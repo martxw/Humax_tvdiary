@@ -1,0 +1,273 @@
+#!/mod/bin/jimsh
+#
+# PVR status checker to be run every minute to update the tvdiary database.
+# Author: Martin Wink, 2013.
+# Based on status.jim by af123.
+#
+
+source /mod/webif/lib/setup
+require epg.class rsv.class
+source /mod/var/mongoose/lib/ts.class
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+#
+# The time for this polling period.
+#
+set current_time [clock seconds]
+puts "tvdiary_status.jim @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]"
+
+if { [catch {set pid [exec pgrep humaxtv]}] } {
+  puts "Cannot find humaxtv process."
+  exit
+}
+
+#
+# Create or open the database file, declaring the global $::tvdiarydb.
+#
+if { ![file exists /mod/etc/tvdiary.db] } {
+  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+  catch {
+    $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+    $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+  }
+} else {
+  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+}
+
+#
+# We load the IDs of the activities currently marked as unfinished into this list.
+# As we update activities we remove their IDs from the list. At the end, any IDs
+# remaining will be the ones previously marked as unfinished but are now finished.
+#
+set finished_activities {}
+
+#
+# Load the IDs of previously unfinished activities.
+#
+proc load_unfinished_activities {} {
+  set ::finished_activities {}
+
+  set res [$::tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished=1"]
+  foreach rec $res {
+    lappend ::finished_activities $rec(activity_id)
+  }
+}
+
+#
+# Update the flags on activities that are now finished.
+# Any activities that haven't got end times (ie represent less than a minute) are deleted.
+# TODO: This may leave program rows with no activities, so delete them too.
+#
+proc update_finished_activities {} {
+  foreach activity_id $::finished_activities {
+    $::tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
+  }
+
+  $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
+  #set deleted_count [$::tvdiarydb changes]
+  #puts "Deleted $deleted_count activities for being finished with no end time."
+}
+
+#
+# Add details for a program being watched or recorded.
+#
+proc log_program_activity { activity_type log_time channel_name title synopsis start_time duration } {
+  #puts "log_program_activity( $activity_type, $log_time, $channel_name, $title, $synopsis, $start_time, $duration )"
+
+  # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
+  if { $channel_name ne "" } {
+    set _prog_id [$::tvdiarydb query "
+        SELECT program_id
+        FROM programs
+        WHERE channel_name = '%s' AND start = %s
+        LIMIT 1
+      " $channel_name $start_time]
+  } else {
+    set _prog_id [$::tvdiarydb query "
+        SELECT program_id
+        FROM programs
+        WHERE channel_name = '' AND title = '%s'
+        LIMIT 1
+      " $title]
+  }
+  if { [llength $_prog_id] == 1 } {
+    set prog_id [lindex [lindex $_prog_id 0] 1]
+  } else {
+    set prog_id {}
+  }
+
+  if { $prog_id ne {} } {
+    # If there's an existing program entry, check for an unfinished activity of the right type for it that we can update.
+    set _act_id [$::tvdiarydb query "
+        SELECT activity_id
+        FROM activities
+        WHERE program_id = %s AND type = '%s' AND unfinished = 1
+        LIMIT 1
+      " $prog_id $activity_type]
+    if { [llength $_act_id] == 1 } {
+      set act_id [lindex [lindex $_act_id 0] 1]
+    } else {
+      set act_id {}
+    }
+
+    if { $act_id ne {} } {
+      # Update the unfinished activity's end time, and remove the ID from the finished activities set.
+      $::tvdiarydb query "UPDATE activities SET end = %s WHERE activity_id = %s" $log_time $act_id
+      
+      set idx [lsearch $::finished_activities $act_id]
+      set ::finished_activities [lreplace $::finished_activities $idx $idx]
+    } else {
+      # If no unfinished activity, create a new activity with a start time but zero end time, marked unfinished.
+      $::tvdiarydb query "
+        INSERT INTO activities (program_id, type, start, end, unfinished)
+        VALUES (%s, '%s', %s, 0, 1)
+      " $prog_id $activity_type $log_time
+      #set act_id [$::tvdiarydb lastid]
+    }
+  } else {
+    # If there's no existing entry for the program, create a new entry, and a new activity.
+    $::tvdiarydb query "
+      INSERT INTO programs (channel_name, title, synopsis, start, duration)
+      VALUES ('%s', '%s', '%s', %s, %s)
+    " $channel_name $title $synopsis $start_time $duration
+    set prog_id [$::tvdiarydb lastid]
+
+    $::tvdiarydb query "
+      INSERT INTO activities (program_id, type, start, end, unfinished)
+      VALUES (%s, '%s', %s, 0, 1)
+    " $prog_id $activity_type $log_time
+    #set act_id [$::tvdiarydb lastid]
+  }
+}
+
+#
+# Add details for a media file being watched. Stored like a TV program except blank channel name and no start time or duration.
+#
+proc log_stream_activity { activity_type log_time filename } {
+  log_program_activity "W" $log_time "" $filename "" 0 0
+}
+
+#
+# Find the Video files accessed by the humaxtv process.
+# Includes both .ts files and .mp4 files, and checks for the downloaded stream file used by the portal.
+# By not limiting the location to My Videos, also have to check for the Tsr (Time Shift Recording?) directory.
+# Returns a dictionary map from the FULL path of the file to its current size,
+# unless the file appears twice (record & watch), where -1 is set instead.
+# Because it's a dictionary, files an only appear once.
+#
+proc get_data {} {
+  set ret {}
+  if { [catch {set data [exec /mod/bin/lsof -p $::pid]} ] } {
+    set ret {}
+  } else {
+    foreach line [split $data "\n"] {
+      # Replace multiple whitespaces with single spaces.
+      regsub -all -- {[[:space:]]+} $line " " line
+      
+      # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
+      set filepath [regsub {^[^/]*} $line {}]
+      set type [file extension $filepath]
+      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type eq ".mp4" } {
+        if { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
+          # Remove what I think is "Time Shift Recording", for rewinding or pausing live TV.
+          # We'll log it as watching live instead.
+          continue
+        }
+        if { [dict exists $ret $filepath] } {
+          set ret($filepath) -1
+        } else {
+          set size [lindex [split $line " "] 6]
+          set ret($filepath) $size
+        }
+      }
+    }
+  }
+  return $ret
+}
+
+# Pre-load the set of unfinished activities.
+load_unfinished_activities
+
+# Count of files being watched. If it remains at zero we must be watching live TV.
+set watching 0
+
+# Get the data once, wait, then get the data again to see if files are growing as they're recorded.
+set data [get_data]
+if { [llength $data] } {
+  sleep 3
+  set ndata [get_data]
+  foreach filepath [array names ndata] {
+    if { ![dict exists $data $filepath] } { set data($filepath) 0 }
+
+    set filename [file tail $filepath]
+    set extension [file extension $filename]
+    if { $extension eq ".ts" } {
+      set basename [file rootname $filename]
+      set ts [ts fetch $filepath]
+#
+#puts "ts=[$ts get channel_name], [$ts get title], [$ts get synopsis], [$ts get start], [$ts duration], [clock format [$ts get start] -format "%c %Z"], [$ts get definition]."
+#
+      if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
+        # "Decrypting"
+        # I haven't seen this in practice. I'm not sure that the file would be open by the humaxtv process in that case?
+      } elseif { $ndata($filepath) == -1 } {
+        # "Chase Playing"
+        incr watching
+        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+      } elseif { $ndata($filepath) > $data($filepath) } {
+        # "Recording"
+        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+      } else {
+        # "Playing"
+        incr watching
+        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+      }
+
+    } elseif { $extension eq ".mp4" } {
+      # "Playing .mp4"
+      incr watching
+      log_stream_activity "W" $current_time $filename
+    } elseif { $filename eq "Streamer_down_file" } {
+      # "Playing network streamed media"
+      incr watching
+      log_stream_activity "W" $current_time "Network streamed media"
+    }
+  }
+}
+
+# Check if we're watching live TV instead.
+if { ![system instandby] && $watching < 1 } {
+  set hsvc [system param CUR_SVC Value USERCONFIG]
+  set ff [$rsvdb query "
+    select usSvcid as svcid, usLcn as lcn,
+    substr(szSvcName, 2) as name
+    from channel.TBL_SVC
+    where hSvc = $hsvc
+    limit 1
+  "]
+  if { [llength $ff] == 1 } {
+    lassign [lindex $ff 0] x svcid x lcn x name
+    set epgs [epg dbfetch get \
+        -service $svcid \
+        -time [clock seconds]\
+    ]
+    set prog ""
+    if { [llength $epgs] == 1 } {
+      lassign $epgs epg
+#
+#puts "epg=[$epg get channel_name], [$epg get name], [$epg get text], [$epg get start], [$epg get duration], [clock format [$epg get start] -format "%c %Z"]."
+#
+      log_program_activity "W" $current_time [$epg get channel_name] [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
+    } else {
+      puts "Unable to get the EPG for the program being watched on service $svcid."
+    }
+  }
+}
+
+if { [system instandby] } {
+  puts "The system is in standby."
+}
+
+# Update any activities that are now finished.
+update_finished_activities

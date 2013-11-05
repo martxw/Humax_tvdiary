@@ -1,0 +1,26 @@
+#!/bin/sh
+
+echo "Postinstall $*"
+
+export tmpf=/tmp/cronf.$$
+
+# Add cron jobs
+
+crontab=$PKG_ROOT/bin/crontab
+if [ -x $crontab ]; then
+  $crontab -l | grep -v tvdiary_status.jim > $tmpf
+  cat $tmpf - << EOM | $crontab -
+* * * * * /mod/sbin/tvdiary_status.jim  >>/mod/tmp/tvdiary.log 2>&1
+EOM
+fi
+
+dbfile=/mod/etc/tvdiary.db
+[ -f $dbfile ] && rm -f $dbfile
+
+logfile=/mod/tmp/tvdiary.log
+[ -f $logfile ] && rm -f $logfile
+
+[ -f $tmpf ] && rm -f $tmpf
+
+exit 0
+
