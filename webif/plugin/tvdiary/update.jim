@@ -6,30 +6,21 @@ cgi_input
 puts "Content-Type: text/html"
 puts ""
 
-set keep [cgi_get undelete_keep]
-set name [cgi_get undelete_name]
+set monitoring [cgi_get tvdiary_monitoring]
+set day_start [cgi_get tvdiary_day_start]
 
-if {$keep eq "-" || $name eq "-"} {
-	puts "Error ($keep/$name)"
-	exit
-}
+puts "Parameters: $monitoring, $day_start<br>"
 
-if {![regexp -nocase {^\[?[- a-z_]+\]?$} $name]} {
-	puts "Invalid dustbin name."
-	exit
-}
-
-loop i 0 7 { lappend threshl [cgi_get undelete_thresh_$i 0] }
-set thresh [join $threshl ","]
-
-set fd [open "/mod/etc/undelete.conf" w]
-puts $fd "keep $keep"
-puts $fd "thresholds $thresh"
+set fd [open "/mod/etc/tvdiary.conf" w]
+puts $fd "monitoring $monitoring"
+puts $fd "day_start $day_start"
 close $fd
 
-set fd [open "/mod/boot/dustbin.name" w]
-puts -nonewline $fd $name
-close $fd
+if { $monitoring } {
+  exec "/mod/sbin/tvdiary_monitor_on"
+} else {
+  exec "/mod/sbin/tvdiary_monitor_off"
+}
 
 puts "Updated Successfully"
 

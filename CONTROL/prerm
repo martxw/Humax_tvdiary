@@ -1,20 +1,11 @@
 #!/bin/sh
 
-export tmpf=/tmp/cronf.$$
+/mod/sbin/tvdiary_monitor_off
 
-crontab=$PKG_ROOT/bin/crontab
-if [ -x $crontab ]; then
-  $crontab -l | grep -v tvdiary_status.jim > $tmpf
-  [ -s $tmpf ] && $crontab $tmpf || $crontab -r
-fi
-
-dbfile=/mod/etc/tvdiary.db
-[ -f $dbfile ] && rm -f $dbfile
+#dbfile=/mod/etc/tvdiary.db
+#[ -f $dbfile ] && rm -f $dbfile
 
 logfile=/mod/tmp/tvdiary.log
 [ -f $logfile ] && rm -f $logfile
 
-[ -f $tmpf ] && rm -f $tmpf
-
 exit 0
-
