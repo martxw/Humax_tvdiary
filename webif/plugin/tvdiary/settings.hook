@@ -1,0 +1,87 @@
+#!/mod/bin/jimsh
+
+set undelete_keep 7
+set _undelete_thresh [set undelete_thresh 10,20,40,60,80,100,120]
+set undelete_name "\[Deleted Items\]"
+if {![catch {set undelete_fd [open "/mod/etc/undelete.conf" r]}]} {
+	foreach line [split [read $undelete_fd] "\n"] {
+		lassign $line undelete_key undelete_val
+		switch $undelete_key {
+			keep { set undelete_keep $undelete_val }
+			thresholds { set undelete_thresh $undelete_val }
+		}
+	}
+	$undelete_fd close
+}
+if {![catch {set undelete_fd [open "/mod/boot/dustbin.name" r]}]} {
+	set undelete_name [lindex [split [read $undelete_fd] "\n"] 0]
+	$undelete_fd close
+}
+
+set undelete_thresholds [split $undelete_thresh ","]
+if {[llength $undelete_thresholds] != 7} {
+	set undelete_thresholds [split $_undelete_thresh ","]
+}
+
+puts "
+	<br><br>
+	<fieldset style=\"display: inline\">
+	<legend>
+		Undelete Settings
+	</legend>
+	<form class=auto id=undelete method=post
+	    action=/plugin/undelete/update.jim>
+	<table>
+	<tr>
+		<th class=key>Dustbin name:</th>
+		<td><input id=undelete_name name=undelete_name
+		    value=\"[cgi_quote_html $undelete_name]\"
+		    class=\"text ui-widget-content ui-corner-all\">
+		</td>
+	</tr><tr>
+		<th class=key>Remove files from dustbin after:</th>
+		<td><select id=undelete_keep name=undelete_keep
+		    class=\"ui-widget-content ui-corner-all\">
+"
+foreach undelete_period {1 2 3 4 5 6 7 10 15 20 30} {
+	puts -nonewline "<option value=$undelete_period"
+	if {$undelete_period == $undelete_keep} {
+		puts -nonewline " selected"
+	}
+	puts -nonewline ">$undelete_period day"
+	if {$undelete_period > 1} { puts -nonewline "s" }
+	puts ""
+}
+
+puts "
+		</select></td>
+	</tr>
+"
+	foreach undelete_d {6 5 4 3 2 1 0} {
+		puts "
+		<tr>
+		<th class=key>Reduce retention time to $undelete_d days if disk
+		    space &lt;</th>
+		<td><input name=undelete_thresh_${undelete_d}
+		    class=\"text ui-widget-content ui-corner-all\"
+		    id=undelete_thresh_${undelete_d}
+		    class=undelete_thresh size=4 maxlength=4
+		    value=\"[lindex $undelete_thresholds $undelete_d]\">
+		    GiB
+		</td>
+		</tr>
+		"
+	}
+
+puts "
+		</td>
+	</tr>
+		<td><input type=submit value=\"Update settings\">
+		    <div id=undelete_output></div>
+		</td>
+	</tr>
+	</table>
+	</form>
+	</fieldset>
+"
+

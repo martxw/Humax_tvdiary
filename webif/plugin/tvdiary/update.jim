@@ -1,0 +1,35 @@
+#!/mod/bin/jimsh
+
+package require cgi
+
+cgi_input
+puts "Content-Type: text/html"
+puts ""
+
+set keep [cgi_get undelete_keep]
+set name [cgi_get undelete_name]
+
+if {$keep eq "-" || $name eq "-"} {
+	puts "Error ($keep/$name)"
+	exit
+}
+
+if {![regexp -nocase {^\[?[- a-z_]+\]?$} $name]} {
+	puts "Invalid dustbin name."
+	exit
+}
+
+loop i 0 7 { lappend threshl [cgi_get undelete_thresh_$i 0] }
+set thresh [join $threshl ","]
+
+set fd [open "/mod/etc/undelete.conf" w]
+puts $fd "keep $keep"
+puts $fd "thresholds $thresh"
+close $fd
+
+set fd [open "/mod/boot/dustbin.name" w]
+puts -nonewline $fd $name
+close $fd
+
+puts "Updated Successfully"
+
