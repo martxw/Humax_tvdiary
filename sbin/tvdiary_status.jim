@@ -14,7 +14,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # The time for this polling period.
 #
 set current_time [clock seconds]
-puts "tvdiary_status.jim @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]"
+#puts "tvdiary_status.jim @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]"
 
 if { [catch {set pid [exec pgrep humaxtv]}] } {
   puts "Cannot find humaxtv process."
@@ -56,16 +56,23 @@ proc load_unfinished_activities {} {
 #
 # Update the flags on activities that are now finished.
 # Any activities that haven't got end times (ie represent less than a minute) are deleted.
-# TODO: This may leave program rows with no activities, so delete them too.
 #
 proc update_finished_activities {} {
   foreach activity_id $::finished_activities {
     $::tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
   }
 
+  set orphans [$::tvdiarydb query "SELECT program_id FROM activities WHERE unfinished = 0 AND end = 0"]
+  
   $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
-  #set deleted_count [$::tvdiarydb changes]
-  #puts "Deleted $deleted_count activities for being finished with no end time."
+  set deleted_count [$::tvdiarydb changes]
+  puts "Deleted $deleted_count activities for being finished with no end time."
+
+  foreach orphan $orphans {
+    $::tvdiarydb query "DELETE FROM programs WHERE program_id = %s" $orphan(program_id)
+    set deleted_count [$::tvdiarydb changes]
+    puts "Deleted $deleted_count programs for being unreferenced."
+  }
 }
 
 #
@@ -213,15 +220,15 @@ if { [llength $data] } {
       } elseif { $ndata($filepath) == -1 } {
         # "Chase Playing"
         incr watching
-        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
-        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
       } elseif { $ndata($filepath) > $data($filepath) } {
         # "Recording"
-        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
       } else {
         # "Playing"
         incr watching
-        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get start] [$ts duration]
+        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
       }
 
     } elseif { $extension eq ".mp4" } {
