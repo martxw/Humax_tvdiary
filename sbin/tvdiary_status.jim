@@ -65,13 +65,13 @@ proc update_finished_activities {} {
   set orphans [$::tvdiarydb query "SELECT program_id FROM activities WHERE unfinished = 0 AND end = 0"]
   
   $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
-  set deleted_count [$::tvdiarydb changes]
-  puts "Deleted $deleted_count activities for being finished with no end time."
+  #set deleted_count [$::tvdiarydb changes]
+  #puts "Deleted $deleted_count activities for being finished with no end time."
 
   foreach orphan $orphans {
     $::tvdiarydb query "DELETE FROM programs WHERE program_id = %s" $orphan(program_id)
-    set deleted_count [$::tvdiarydb changes]
-    puts "Deleted $deleted_count programs for being unreferenced."
+    #set deleted_count [$::tvdiarydb changes]
+    #puts "Deleted $deleted_count programs for being unreferenced."
   }
 }
 
@@ -273,7 +273,7 @@ if { ![system instandby] && $watching < 1 } {
 }
 
 if { [system instandby] } {
-  puts "The system is in standby."
+  puts "The system is in standby @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]."
 }
 
 # Update any activities that are now finished.
