@@ -1,0 +1,92 @@
+#!/mod/bin/jimsh
+
+package require cgi
+source /mod/webif/lib/setup
+require altrow
+
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+#
+# Check we have a database, and open it, else HTTP error.
+#
+if { ![file exists /mod/etc/tvdiary.db] } {
+  puts "Status: HTTP/1.1 500 Server Error"
+  exit
+} else {
+  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+
+  #
+  # Got the DB open so safe to say we're returning data.
+  #
+header
+
+
+  #$tvdiarydb query "DELETE FROM activities WHERE program_id <= 84"
+  #set deleted_count [$tvdiarydb changes]
+  #puts "Deleted $deleted_count activities for being unreferenced."
+
+  #$tvdiarydb query "DELETE FROM programs WHERE program_id <= 84"
+  #set deleted_count [$tvdiarydb changes]
+  #puts "Deleted $deleted_count programs for being unreferenced."
+
+  puts "<h1>activities</h1>"
+  puts "<table class=borders>"
+  puts "<tr><th>a#</th><th>p#</th><th>R/W</th><th>start</th><th>end</th><th>dur</th><th>on</th></tr>"
+  
+  set records [$tvdiarydb query "
+SELECT activity_id, program_id, type, start, end, unfinished
+FROM activities
+ORDER BY activities.start"]
+  foreach record $records {
+    altrow
+
+    puts "<td>$record(activity_id)</td>"
+    puts "<td>$record(program_id)</td>"
+    puts "<td>$record(type)</td>"
+    puts "<td>$record(start)<br/>[clock format $record(start) -format "%d/%m/%y %H:%M:%S"]</td>"
+    puts "<td>$record(end)<br/>[clock format $record(end) -format "%d/%m/%y %H:%M:%S"]</td>"
+    set difference [expr $record(end) - $record(start)]
+    puts "<td>$difference sec<br/>[format "%d:%2.2d" [expr $difference / 60] [expr $difference % 60]]</td>"
+    puts "<td>$record(unfinished)</td>"
+
+
+    puts "<td>"
+    set precords [$tvdiarydb query "
+SELECT title
+FROM programs
+WHERE program_id=%s" $record(program_id)]
+    foreach precord $precords {
+      puts "$precord(title)"
+    }
+    puts "</td>"
+
+    puts "</tr>"
+  }
+  puts "</table>"
+
+  puts "<h1>programs</h1>"
+  puts "<table class=borders>"
+  puts "<tr><th>p#</th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Start</th><th>Dur</th></tr>"
+  
+  set records [$tvdiarydb query "
+SELECT program_id, channel_name, title, synopsis, start, duration
+FROM programs
+ORDER BY programs.program_id"]
+  foreach record $records {
+    altrow
+
+    puts "<td>$record(program_id)</td>"
+    puts "<td>$record(channel_name)</td>"
+    puts "<td>$record(title)</td>"
+    puts "<td>[string range $record(synopsis) 0 60]</td>"
+    puts "<td nowrap>$record(start)<br/>[clock format $record(start) -format "%d/%m/%y %H:%M:%S"]</td>"
+    puts "<td nowrap>$record(duration) min</td>"
+
+    puts "</tr>"
+  }
+  puts "</table>"
+
+  $tvdiarydb close
+}
+
+footer

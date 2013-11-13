@@ -1,0 +1,45 @@
+.tvdiary_table
+{
+  line-height: 1.1em;
+}
+
+.time_range
+{
+  display: inline;
+  white-space: nowrap;
+}
+
+.time_duration, .channel_name
+{
+  display: block;
+  white-space: nowrap;
+}
+
+.tvtitle
+{
+  display: block;
+  text-align:left;
+  font-weight:bold;
+  white-space: nowrap;
+}
+
+.tvsynopsis
+{
+  display: block;
+  text-align:left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tvschedule
+{
+  display: block;
+  text-align:right;
+  font-size:90%;
+  white-space: nowrap;
+}
+
+.total_duration
+{
+  font-weight:bold;
+}

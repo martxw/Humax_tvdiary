@@ -14,7 +14,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # The time for this polling period.
 #
 set current_time [clock seconds]
-#puts "tvdiary_status.jim @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]"
+puts "\ntvdiary_status.jim @ [clock format $current_time -format {%a %b %d %H:%M (%Z)}]"
 
 if { [catch {set pid [exec pgrep humaxtv]}] } {
   puts "Cannot find humaxtv process."
@@ -51,6 +51,7 @@ proc load_unfinished_activities {} {
   foreach rec $res {
     lappend ::finished_activities $rec(activity_id)
   }
+puts "load_unfinished_activities() => \{$::finished_activities\}"
 }
 
 #
@@ -58,21 +59,56 @@ proc load_unfinished_activities {} {
 # Any activities that haven't got end times (ie represent less than a minute) are deleted.
 #
 proc update_finished_activities {} {
+puts "update_finished_activities() SET unfinished=0 foreach \{$::finished_activities\}"
   foreach activity_id $::finished_activities {
     $::tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
   }
 
-  set orphans [$::tvdiarydb query "SELECT program_id FROM activities WHERE unfinished = 0 AND end = 0"]
-  
-  $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
-  #set deleted_count [$::tvdiarydb changes]
-  #puts "Deleted $deleted_count activities for being finished with no end time."
+# begin_debug
+set condemned [$::tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished = 0 AND end = 0"]
+puts "update_finished_activities() queried zero time activities => \{$condemned\}"
+# end_debug
 
-  foreach orphan $orphans {
-    $::tvdiarydb query "DELETE FROM programs WHERE program_id = %s" $orphan(program_id)
-    #set deleted_count [$::tvdiarydb changes]
-    #puts "Deleted $deleted_count programs for being unreferenced."
-  }
+  $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
+# begin_debug
+  set deleted_count [$::tvdiarydb changes]
+  puts "Deleted $deleted_count activities for being finished with no end time."
+# end_debug
+
+# begin_debug
+set orphans [$::tvdiarydb query "
+SELECT program_id
+FROM   programs
+WHERE NOT EXISTS
+  (SELECT activity_id
+   FROM   activities
+   WHERE  activities.program_id = programs.program_id)"]
+puts "update_finished_activities() NOT EXISTS queried unreferenced programs => \{$orphans\}"
+# end_debug
+
+# begin_debug
+set orphans [$::tvdiarydb query "
+SELECT programs.program_id 
+FROM   programs
+LEFT OUTER JOIN activities
+  ON (programs.program_id = activities.program_id)
+  WHERE activities.program_id IS NULL"]
+puts "update_finished_activities() LEFT OUTER JOIN queried unreferenced programs => \{$orphans\}"
+# end_debug
+
+# TODO: When the DB gets fuller, try running /bin/sh/sqlite3 /mod/etc/tvdiary.db and do .timer on and then run both o the queries interactively to see the timings. Turn the monitoring off first. Try with and without deleting activities.
+
+  
+  $::tvdiarydb query "
+DELETE FROM programs
+WHERE  NOT EXISTS
+  (SELECT activity_id
+   FROM   activities
+   WHERE  activities.program_id = programs.program_id)"
+# begin_debug
+  set deleted_count [$::tvdiarydb changes]
+  puts "Deleted $deleted_count programs for being unreferenced."
+# end_debug
 }
 
 #

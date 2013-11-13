@@ -1,0 +1,114 @@
+#!/mod/bin/jimsh
+
+package require cgi
+source /mod/webif/lib/setup
+require altrow
+
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+cgi_input
+set time_start [cgi_get start]
+set type [cgi_get type]
+#set time_start "1384222801"
+#set type "R"
+set time_end [expr $time_start + 86400]
+
+#
+# Check we have a database, and open it, else HTTP error.
+#
+if { ![file exists /mod/etc/tvdiary.db] } {
+  puts "Status: HTTP/1.1 500 Server Error"
+  exit
+} else {
+  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+
+  #
+  # Got the parameters & DB open so safe to say we're returning data.
+  #
+  httpheader "text/html"
+
+# begin_debug
+#  puts "<pre>Parameters:
+#  time_start=$time_start=[clock format $time_start]
+#  time_end=$time_end=[clock format $time_end]
+#  type=$type</pre>"
+# end_debug
+
+  puts "<table class=\"tvdiary_table\">"
+
+  # Dummy commented out altrow to flip odd & evenness to avoid green title followed by green row.
+  puts "<!-- "
+  altrow
+  puts "-->"
+
+  # Maintain a running count of time spent recording or watching.
+  set total_duration 0
+  
+  set time_fmt "%H:%M"
+  set date_time_fmt "%a %d %b %Y $time_fmt"
+
+  set records [$tvdiarydb query "
+    SELECT activities.start, activities.end, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
+    FROM activities, programs
+    WHERE activities.type=\"%s\" AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
+    ORDER BY activities.start" $type $time_start $time_end]
+  foreach record $records {
+    altrow
+    
+    #
+    # Column 1. The actual record or watching time. This is always present.
+    # The calculated duration is from the start to the end of the program, but the total duration for the day must exclude parts of the program on other days.
+    #
+    set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
+    if { $record(start) < $time_start } {
+      set total_duration [expr $total_duration + [expr ($record(end) - $time_start + 30) / 60]]
+    } elseif { $record(end) > $time_end } {
+      set total_duration [expr $total_duration + [expr ($time_end - $record(start) + 30) / 60]]
+    } else {
+      set total_duration [expr $total_duration + $calculated_duration]
+    }
+    puts "<td>"
+    puts "<span class=\"time_range\">[clock format $record(start) -format $time_fmt] - [clock format $record(end) -format $time_fmt]</span>"
+    puts "<span class=\"time_duration\">($calculated_duration mins)</span>"
+    puts "</td>"
+
+    #
+    # Column 2. The channel icon and name. There might not be a channel, and the icon may not exist.
+    #
+    puts "<td>"
+    if { $record(channel_name) != "" } {
+      if { [file exists "/mod/webif/html/img/channels/out/$record(channel_name).png"] } {
+        puts "<img src=\"/img/channels/out/$record(channel_name).png\" width=50>"
+      } else {
+        puts "<img src=\"/img/channels/out/Unknown.png\" width=50>"
+      }
+      puts "<span class=\"channel_name\">$record(channel_name)</span>"
+    }
+    puts "</td>"
+
+    #
+    # Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
+    puts "<td>"
+    puts "<span class=\"tvtitle\">$record(title)</span>"
+    if { $record(synopsis) != "" } {
+      puts "<span class=\"tvsynopsis\">$record(synopsis)</span>"
+    }
+    if { $record(scheduled_start) != 0 && $record(scheduled_duration) != 0 } {
+      puts "<span class=\"tvschedule\">([clock format $record(scheduled_start) -format $date_time_fmt], $record(scheduled_duration) mins)</span>"
+    }
+    puts "</td>"
+
+    puts "</tr>"
+  }
+
+  # Final row is the total duration.
+  altrow
+  puts "<td colspan=\"3\">"
+  puts "<span class=\"total_duration\">Total [format "%d:%2.2d" [expr $total_duration / 60] [expr $total_duration % 60]]</span>"
+  puts "</td>"
+  puts "</tr>"
+
+  puts "</table>"
+
+  $tvdiarydb close
+}

@@ -1,5 +1,5 @@
 menuitem \
   "TV Diary" \
   "/plugin/tvdiary/icon.png" \
-  "/plugin/tvdiary/index.jim"
+  "/tvdiary/index.shtml"
 
