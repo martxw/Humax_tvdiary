@@ -1,3 +1,8 @@
+/*
+ * TV Diary main display page styles.
+ * Author: Martin Wink, 2013.
+ */
+
 #recorded_outer, #watched_outer {
   width: 51em;
   margin: 0 1em 1em 0;
@@ -24,54 +29,49 @@
   text-align: center;
 }
 
-.tvdiary_table
-{
+.tvdiary_table {
   line-height: 1.1em;
 }
 
-.time_range
-{
-  display: inline;
+.time_range_value {
   white-space: nowrap;
 }
 
-.time_duration
-{
-  display: block;
+.time_range_duration {
   white-space: nowrap;
+  margin: 0 0 0 0.5em;
+  padding: 0.75em 0.25em 0.75em 1em;
+  border-left: thin solid #000000;
+  vertical-align: middle;
+  text-align: right;
 }
-
-.tvchannel
-{
-  display: block;
+      
+.tvchannel {
   text-align:center;
+  vertical-align: middle;
   white-space: nowrap;
 }
 
-.tvtitle
-{
+.tvtitle {
   display: block;
   text-align:left;
   font-weight:bold;
   white-space: nowrap;
 }
 
-.tvsynopsis
-{
+.tvsynopsis {
   display: block;
   text-align:left;
 }
 
-.tvschedule
-{
+.tvschedule {
   display: block;
   text-align:right;
   font-size:90%;
   white-space: nowrap;
 }
 
-.total_duration
-{
+.total_duration {
   display: block;
   font-weight:bold;
   text-align: center;
@@ -81,8 +81,7 @@
   text-align: center;
 }
 
-.nothing
-{
+.nothing {
   display: block;
   font-style:italic;
   text-align: center;
