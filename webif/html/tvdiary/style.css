@@ -1,3 +1,28 @@
+#recorded_outer, #watched_outer {
+  width: 51em;
+  margin: 0 1em 1em 0;
+}
+
+#datepicker {
+  float: left;
+  margin: 0 1em 1em 0;
+}
+
+#recorded_outer, #watched_outer {
+  float: left;
+}
+
+.tvouters {
+  float: left;
+}
+
+.outer_hdr {
+  display: block;
+  margin: .2em 0 .2em 0;
+  line-height: 1.8em;
+  text-align: center;
+}
+
 .tvdiary_table
 {
   line-height: 1.1em;
@@ -9,9 +34,16 @@
   white-space: nowrap;
 }
 
-.time_duration, .channel_name
+.time_duration
 {
   display: block;
+  white-space: nowrap;
+}
+
+.tvchannel
+{
+  display: block;
+  text-align:center;
   white-space: nowrap;
 }
 
@@ -41,5 +73,29 @@
 
 .total_duration
 {
+  display: block;
   font-weight:bold;
+  text-align: center;
 }
+
+#recorded_spinner, #watched_spinner {
+  text-align: center;
+}
+
+.nothing
+{
+  display: block;
+  font-style:italic;
+  text-align: center;
+}
+
+.following {
+  clear: both;
+}
+
+/*
+.nopagebreak {
+  position: relative;
+  page-break-inside: avoid !important;
+}
+*/

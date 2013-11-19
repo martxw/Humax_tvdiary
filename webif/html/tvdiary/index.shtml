@@ -1,47 +1,48 @@
 <!--#include virtual="/lib/header.shtml" -->
 
-<link href=style.css rel=stylesheet type=text/css />
-<script type=text/javascript src=/js/iajax.js></script>
-<script type=text/javascript src=calendar_params.jim></script>
-<script type=text/javascript src=script.js></script>
+<script type="text/javascript" src="/js/iajax.js"></script>
+<script type="text/javascript" src="calendar_params.jim"></script>
+<script type="text/javascript" src="/tvdiary/script.js"></script>
 
 <script type="text/javascript" src="/js/jquery.ui.totop.js"></script>
 <script type="text/javascript" src="/js/easing.js"></script>
-<link href=/css/ui.totop.css rel=stylesheet type=text/css />
 
-<div class=va style="padding: 0 0 1em 0">
-  <h1 style="display: inline" class=va>
-    TV Diary<span id="title_date"></span>
-  </h1>
-</div>
+<link type="text/css" href="/css/ui.totop.css" rel="stylesheet" />
+<link type="text/css" href="/tvdiary/style.css" rel="stylesheet" />
+
+<h1 class="va">TV Diary<span id="title_date"></span></h1>
 
 <div id="datepicker"></div>
 
-<div class="ui-widget ui-widget-content ui-helper-clearfix ui-corner-all" style="width: 51em; padding: .2em .2em 0; line-height: 1.8em; text-align: center;">
-  <div class="ui-datepicker-header ui-widget-header ui-helper-clearfix ui-corner-all" style="display: block;">
-  Recorded
-  </div>
-  <div>
-    <div id=rresults></div>
-    <div id=rspinner>
-      <img border=0 src=/img/loading.gif>
-      Processing request...
+<div class="tvouters">
+  <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
+    <div class="outer_hdr ui-widget-header ui-corner-all">
+      Recorded
+    </div>
+    <div>
+      <div id="recorded_inner"></div>
+      <div id="recorded_spinner">
+        <img src="/img/loading.gif" alt="Processing request...">
+        Processing request...
+      </div>
     </div>
   </div>
-</div>
-<div class="ui-widget ui-widget-content ui-helper-clearfix ui-corner-all" style="width: 51em; padding: .2em .2em 0; line-height: 1.8em; text-align: center;">
-  <div class="ui-datepicker-header ui-widget-header ui-helper-clearfix ui-corner-all" style="display: block;">
-  Watched
-  </div>
-  <div>
-    <div id=wresults></div>
-    <div id=wspinner>
-      <img border=0 src=/img/loading.gif>
-      Processing request...
+  <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
+    <div class="outer_hdr ui-widget-header ui-corner-all">
+      Watched
+    </div>
+    <div>
+      <div id="watched_inner"></div>
+      <div id="watched_spinner">
+        <img src="/img/loading.gif" alt="Processing request...">
+        Processing request...
+      </div>
     </div>
   </div>
 </div>
 
-<a href="/tvdiary/db_view.jim">View database</a>
+<div class="following">
+  <a href="/tvdiary/db_view.jim">View database</a>
+</div>
 
 <!--#include virtual="/lib/footer.shtml" -->

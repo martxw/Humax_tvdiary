@@ -21,24 +21,24 @@ $(document).ready(function() {
   {
     $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(chosen * 1000)) );
 
-    $('#rresults').html("");
-    $('#rspinner').show('fast');
-    $('#wresults').html("");
-    $('#wspinner').show('fast');
+    $('#recorded_inner').html("");
+    $('#recorded_spinner').show('fast');
+    $('#watched_inner').html("");
+    $('#watched_spinner').show('fast');
 
     $.ajax({
       type: "GET",
       dataType: "text",
       url: "/tvdiary/day_view.jim?start=" + chosen + "&type=R",
       success: function(data) {
-        $('#rresults').html(data);
-        $('#rspinner').hide('slow');
+        $('#recorded_inner').html(data);
+        $('#recorded_spinner').hide('slow');
       },
       error: function(_, _, e) {
         if (window.console)
           console.log("ajax error " + e);
-        $('#rresults').html("Sorry, unavailable due to server error");
-        $('#rspinner').hide('slow');
+        $('#recorded_inner').html("<span>Sorry, unavailable due to server error</span>");
+        $('#recorded_spinner').hide('slow');
       }
     });
     
@@ -47,14 +47,14 @@ $(document).ready(function() {
       dataType: "text",
       url: "/tvdiary/day_view.jim?start=" + chosen + "&type=W",
       success: function(data) {
-        $('#wresults').html(data);
-        $('#wspinner').hide('slow');
+        $('#watched_inner').html(data);
+        $('#watched_spinner').hide('slow');
       },
       error: function(_, _, e) {
         if (window.console)
           console.log("ajax error " + e);
-        $('#wresults').html("Sorry, unavailable due to server error");
-        $('#wspinner').hide('slow');
+        $('#watched_inner').html("<span>Sorry, unavailable due to server error</span>");
+        $('#watched_spinner').hide('slow');
       }
     });
   }

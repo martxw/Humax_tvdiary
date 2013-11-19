@@ -77,22 +77,22 @@ puts "update_finished_activities() queried zero time activities => \{$condemned\
 
 # begin_debug
 set orphans [$::tvdiarydb query "
-SELECT program_id
-FROM   programs
-WHERE NOT EXISTS
-  (SELECT activity_id
-   FROM   activities
-   WHERE  activities.program_id = programs.program_id)"]
+  SELECT program_id
+  FROM   programs
+  WHERE NOT EXISTS
+    (SELECT activity_id
+     FROM   activities
+     WHERE  activities.program_id = programs.program_id)"]
 puts "update_finished_activities() NOT EXISTS queried unreferenced programs => \{$orphans\}"
 # end_debug
 
 # begin_debug
 set orphans [$::tvdiarydb query "
-SELECT programs.program_id 
-FROM   programs
-LEFT OUTER JOIN activities
-  ON (programs.program_id = activities.program_id)
-  WHERE activities.program_id IS NULL"]
+  SELECT programs.program_id 
+  FROM   programs
+  LEFT OUTER JOIN activities
+    ON (programs.program_id = activities.program_id)
+    WHERE activities.program_id IS NULL"]
 puts "update_finished_activities() LEFT OUTER JOIN queried unreferenced programs => \{$orphans\}"
 # end_debug
 
@@ -100,11 +100,11 @@ puts "update_finished_activities() LEFT OUTER JOIN queried unreferenced programs
 
   
   $::tvdiarydb query "
-DELETE FROM programs
-WHERE  NOT EXISTS
-  (SELECT activity_id
-   FROM   activities
-   WHERE  activities.program_id = programs.program_id)"
+    DELETE FROM programs
+    WHERE  NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.program_id = programs.program_id)"
 # begin_debug
   set deleted_count [$::tvdiarydb changes]
   puts "Deleted $deleted_count programs for being unreferenced."
@@ -120,17 +120,17 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
   # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
   if { $channel_name ne "" } {
     set _prog_id [$::tvdiarydb query "
-        SELECT program_id
-        FROM programs
-        WHERE channel_name = '%s' AND start = %s
-        LIMIT 1
+      SELECT program_id
+      FROM programs
+      WHERE channel_name = '%s' AND start = %s
+      LIMIT 1
       " $channel_name $start_time]
   } else {
     set _prog_id [$::tvdiarydb query "
-        SELECT program_id
-        FROM programs
-        WHERE channel_name = '' AND title = '%s'
-        LIMIT 1
+      SELECT program_id
+      FROM programs
+      WHERE channel_name = '' AND title = '%s'
+      LIMIT 1
       " $title]
   }
   if { [llength $_prog_id] == 1 } {
@@ -142,10 +142,10 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
   if { $prog_id ne {} } {
     # If there's an existing program entry, check for an unfinished activity of the right type for it that we can update.
     set _act_id [$::tvdiarydb query "
-        SELECT activity_id
-        FROM activities
-        WHERE program_id = %s AND type = '%s' AND unfinished = 1
-        LIMIT 1
+      SELECT activity_id
+      FROM activities
+      WHERE program_id = %s AND type = '%s' AND unfinished = 1
+      LIMIT 1
       " $prog_id $activity_type]
     if { [llength $_act_id] == 1 } {
       set act_id [lindex [lindex $_act_id 0] 1]
@@ -164,7 +164,7 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
       $::tvdiarydb query "
         INSERT INTO activities (program_id, type, start, end, unfinished)
         VALUES (%s, '%s', %s, 0, 1)
-      " $prog_id $activity_type $log_time
+        " $prog_id $activity_type $log_time
       #set act_id [$::tvdiarydb lastid]
     }
   } else {
@@ -172,13 +172,13 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
     $::tvdiarydb query "
       INSERT INTO programs (channel_name, title, synopsis, start, duration)
       VALUES ('%s', '%s', '%s', %s, %s)
-    " $channel_name $title $synopsis $start_time $duration
+      " $channel_name $title $synopsis $start_time $duration
     set prog_id [$::tvdiarydb lastid]
 
     $::tvdiarydb query "
       INSERT INTO activities (program_id, type, start, end, unfinished)
       VALUES (%s, '%s', %s, 0, 1)
-    " $prog_id $activity_type $log_time
+      " $prog_id $activity_type $log_time
     #set act_id [$::tvdiarydb lastid]
   }
 }
