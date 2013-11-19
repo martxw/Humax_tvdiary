@@ -1,4 +1,8 @@
 #!/mod/bin/jimsh
+#
+# Render an importable Javascript containing the min and max date times, and the offset to the start of the TV day.
+# Author: Martin Wink, 2013.
+#
 
 package require cgi
 source /mod/webif/lib/setup
@@ -35,6 +39,7 @@ if { ![catch {set settings_fd [open "/mod/etc/tvdiary.conf" r]}] } {
       "day_start" {
         set parts [split $settings_val ":"]
         set day_start [expr ([lindex $parts 0] * 60 + [lindex $parts 1]) * 60]
+        break
       }
     }
   }

@@ -1,3 +1,8 @@
+/*
+ * TV Diary main display page scripts.
+ * Author: Martin Wink, 2013.
+ */
+
 $(document).ready(function() {
 
   $('#datepicker').datepicker({
@@ -35,9 +40,10 @@ $(document).ready(function() {
         $('#recorded_spinner').hide('slow');
       },
       error: function(_, _, e) {
-        if (window.console)
+        if (window.console) {
           console.log("ajax error " + e);
-        $('#recorded_inner').html("<span>Sorry, unavailable due to server error</span>");
+        }
+        $('#recorded_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#recorded_spinner').hide('slow');
       }
     });
@@ -51,9 +57,10 @@ $(document).ready(function() {
         $('#watched_spinner').hide('slow');
       },
       error: function(_, _, e) {
-        if (window.console)
+        if (window.console) {
           console.log("ajax error " + e);
-        $('#watched_inner').html("<span>Sorry, unavailable due to server error</span>");
+        }
+        $('#watched_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#watched_spinner').hide('slow');
       }
     });

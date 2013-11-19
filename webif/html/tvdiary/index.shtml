@@ -1,20 +1,19 @@
 <!--#include virtual="/lib/header.shtml" -->
 
 <script type="text/javascript" src="/js/iajax.js"></script>
-<script type="text/javascript" src="calendar_params.jim"></script>
-<script type="text/javascript" src="/tvdiary/script.js"></script>
-
 <script type="text/javascript" src="/js/jquery.ui.totop.js"></script>
 <script type="text/javascript" src="/js/easing.js"></script>
-
 <link type="text/css" href="/css/ui.totop.css" rel="stylesheet" />
+
+<script type="text/javascript" src="/tvdiary/calendar_params.jim"></script>
+<script type="text/javascript" src="/tvdiary/script.js"></script>
 <link type="text/css" href="/tvdiary/style.css" rel="stylesheet" />
 
-<h1 class="va">TV Diary<span id="title_date"></span></h1>
+<h1>TV Diary<span id="title_date"></span></h1>
 
 <div id="datepicker"></div>
 
-<div class="tvouters">
+<div class="table_wrapper">
   <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
     <div class="outer_hdr ui-widget-header ui-corner-all">
       Recorded
@@ -41,8 +40,10 @@
   </div>
 </div>
 
+<!--
 <div class="following">
   <a href="/tvdiary/db_view.jim">View database</a>
 </div>
+-->
 
 <!--#include virtual="/lib/footer.shtml" -->
