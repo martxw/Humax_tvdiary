@@ -7,28 +7,191 @@
 
 package require cgi
 source /mod/webif/lib/setup
-require altrow
+require altrow rsv.class epg.class
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
+#
+# CGI parameters
+#
 cgi_input
 set time_start [cgi_get start]
 set type [cgi_get type]
+
+#
+# Declare globals
+#
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
 set time_end [expr $time_start + 86400]
 
+# Maintain a running count of time spent recording or watching.
+set total_duration 0
+
+# Accumulte a map from "<time>:<channel-name>" to {service_id start_time end_time}.
+set future_events {}
+
 #
-# Check we have a database, and open it, else HTTP error.
+# Declare procedures
 #
-if { ![file exists /mod/etc/tvdiary.db] } {
-  # Ajax detects the error if we just exit.
-  exit
+
+#
+# Output the table row for one record of past details.
+# Updates the global $::total_duration.
+#
+proc output_past_record { record } {
+  altrow
+
+  #
+  # Column 1. The actual record or watching time. This is always present.
+  # The calculated duration is from the start to the end of the program, but the total duration for the day must exclude parts of the program on other days.
+  #
+  set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
+  if { $record(start) < $::time_start } {
+    set ::total_duration [expr $::total_duration + [expr ($record(end) - $::time_start + 30) / 60]]
+  } elseif { $record(end) > $::time_end } {
+    set ::total_duration [expr $::total_duration + [expr ($::time_end - $record(start) + 30) / 60]]
+  } else {
+    set ::total_duration [expr $::total_duration + $calculated_duration]
+  }
+  puts "<td>"
+  puts "<div class=\"time_range_value\">[clock format $record(start) -format $::time_fmt]</div>"
+  puts "<div class=\"time_range_duration\">($calculated_duration mins)</div>"
+  puts "<div class=\"time_range_value\">[clock format $record(end) -format $::time_fmt]</div>"
+  puts "</td>"
+
+  #
+  # Column 2. The channel icon and name. There might not be a channel, and the icon may not exist.
+  #
+  puts "<td class=\"tvchannel\">"
+  if { $record(channel_name) != "" } {
+    if { [file exists "/mod/webif/html/img/channels/out/$record(channel_name).png"] } {
+      puts "<img src=\"/img/channels/out/[cgi_quote_url $record(channel_name)].png\" width=50 alt=\"[cgi_quote_html $record(channel_name)]\"/>"
+    } else {
+      puts "<img src=\"/img/channels/out/Unknown.png\" width=50/>"
+    }
+    puts "<div>[cgi_quote_html $record(channel_name)]</div>"
+  }
+  puts "</td>"
+
+  #
+  # Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
+  puts "<td>"
+  puts "<span class=\"tvtitle\">[cgi_quote_html $record(title)]</span>"
+  if { $record(synopsis) != "" } {
+    puts "<span class=\"tvsynopsis\">[cgi_quote_html $record(synopsis)]</span>"
+  }
+  if { $record(scheduled_start) != 0 && $record(scheduled_duration) != 0 } {
+    puts "<span class=\"tvschedule\">([clock format $record(scheduled_start) -format $::date_time_fmt], $record(scheduled_duration) mins)</span>"
+  }
+  puts "</td>"
+
+  puts "</tr>"
 }
 
-set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+#
+# Output the table row for a future event.
+# Updates the global $::total_duration.
+#
+proc output_future_event { service_id event_start event_end } {
+  # Get the EPG entry for the other details displayed.
+  # NB: Adding 10 seconds because the EPG class checks > rather than >= start time.
+  set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 10]]
+  if { [llength $epgs] != 1 } {
+    throw "Unable to get the EPG for the program being watched on service $service_id at $event_start."
+  }
+  lassign $epgs epg
+
+  set title [$epg get name]
+  set synopsis [$epg get text]
+  set channel_name [$epg get channel_name]
+
+  altrow
+
+  #
+  # Column 1. The scheduled record time. This is always present.
+  # The calculated duration is from the start to the end of the program, but the total duration for the day must exclude parts of the program on other days.
+  #
+  set calculated_duration [expr ($event_end - $event_start + 30) / 60]
+  if { $event_start < $::time_start } {
+    set ::total_duration [expr $::total_duration + [expr ($event_end - $::time_start + 30) / 60]]
+  } elseif { $event_end > $::time_end } {
+    set ::total_duration [expr $::total_duration + [expr ($::time_end - $event_start + 30) / 60]]
+  } else {
+    set ::total_duration [expr $::total_duration + $calculated_duration]
+  }
+  puts "<td class=\"future_event\">"
+  puts "<div class=\"time_range_value\">[clock format $event_start -format $::time_fmt]</div>"
+  puts "<div class=\"time_range_duration future_event\">($calculated_duration mins)</div>"
+  puts "<div class=\"time_range_value\">[clock format $event_end -format $::time_fmt]</div>"
+  puts "</td>"
+
+  #
+  # Column 2. The channel icon and name. The channel icon may not exist.
+  #
+  puts "<td class=\"tvchannel future_event\">"
+  if { [file exists "/mod/webif/html/img/channels/out/$channel_name.png"] } {
+    puts "<img src=\"/img/channels/out/[cgi_quote_url $channel_name].png\" width=50 alt=\"[cgi_quote_html $channel_name]\"/>"
+  } else {
+    puts "<img src=\"/img/channels/out/Unknown.png\" width=50/>"
+  }
+  puts "<div>[cgi_quote_html $channel_name]</div>"
+  puts "</td>"
+
+  #
+  # Column 3. There will always be a title. There should be a synopsis, and sheduled time and duration.
+  puts "<td class=\"future_event\">"
+  puts "<span class=\"tvtitle\">[cgi_quote_html $title]</span>"
+  puts "<span class=\"tvsynopsis\">[cgi_quote_html $synopsis]</span>"
+  puts "<span class=\"tvschedule\">([clock format $event_start -format $::date_time_fmt], $calculated_duration mins)</span>"
+  puts "</td>"
+
+  puts "</tr>"
+}
 
 #
-# Got the parameters & DB open so safe to say we're returning data.
+# Convert from the handle of a service to the service ID.
+# (Consider caching results to avoid repeated queries.)
 #
+proc hsvc_to_svcid { hsvc } {
+  set _svcid [$::rsvdb query "SELECT usSvcid FROM channel.TBL_SVC WHERE hSvc = $hsvc LIMIT 1"]
+  if { [llength $_svcid] != 1 } {
+    throw "Failed to get svcid for hsvc=$hsvc"
+  }
+  set svcid [lindex [lindex $_svcid 0] 1]
+  return $svcid;
+}
+
+#
+# Filter the events and add future events to the global $::future_events.
+#
+proc add_future_event { event } {
+  # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
+  if { [$event get ersvtype] == 3 } {
+    set ucRecKind [$event get ucRecKind]
+    # 1 == one-off, 4 == series.
+    if { $ucRecKind == 1 || $ucRecKind == 4 } {
+
+      set elist [$event aul]
+      foreach e $elist {
+        lassign $e hservice start end event_id
+        # Filter to the displayed day's range, after anything that's currently recording.
+        if { $end >= $::time_start && $start < $::time_end && $start > $::current_time } {
+          set key "$start:[$event channel_name]"
+          set vals [concat [hsvc_to_svcid $hservice] $start $end ]
+          dict set ::future_events $key $vals
+        }
+      }
+
+    }
+  }
+}
+
+#
+# Main
+#
+
 httpheader "text/html"
 
 # begin_debug
@@ -38,19 +201,45 @@ httpheader "text/html"
 #  type=$type</pre>"
 # end_debug
 
-# Maintain a running count of time spent recording or watching.
-set total_duration 0
+#
+# Check we have a database, and open it, else HTTP error.
+#
+if { ![file exists /mod/etc/tvdiary.db] } {
+  # Ajax detects the error if we just exit.
+  throw "The tvdiary.db database is missing."
+}
+set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
 
-set time_fmt "%H:%M"
-set date_time_fmt "%a %d %b %Y $time_fmt"
-
+#
+# Query the set of records for the specified type and time range.
+#
 set records [$tvdiarydb query "
   SELECT activities.start, activities.end, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
   FROM activities, programs
   WHERE activities.type=\"%s\" AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
   ORDER BY activities.start" $type $time_start $time_end]
 
-if { [llength $records] > 0 } {
+# Finished with the DB.
+$tvdiarydb close
+
+#
+# Determine if future recording events need to be included.
+#
+if { $type == "R" && $time_end > $current_time } {
+  # Get the details of the scheduled events.
+  set events [rsv list]
+  foreach event $events {
+    add_future_event $event
+  }
+  
+  # I considered processing the pending events here to add/remove from the map,
+  # but pending events only have the first occurance of a series. So I can't
+  # add anything but the first, and I can't remove anything but the first.
+  # So, take the policy decision that the diary predicts what will be recorded
+  # if you don't restart the machine.
+}
+
+if { [llength $records] > 0 || [llength $future_events] } {
   puts "<table class=\"tvdiary_table\">"
 
   # Dummy commented out altrow to flip odd & evenness to avoid green title followed by green row.
@@ -59,53 +248,14 @@ if { [llength $records] > 0 } {
   puts "-->"
 
   foreach record $records {
-    altrow
+    output_past_record $record
+  }
 
-    #
-    # Column 1. The actual record or watching time. This is always present.
-    # The calculated duration is from the start to the end of the program, but the total duration for the day must exclude parts of the program on other days.
-    #
-    set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
-    if { $record(start) < $time_start } {
-      set total_duration [expr $total_duration + [expr ($record(end) - $time_start + 30) / 60]]
-    } elseif { $record(end) > $time_end } {
-      set total_duration [expr $total_duration + [expr ($time_end - $record(start) + 30) / 60]]
-    } else {
-      set total_duration [expr $total_duration + $calculated_duration]
-    }
-    puts "<td>"
-    puts "<div class=\"time_range_value\">[clock format $record(start) -format $time_fmt]</div>"
-    puts "<div class=\"time_range_duration\">($calculated_duration mins)</div>"
-    puts "<div class=\"time_range_value\">[clock format $record(end) -format $time_fmt]</div>"
-    puts "</td>"
-
-    #
-    # Column 2. The channel icon and name. There might not be a channel, and the icon may not exist.
-    #
-    puts "<td class=\"tvchannel\">"
-    if { $record(channel_name) != "" } {
-      if { [file exists "/mod/webif/html/img/channels/out/$record(channel_name).png"] } {
-        puts "<img src=\"/img/channels/out/[cgi_quote_url $record(channel_name)].png\" width=50 alt=\"[cgi_quote_html $record(channel_name)]\"/>"
-      } else {
-        puts "<img src=\"/img/channels/out/Unknown.png\" width=50/>"
-      }
-      puts "<div>[cgi_quote_html $record(channel_name)]</div>"
-    }
-    puts "</td>"
-
-    #
-    # Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
-    puts "<td>"
-    puts "<span class=\"tvtitle\">[cgi_quote_html $record(title)]</span>"
-    if { $record(synopsis) != "" } {
-      puts "<span class=\"tvsynopsis\">[cgi_quote_html $record(synopsis)]</span>"
-    }
-    if { $record(scheduled_start) != 0 && $record(scheduled_duration) != 0 } {
-      puts "<span class=\"tvschedule\">([clock format $record(scheduled_start) -format $date_time_fmt], $record(scheduled_duration) mins)</span>"
-    }
-    puts "</td>"
-
-    puts "</tr>"
+  set keys [lsort [dict keys $future_events]]
+  foreach key $keys {
+    set vals [dict get $future_events $key]
+    lassign $vals service_id start_time end_time
+    output_future_event $service_id $start_time $end_time
   }
 
   # Final row is the total duration.
@@ -124,5 +274,3 @@ if { $total_duration == 0 } {
   #
   puts "<span class=\"nothing\">Nothing</span>"
 }
-
-$tvdiarydb close

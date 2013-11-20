@@ -71,6 +71,14 @@
   white-space: nowrap;
 }
 
+.future_event {
+  font-style: italic;
+}
+
+.future_event.time_range_duration {
+  border-left: thin dashed #000000;
+}
+
 .total_duration {
   display: block;
   font-weight:bold;

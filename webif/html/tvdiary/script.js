@@ -9,7 +9,7 @@ $(document).ready(function() {
           firstDay: 1,
           dateFormat: '@',  //@=ms since 01/01/1970.
           minDate: new Date(min_time * 1000),
-          maxDate: 0,
+          maxDate: 7,
           onSelect: function(val, inst) {
                   // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
                   var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;

@@ -12,6 +12,8 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 set logging 0
 
+set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
+
 #
 # The time for this polling period.
 #
@@ -209,7 +211,7 @@ proc log_stream_activity { activity_type log_time filename } {
 
 #
 # Find the Video files accessed by the humaxtv process.
-# Includes both .ts files and .mp4 files, and checks for the downloaded stream file used by the portal.
+# Includes .ts files and other media files like .mp4, and checks for the downloaded stream file used by the portal.
 # By not limiting the location to My Videos, also have to check for the Tsr (Time Shift Recording?) directory.
 # Returns a dictionary map from the FULL path of the file to its current size,
 # unless the file appears twice (record & watch), where -1 is set instead.
@@ -226,8 +228,8 @@ proc get_data {} {
       
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
       set filepath [regsub {^[^/]*} $line {}]
-      set type [file extension $filepath]
-      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type eq ".mp4" } {
+      set type [string tolower [file extension $filepath]]
+      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::media_file_extensions } {
         if { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
           # Remove what I think is "Time Shift Recording", for rewinding or pausing live TV.
           # We'll log it as watching live instead.
@@ -245,6 +247,19 @@ proc get_data {} {
   return $ret
 }
 
+#
+# Convert from the handle of a service to the service ID.
+# (Consider caching results to avoid repeated queries.)
+#
+proc hsvc_to_svcid { hsvc } {
+  set _svcid [$::rsvdb query "SELECT usSvcid FROM channel.TBL_SVC WHERE hSvc = $hsvc LIMIT 1"]
+  if { [llength $_svcid] != 1 } {
+    throw "Failed to get svcid for hsvc=$hsvc"
+  }
+  set svcid [lindex [lindex $_svcid 0] 1]
+  return $svcid;
+}
+
 # Pre-load the set of unfinished activities.
 load_unfinished_activities
 
@@ -260,13 +275,11 @@ if { [llength $data] } {
     if { ![dict exists $data $filepath] } { set data($filepath) 0 }
 
     set filename [file tail $filepath]
-    set extension [file extension $filename]
+    set extension [string tolower [file extension $filename]]
     if { $extension eq ".ts" } {
       set basename [file rootname $filename]
       set ts [ts fetch $filepath]
-#
-#puts "ts=[$ts get channel_name], [$ts get title], [$ts get synopsis], [$ts get start], [$ts duration], [clock format [$ts get start] -format "%c %Z"], [$ts get definition]."
-#
+
       if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
         # "Decrypting"
         # I haven't seen this in practice. I'm not sure that the file would be open by the humaxtv process in that case?
@@ -284,8 +297,8 @@ if { [llength $data] } {
         log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
       }
 
-    } elseif { $extension eq ".mp4" } {
-      # "Playing .mp4"
+    } elseif { $extension in $::media_file_extensions } {
+      # "Playing .mp4 etc"
       incr watching
       log_stream_activity "W" $current_time $filename
     } elseif { $filename eq "Streamer_down_file" } {
@@ -299,29 +312,14 @@ if { [llength $data] } {
 # Check if we're watching live TV instead.
 if { ![system instandby] && $watching < 1 } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
-  set ff [$rsvdb query "
-    select usSvcid as svcid, usLcn as lcn,
-    substr(szSvcName, 2) as name
-    from channel.TBL_SVC
-    where hSvc = $hsvc
-    limit 1
-  "]
-  if { [llength $ff] == 1 } {
-    lassign [lindex $ff 0] x svcid x lcn x name
-    set epgs [epg dbfetch get \
-        -service $svcid \
-        -time [clock seconds]\
-    ]
-    set prog ""
-    if { [llength $epgs] == 1 } {
-      lassign $epgs epg
-#
-#puts "epg=[$epg get channel_name], [$epg get name], [$epg get text], [$epg get start], [$epg get duration], [clock format [$epg get start] -format "%c %Z"]."
-#
-      log_program_activity "W" $current_time [$epg get channel_name] [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
-    } else {
-      puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Unable to get the EPG for the program being watched on service $svcid."
-    }
+  set svcid [hsvc_to_svcid hsvc]
+  set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
+  set prog ""
+  if { [llength $epgs] == 1 } {
+    lassign $epgs epg
+    log_program_activity "W" $current_time [$epg get channel_name] [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
+  } else {
+    puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Unable to get the EPG for the program being watched on service $svcid."
   }
 }
 
