@@ -177,7 +177,7 @@ proc add_future_event { event } {
       foreach e $elist {
         lassign $e hservice start end event_id
         # Filter to the displayed day's range, after anything that's currently recording.
-        if { $end >= $::time_start && $start < $::time_end && $start > $::current_time } {
+        if { $end >= $::time_start && $start < $::time_end } {
           set key "$start:[$event channel_name]"
           set vals [concat [hsvc_to_svcid $hservice] $start $end ]
           dict set ::future_events $key $vals
@@ -239,7 +239,22 @@ if { $type == "R" && $time_end > $current_time } {
   # if you don't restart the machine.
 }
 
-if { [llength $records] > 0 || [llength $future_events] } {
+if { [llength $records] > 0 || [llength $future_events] > 0 } {
+  #
+  # Corner case: I initially suppressed future events immediately after their start time, but
+  # this results in events disappearing for a couple of minutes until the show has actually
+  # started and more than a minute has been recorded.
+  # So instead, suppress by spotting & removing duplicates.
+  #
+  if { [llength $records] > 0 && [llength $future_events] > 0 } {
+    foreach record $records {
+      set key "$record(scheduled_start):$record(channel_name)"
+      if { [dict exists $future_events $key]  } {
+        dict unset future_events $key
+      }
+    }
+  }
+
   puts "<table class=\"tvdiary_table\">"
 
   # Dummy commented out altrow to flip odd & evenness to avoid green title followed by green row.
