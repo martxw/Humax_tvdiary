@@ -57,7 +57,8 @@ proc output_past_record { record } {
   }
   puts "<td>"
   puts "<div class=\"time_range_value\">[clock format $record(start) -format $::time_fmt]</div>"
-  puts "<div class=\"time_range_duration\">($calculated_duration mins)</div>"
+  if {$calculated_duration == 1} { set min_mins "min" } else { set min_mins "mins" }
+  puts "<div class=\"time_range_duration\">($calculated_duration $min_mins)</div>"
   puts "<div class=\"time_range_value\">[clock format $record(end) -format $::time_fmt]</div>"
   puts "</td>"
 
@@ -83,7 +84,8 @@ proc output_past_record { record } {
     puts "<span class=\"tvsynopsis\">[cgi_quote_html $record(synopsis)]</span>"
   }
   if { $record(scheduled_start) != 0 && $record(scheduled_duration) != 0 } {
-    puts "<span class=\"tvschedule\">([clock format $record(scheduled_start) -format $::date_time_fmt], $record(scheduled_duration) mins)</span>"
+    if {$record(scheduled_duration) == 1} { set min_mins "min" } else { set min_mins "mins" }
+    puts "<span class=\"tvschedule\">([clock format $record(scheduled_start) -format $::date_time_fmt], $record(scheduled_duration) $min_mins)</span>"
   }
   puts "</td>"
 
@@ -123,7 +125,8 @@ proc output_future_event { service_id event_start event_end } {
   }
   puts "<td class=\"future_event\">"
   puts "<div class=\"time_range_value\">[clock format $event_start -format $::time_fmt]</div>"
-  puts "<div class=\"time_range_duration future_event\">($calculated_duration mins)</div>"
+  if {$calculated_duration == 1} { set min_mins "min" } else { set min_mins "mins" }
+  puts "<div class=\"time_range_duration future_event\">($calculated_duration $min_mins)</div>"
   puts "<div class=\"time_range_value\">[clock format $event_end -format $::time_fmt]</div>"
   puts "</td>"
 
@@ -144,7 +147,8 @@ proc output_future_event { service_id event_start event_end } {
   puts "<td class=\"future_event\">"
   puts "<span class=\"tvtitle\">[cgi_quote_html $title]</span>"
   puts "<span class=\"tvsynopsis\">[cgi_quote_html $synopsis]</span>"
-  puts "<span class=\"tvschedule\">([clock format $event_start -format $::date_time_fmt], $calculated_duration mins)</span>"
+  if {$calculated_duration == 1} { set min_mins "min" } else { set min_mins "mins" }
+  puts "<span class=\"tvschedule\">([clock format $event_start -format $::date_time_fmt], $calculated_duration $min_mins)</span>"
   puts "</td>"
 
   puts "</tr>"

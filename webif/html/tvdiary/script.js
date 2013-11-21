@@ -3,6 +3,8 @@
  * Author: Martin Wink, 2013.
  */
 
+var today_start = Math.floor(new Date().getTime() / 86400000.0) * 86400 + day_start;
+
 $(document).ready(function() {
 
   $('#datepicker').datepicker({
@@ -22,10 +24,15 @@ $(document).ready(function() {
     $('html, body').animate({scrollTop: 0}, 500);
   });
 
-  function request_update(chosen)
-  {
+  function request_update(chosen) {
     $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(chosen * 1000)) );
 
+    if (chosen > today_start) {
+      $('#recorded_caption').html( "To be recorded" );
+    } else {
+      $('#recorded_caption').html( "Recorded" );
+    }
+    
     $('#recorded_inner').html("");
     $('#recorded_spinner').show('fast');
     $('#watched_inner').html("");
@@ -67,6 +74,6 @@ $(document).ready(function() {
   }
 
   // When the page loads, show today's details.
-  request_update(Math.floor(new Date().getTime() / 86400000.0) * 86400 + day_start);                  
+  request_update(today_start);
 
 });

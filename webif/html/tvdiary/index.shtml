@@ -15,7 +15,7 @@
 
 <div class="table_wrapper">
   <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
-    <div class="outer_hdr ui-widget-header ui-corner-all">
+    <div id="recorded_caption" class="outer_hdr ui-widget-header ui-corner-all">
       Recorded
     </div>
     <div>
