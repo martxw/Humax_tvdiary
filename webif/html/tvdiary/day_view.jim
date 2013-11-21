@@ -11,16 +11,16 @@ require altrow rsv.class epg.class
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
-#
+# --------------------------------------------------------------
 # CGI parameters
-#
+# --------------------------------------------------------------
 cgi_input
 set time_start [cgi_get start]
 set type [cgi_get type]
 
-#
+# --------------------------------------------------------------
 # Declare globals
-#
+# --------------------------------------------------------------
 set current_time [clock seconds]
 set time_fmt "%H:%M"
 set date_time_fmt "%a %d %b %Y $time_fmt"
@@ -32,9 +32,9 @@ set total_duration 0
 # Accumulte a map from "<time>:<channel-name>" to {service_id start_time end_time}.
 set future_events {}
 
-#
+# --------------------------------------------------------------
 # Declare procedures
-#
+# --------------------------------------------------------------
 
 #
 # Output the table row for one record of past details.
@@ -191,101 +191,104 @@ proc add_future_event { event } {
 #
 # Main
 #
+proc main {} {
+  httpheader "text/html"
 
-httpheader "text/html"
+  # begin_debug
+  #  puts "<pre>Parameters:
+  #  time_start=$::time_start=[clock format $::time_start]
+  #  time_end=$::time_end=[clock format $::time_end]
+  #  type=$::type</pre>"
+  # end_debug
 
-# begin_debug
-#  puts "<pre>Parameters:
-#  time_start=$time_start=[clock format $time_start]
-#  time_end=$time_end=[clock format $time_end]
-#  type=$type</pre>"
-# end_debug
-
-#
-# Check we have a database, and open it, else HTTP error.
-#
-if { ![file exists /mod/etc/tvdiary.db] } {
-  # Ajax detects the error if we just exit.
-  throw "The tvdiary.db database is missing."
-}
-set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-
-#
-# Query the set of records for the specified type and time range.
-#
-set records [$tvdiarydb query "
-  SELECT activities.start, activities.end, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
-  FROM activities, programs
-  WHERE activities.type=\"%s\" AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
-  ORDER BY activities.start" $type $time_start $time_end]
-
-# Finished with the DB.
-$tvdiarydb close
-
-#
-# Determine if future recording events need to be included.
-#
-if { $type == "R" && $time_end > $current_time } {
-  # Get the details of the scheduled events.
-  set events [rsv list]
-  foreach event $events {
-    add_future_event $event
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists /mod/etc/tvdiary.db] } {
+    # Ajax detects the error if we just exit.
+    throw "The tvdiary.db database is missing."
   }
-  
-  # I considered processing the pending events here to add/remove from the map,
-  # but pending events only have the first occurance of a series. So I can't
-  # add anything but the first, and I can't remove anything but the first.
-  # So, take the policy decision that the diary predicts what will be recorded
-  # if you don't restart the machine.
-}
+  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
 
-if { [llength $records] > 0 || [llength $future_events] > 0 } {
   #
-  # Corner case: I initially suppressed future events immediately after their start time, but
-  # this results in events disappearing for a couple of minutes until the show has actually
-  # started and more than a minute has been recorded.
-  # So instead, suppress by spotting & removing duplicates.
+  # Query the set of records for the specified type and time range.
   #
-  if { [llength $records] > 0 && [llength $future_events] > 0 } {
-    foreach record $records {
-      set key "$record(scheduled_start):$record(channel_name)"
-      if { [dict exists $future_events $key]  } {
-        dict unset future_events $key
+  set records [$tvdiarydb query "
+    SELECT activities.start, activities.end, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
+    FROM activities, programs
+    WHERE activities.type=\"%s\" AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
+    ORDER BY activities.start" $::type $::time_start $::time_end]
+
+  # Finished with the DB.
+  $tvdiarydb close
+
+  #
+  # Determine if future recording events need to be included.
+  #
+  if { $::type == "R" && $::time_end > $::current_time } {
+    # Get the details of the scheduled events.
+    set events [rsv list]
+    foreach event $events {
+      add_future_event $event
+    }
+
+    # I considered processing the pending events here to add/remove from the map,
+    # but pending events only have the first occurance of a series. So I can't
+    # add anything but the first, and I can't remove anything but the first.
+    # So, take the policy decision that the diary predicts what will be recorded
+    # if you don't restart the machine.
+  }
+
+  if { [llength $records] > 0 || [llength $::future_events] > 0 } {
+    #
+    # Corner case: I initially suppressed future events immediately after their start time, but
+    # this results in events disappearing for a couple of minutes until the show has actually
+    # started and more than a minute has been recorded.
+    # So instead, suppress by spotting & removing duplicates.
+    #
+    if { [llength $records] > 0 && [llength $::future_events] > 0 } {
+      foreach record $records {
+        set key "$record(scheduled_start):$record(channel_name)"
+        if { [dict exists $::future_events $key]  } {
+          dict unset future_events $key
+        }
       }
     }
+
+    puts "<table class=\"tvdiary_table\">"
+
+    # Dummy commented out altrow to flip odd & evenness to avoid green title followed by green row.
+    puts "<!-- "
+    altrow
+    puts "-->"
+
+    foreach record $records {
+      output_past_record $record
+    }
+
+    set keys [lsort [dict keys $::future_events]]
+    foreach key $keys {
+      set vals [dict get $::future_events $key]
+      lassign $vals service_id start_time end_time
+      output_future_event $service_id $start_time $end_time
+    }
+
+    # Final row is the total duration.
+    altrow
+    puts "<td colspan=\"3\">"
+    puts "<span class=\"total_duration\">Total [format "%d:%2.2d" [expr $::total_duration / 60] [expr $::total_duration % 60]]</span>"
+    puts "</td>"
+    puts "</tr>"
+
+    puts "</table>"
   }
 
-  puts "<table class=\"tvdiary_table\">"
-
-  # Dummy commented out altrow to flip odd & evenness to avoid green title followed by green row.
-  puts "<!-- "
-  altrow
-  puts "-->"
-
-  foreach record $records {
-    output_past_record $record
+  if { $::total_duration == 0 } {
+    #
+    # For zero length results.
+    #
+    puts "<span class=\"nothing\">Nothing</span>"
   }
-
-  set keys [lsort [dict keys $future_events]]
-  foreach key $keys {
-    set vals [dict get $future_events $key]
-    lassign $vals service_id start_time end_time
-    output_future_event $service_id $start_time $end_time
-  }
-
-  # Final row is the total duration.
-  altrow
-  puts "<td colspan=\"3\">"
-  puts "<span class=\"total_duration\">Total [format "%d:%2.2d" [expr $total_duration / 60] [expr $total_duration % 60]]</span>"
-  puts "</td>"
-  puts "</tr>"
-
-  puts "</table>"
 }
 
-if { $total_duration == 0 } {
-  #
-  # For zero length results.
-  #
-  puts "<span class=\"nothing\">Nothing</span>"
-}
+main
