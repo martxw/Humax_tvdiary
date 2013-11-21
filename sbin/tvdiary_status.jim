@@ -22,7 +22,9 @@ if { $::logging } {
   puts "\n[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: tvdiary_status.jim"
 }
 
-if { [catch {set pid [exec pgrep humaxtv]}] } {
+try {
+  set pid [exec pgrep humaxtv]
+} on error { msg } {
   puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Cannot find humaxtv process."
   exit
 }
@@ -32,9 +34,12 @@ if { [catch {set pid [exec pgrep humaxtv]}] } {
 #
 if { ![file exists /mod/etc/tvdiary.db] } {
   set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-  catch {
+  try {
     $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
     $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+  } on error { msg } {
+    puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Failed to create the database tables."
+    exit
   }
 } else {
   set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
@@ -219,9 +224,8 @@ proc log_stream_activity { activity_type log_time filename } {
 #
 proc get_data {} {
   set ret {}
-  if { [catch {set data [exec /mod/bin/lsof -p $::pid]} ] } {
-    set ret {}
-  } else {
+  try {
+    set data [exec /mod/bin/lsof -p $::pid]
     foreach line [split $data "\n"] {
       # Replace multiple whitespaces with single spaces.
       regsub -all -- {[[:space:]]+} $line " " line
@@ -243,6 +247,8 @@ proc get_data {} {
         }
       }
     }
+  } on error { msg } {
+    puts "[clock format $::current_time -format {%a %b %d %H:%M (%Z)}]: Error listing humaxtv files."
   }
   return $ret
 }

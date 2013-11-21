@@ -12,7 +12,6 @@ set day_start [cgi_get tvdiary_day_start]
 #puts "Parameters: $monitoring, $day_start<br>"
 
 set fd [open "/mod/etc/tvdiary.conf" w]
-puts $fd "monitoring $monitoring"
 puts $fd "day_start $day_start"
 close $fd
 

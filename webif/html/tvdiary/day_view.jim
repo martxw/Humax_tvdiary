@@ -99,7 +99,7 @@ proc output_future_event { service_id event_start event_end } {
   # NB: Adding 10 seconds because the EPG class checks > rather than >= start time.
   set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 10]]
   if { [llength $epgs] != 1 } {
-    throw "Unable to get the EPG for the program being watched on service $service_id at $event_start."
+    throw error "Unable to get the EPG for the program being watched on service $service_id at $event_start."
   }
   lassign $epgs epg
 
@@ -157,7 +157,7 @@ proc output_future_event { service_id event_start event_end } {
 proc hsvc_to_svcid { hsvc } {
   set _svcid [$::rsvdb query "SELECT usSvcid FROM channel.TBL_SVC WHERE hSvc = $hsvc LIMIT 1"]
   if { [llength $_svcid] != 1 } {
-    throw "Failed to get svcid for hsvc=$hsvc"
+    throw error "Failed to get svcid for hsvc=$hsvc"
   }
   set svcid [lindex [lindex $_svcid 0] 1]
   return $svcid;
@@ -206,7 +206,7 @@ proc main {} {
   #
   if { ![file exists /mod/etc/tvdiary.db] } {
     # Ajax detects the error if we just exit.
-    throw "The tvdiary.db database is missing."
+    throw error "The tvdiary.db database is missing."
   }
   set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
 
@@ -250,7 +250,7 @@ proc main {} {
       foreach record $records {
         set key "$record(scheduled_start):$record(channel_name)"
         if { [dict exists $::future_events $key]  } {
-          dict unset future_events $key
+          dict unset ::future_events $key
         }
       }
     }
@@ -291,4 +291,8 @@ proc main {} {
   }
 }
 
-main
+try {
+  main
+} on error { msg } {
+  puts "<span class=\"nothing\">Error: $msg</span>"
+}

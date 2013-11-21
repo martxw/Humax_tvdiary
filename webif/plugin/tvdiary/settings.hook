@@ -1,16 +1,23 @@
 #!/mod/bin/jimsh
 
-set day_start "06:00"
-set monitoring 0
-if { ![catch {set settings_fd [open "/mod/etc/tvdiary.conf" r]}] } {
+set day_start "00:00"
+try {
+  set settings_fd [open "/mod/etc/tvdiary.conf" r]
   foreach line [split [read $settings_fd] "\n"] {
     lassign $line settings_key settings_val
     switch $settings_key {
       "day_start" { set day_start $settings_val }
-      "monitoring" { set monitoring $settings_val }
     }
   }
   $settings_fd close
+} on error { msg } {
+  # Use the default if no file.
+}
+
+try {
+  set monitoring [expr [string first "tvdiary_status" [exec /mod/bin/crontab -l | grep tvdiary_status]] != -1]
+} on error { msg } {
+  set monitoring 0
 }
 
 if { $monitoring } { set f "checked" } else { set f "" }
