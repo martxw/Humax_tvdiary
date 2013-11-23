@@ -1,7 +1,16 @@
 #!/mod/bin/jimsh
 #
-# Render the table for a day's recordings or watchings.
-# Usage: /tvdiary/day_view.jim?start=<seconds-from-epoch>&type=<R or W>
+# Render the table of what was recorded, will be recorded, or was watched on a given date.
+# Called over CGI to update a page, or as a CLI for hosting on a different server.
+# If there is no data, or on error, a span is rendered instead of a table.
+#
+# CGI usage: /tvdiary/day_view.jim?start=<time_start>&type=<type>
+# CLI usage: day_view.jim <time_start> <type> [<icons_path> <icons_url>]
+#   time_start = seconds since 1 Jan 1970 epoch.
+#   type = R or W for Recorded or Watched.
+#   icons_path = disk path to the TV channel icons.
+#   icons_url = URL path to the TV channel icons.
+#
 # Author: Martin Wink, 2013.
 #
 
@@ -12,25 +21,55 @@ require altrow rsv.class epg.class
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 # --------------------------------------------------------------
-# CGI parameters
-# --------------------------------------------------------------
-cgi_input
-set time_start [cgi_get start]
-set type [cgi_get type]
-
-# --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
 set current_time [clock seconds]
 set time_fmt "%H:%M"
 set date_time_fmt "%a %d %b %Y $time_fmt"
-set time_end [expr $time_start + 86400]
+
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
 
 # Maintain a running count of time spent recording or watching.
 set total_duration 0
 
 # Accumulte a map from "<time>:<channel-name>" to {service_id start_time end_time}.
 set future_events {}
+
+# --------------------------------------------------------------
+# CGI or command line parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    set time_start [cgi_get start]
+    set type [cgi_get type]
+    httpheader "text/html"
+  }
+  cli {
+    if { $argc != 2 && $argc != 4 } {
+      puts "Usage: $argv0 <time_start> <type> \[<icons_path> <icons_url>\]"
+      puts " time_start = seconds since 1 Jan 1970 epoch"
+      puts " type = R or W for Recorded or Watched"
+      puts " icons_path = disk path to the TV channel icons"
+      puts " icons_url = URL path to the TV channel icons"
+      puts ""
+      puts "Eg: $argv0 $current_time R"
+      puts "Eg: $argv0 $current_time R $channel_icons_path $channel_icons_url"
+      exit -1
+    }
+    set time_start [lindex $argv 0]
+    set type [lindex $argv 1]
+    if { $argc == 4 } {
+      set channel_icons_path [lindex $argv 2]
+      set channel_icons_url [lindex $argv 3]
+    }
+  }
+}
+set time_end [expr $time_start + 86400]
 
 # --------------------------------------------------------------
 # Declare procedures
@@ -67,10 +106,10 @@ proc output_past_record { record } {
   #
   puts "<td class=\"tvchannel\">"
   if { $record(channel_name) != "" } {
-    if { [file exists "/mod/webif/html/img/channels/out/$record(channel_name).png"] } {
-      puts "<img src=\"/img/channels/out/[cgi_quote_url $record(channel_name)].png\" width=50 alt=\"[cgi_quote_html $record(channel_name)]\"/>"
+    if { [file exists "$::channel_icons_path/$record(channel_name).png"] } {
+      puts "<img src=\"$::channel_icons_url/[cgi_quote_url $record(channel_name)].png\" width=50 alt=\"[cgi_quote_html $record(channel_name)]\"/>"
     } else {
-      puts "<img src=\"/img/channels/out/Unknown.png\" width=50/>"
+      puts "<img src=\"$::channel_icons_url/Unknown.png\" width=50/>"
     }
     puts "<div>[cgi_quote_html $record(channel_name)]</div>"
   }
@@ -134,10 +173,10 @@ proc output_future_event { service_id event_start event_end } {
   # Column 2. The channel icon and name. The channel icon may not exist.
   #
   puts "<td class=\"tvchannel future_event\">"
-  if { [file exists "/mod/webif/html/img/channels/out/$channel_name.png"] } {
-    puts "<img src=\"/img/channels/out/[cgi_quote_url $channel_name].png\" width=50 alt=\"[cgi_quote_html $channel_name]\"/>"
+  if { [file exists "$::channel_icons_path/$channel_name.png"] } {
+    puts "<img src=\"$::channel_icons_url/[cgi_quote_url $channel_name].png\" width=50 alt=\"[cgi_quote_html $channel_name]\"/>"
   } else {
-    puts "<img src=\"/img/channels/out/Unknown.png\" width=50/>"
+    puts "<img src=\"$::channel_icons_url/Unknown.png\" width=50/>"
   }
   puts "<div>[cgi_quote_html $channel_name]</div>"
   puts "</td>"
@@ -196,8 +235,6 @@ proc add_future_event { event } {
 # Main
 #
 proc main {} {
-  httpheader "text/html"
-
   # begin_debug
   #  puts "<pre>Parameters:
   #  time_start=$::time_start=[clock format $::time_start]
