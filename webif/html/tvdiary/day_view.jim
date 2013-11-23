@@ -228,8 +228,8 @@ proc add_future_event { event } {
   # NB: There's some strange bahaviour with future events, with series' ending prematurely
   # or extra shows appearing at short notice, and recordings being missed. So for the
   # moment log extra information into the HTML.
-  set debug_info ""
-  set debug_incl "OUT"
+  #set debug_info ""
+  #set debug_incl "OUT"
   # end_debug
   
   # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
@@ -242,34 +242,36 @@ proc add_future_event { event } {
       set elist [$event aul]
       foreach e $elist {
         lassign $e hservice start end event_id
-        if { [filter_and_add_to_future_events $start $end [hsvc_to_svcid $hservice] [$event channel_name]] } {
-          # begin_debug
-          set debug_incl "IN"
-          # end_debug
-        }
-      }
-
-      if { [filter_and_add_to_future_events [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]] } {
+        set in [filter_and_add_to_future_events $start $end [hsvc_to_svcid $hservice] [$event channel_name]]
         # begin_debug
-        set debug_incl "IN"
+        #if { $in } {
+        #  set debug_incl "IN"
+        #}
         # end_debug
       }
+
+      set in [filter_and_add_to_future_events [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]]
+      # begin_debug
+      #if { $in } {
+      #  set debug_incl "IN"
+      #}
+      # end_debug
 
     }
   }
 
   # begin_debug
-  set elist [$event aul]
-  foreach e $elist {
-    lassign $e hservice start end event_id
-    if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
-      set inout "IN"
-    } else {
-      set inout "OUT"
-    }
-    set debug_info "$debug_info \{ $inout, [hsvc_to_svcid $hservice], [clock format $start -format "%a %d-%m-%Y %H:%M"], [clock format $end -format "%a %d-%m-%Y %H:%M"] \}"
-  }
-  puts "<!-- add_future_event{ $debug_incl, \"[$event channel_name]\", \"[$event name]\",$debug_info, [hsvc_to_svcid [$event fix_hsvc]], [clock format [$event get nsttime] -format "%a %d-%m-%Y %H:%M"], [$event get nduration], [$event get ersvtype], [$event get ucRecKind] } -->"
+  #set elist [$event aul]
+  #foreach e $elist {
+  #  lassign $e hservice start end event_id
+  #  if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
+  #    set inout "IN"
+  #  } else {
+  #    set inout "OUT"
+  #  }
+  #  set debug_info "$debug_info \{ $inout, [hsvc_to_svcid $hservice], [clock format $start -format "%a %d-%m-%Y %H:%M"], [clock format $end -format "%a %d-%m-%Y %H:%M"] \}"
+  #}
+  #puts "<!-- add_future_event{ $debug_incl, \"[$event channel_name]\", \"[$event name]\",$debug_info, [hsvc_to_svcid [$event fix_hsvc]], [clock format [$event get nsttime] -format "%a %d-%m-%Y %H:%M"], [$event get nduration], [$event get ersvtype], [$event get ucRecKind] } -->"
   # end_debug
 }
 

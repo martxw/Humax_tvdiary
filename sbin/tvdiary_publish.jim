@@ -29,21 +29,20 @@ set channel_icons_url "channels"
 # Command line parameters
 # --------------------------------------------------------------
 
-if { $argc != 5 } {
-  puts "Usage: $argv0 <ftp_host> <ftp_user> <ftp_password> <ftp_directory> <I|U Initialize or Update>"
+if { $argc != 4 } {
+  puts "Usage: $argv0 <ftp_host> <ftp_user> <ftp_password> <ftp_directory>"
   exit -1
 }
 set ftp_host [lindex $argv 0]
 set ftp_user [lindex $argv 1]
 set ftp_pw [lindex $argv 2]
 set ftp_dir [lindex $argv 3]
-set action [lindex $argv 4]
 
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------
 
-proc update {} {
+proc main {} {
   # One temp file for everything.
   set tmpfile [file tempfile]
 
@@ -183,47 +182,6 @@ proc update {} {
   eval $cmd
 
   file delete $tmpfile
-}
-
-proc initialize {} {
-  set icon_files [glob $::channel_icons_path/*.png]
-  puts "#icon_files=[llength $icon_files]"
-  foreach filename [lsort $icon_files] {
-    if { !([file isfile $filename] && [file readable $filename]) } {
-      puts "Cant read $filename"
-    } else {
-      set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host \"$::ftp_dir/$::channel_icons_url/[file tail $filename]\" \"$filename\""
-      puts $cmd
-      eval $cmd
-    }
-  }
-
-  set additional {
-    "/opt/share/images/blue/516_1_26_Freeview_Logo.png"
-    "/opt/share/images/blue/154_1_00_WIN_MD116_1L.png"
-    "/opt/share/images/blue/154_1_00_WIN_MD116_3R.png"
-    "/opt/share/images/blue/154_1_00_WIN_MD116_2C.png"
-  }
-  foreach filename [lsort $additional] {
-    if { !([file isfile $filename] && [file readable $filename]) } {
-      puts "Cant read $filename"
-    } else {
-      set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host \"$::ftp_dir/images/[file tail $filename]\" \"$filename\""
-      puts $cmd
-      eval $cmd
-    }
-  }
-}
-
-proc main {} {
-  case $::action {
-    "U" {
-      update
-    }
-    "I" {
-      initialize
-    }
-  }
 }
 
 main
