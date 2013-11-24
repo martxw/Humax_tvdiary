@@ -225,9 +225,6 @@ proc filter_and_add_to_future_events {start end service_id channel_name} {
 #
 proc add_future_event { event } {
   # begin_debug
-  # NB: There's some strange bahaviour with future events, with series' ending prematurely
-  # or extra shows appearing at short notice, and recordings being missed. So for the
-  # moment log extra information into the HTML.
   #set debug_info ""
   #set debug_incl "OUT"
   # end_debug
