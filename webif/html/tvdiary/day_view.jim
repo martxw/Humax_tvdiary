@@ -235,7 +235,7 @@ proc add_future_event { event } {
     # 1 == one-off, 4 == series.
     if { $ucRecKind == 1 || $ucRecKind == 4 } {
 
-      # We have to check the entry's own time AND the times from its series link list. (What does aul stand for?)
+      # We have to check the entry's own time AND the times from its series link list.
       set elist [$event aul]
       foreach e $elist {
         lassign $e hservice start end event_id

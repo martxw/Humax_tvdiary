@@ -287,7 +287,6 @@ if { [llength $data] } {
 
       if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
         # "Decrypting"
-        # I haven't seen this in practice. I'm not sure that the file would be open by the humaxtv process in that case?
       } elseif { $ndata($filepath) == -1 } {
         # "Chase Playing"
         incr watching
