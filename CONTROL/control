@@ -1,7 +1,7 @@
 Package: tvdiary
 Priority: optional
 Section: misc
-Version: 0.0.1-2
+Version: 0.0.1-3
 Architecture: mipsel
 Maintainer: martin@mwink.co.uk
 Depends: webif (>= 1.0.7-7)

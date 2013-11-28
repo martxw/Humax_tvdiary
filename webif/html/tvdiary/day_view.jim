@@ -71,6 +71,12 @@ case $runmode {
 }
 set time_end [expr $time_start + 86400]
 
+# In case of error - break glass!
+#puts "<!-- "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "-->"
+
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------

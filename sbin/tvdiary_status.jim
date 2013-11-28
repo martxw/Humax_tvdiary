@@ -5,9 +5,12 @@
 # Based on status.jim by af123.
 #
 
+# In case of error - break glass!
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+
 source /mod/webif/lib/setup
-require epg.class rsv.class
-source /mod/var/mongoose/lib/ts.class
+require epg.class rsv.class ts.class
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 set logging 0
@@ -18,14 +21,15 @@ set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 # The time for this polling period.
 #
 set current_time [clock seconds]
+set logging_time [clock format $current_time -format {%a %b %d %H:%M (%Z)}]
 if { $::logging } {
-  puts "\n[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: tvdiary_status.jim"
+  puts "\n$logging_time: tvdiary_status.jim"
 }
 
 try {
-  set pid [exec pgrep humaxtv]
+  set pid [exec /mod/bin/busybox/pgrep -n humaxtv]
 } on error { msg } {
-  puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Cannot find humaxtv process."
+  puts "$logging_time: Cannot find humaxtv process. \[$msg\]"
   exit
 }
 
@@ -38,7 +42,7 @@ if { ![file exists /mod/etc/tvdiary.db] } {
     $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
     $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
   } on error { msg } {
-    puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Failed to create the database tables."
+    puts "$logging_time: Failed to create the database tables. \[$msg\]"
     exit
   }
 } else {
@@ -62,9 +66,6 @@ proc load_unfinished_activities {} {
   foreach rec $res {
     lappend ::finished_activities $rec(activity_id)
   }
-  if { $::logging } {
-    puts "load_unfinished_activities() => \{$::finished_activities\}"
-  }
 }
 
 #
@@ -72,75 +73,24 @@ proc load_unfinished_activities {} {
 # Any activities that haven't got end times (ie represent less than a minute) are deleted.
 #
 proc update_finished_activities {} {
-  if { $::logging } {
-    puts "update_finished_activities() SET unfinished=0 foreach \{$::finished_activities\}"
-  }
   foreach activity_id $::finished_activities {
     $::tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
   }
 
-  # begin_debug
-  if { $::logging } {
-    set condemned [$::tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished = 0 AND end = 0"]
-    puts "update_finished_activities() queried zero time activities => \{$condemned\}"
-  }
-  # end_debug
-
   $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
-  # begin_debug
-  if { $::logging } {
-    set deleted_count [$::tvdiarydb changes]
-    puts "Deleted $deleted_count activities for being finished with no end time."
-  }
-  # end_debug
 
-  # begin_debug
-  if { $::logging } {
-    set orphans [$::tvdiarydb query "
-      SELECT program_id
-      FROM   programs
-      WHERE NOT EXISTS
-        (SELECT activity_id
-         FROM   activities
-         WHERE  activities.program_id = programs.program_id)"]
-    puts "update_finished_activities() NOT EXISTS queried unreferenced programs => \{$orphans\}"
-  }
-  # end_debug
-
-  # begin_debug
-  if { $::logging } {
-    set orphans [$::tvdiarydb query "
-      SELECT programs.program_id 
-      FROM   programs
-      LEFT OUTER JOIN activities
-        ON (programs.program_id = activities.program_id)
-        WHERE activities.program_id IS NULL"]
-    puts "update_finished_activities() LEFT OUTER JOIN queried unreferenced programs => \{$orphans\}"
-  }
-  # end_debug
-
-  # TODO: When the DB gets fuller, try running /bin/sh/sqlite3 /mod/etc/tvdiary.db and do .timer on and then run both of the queries interactively to see the timings. Turn the monitoring off first. Try with and without deleting activities.
-  
   $::tvdiarydb query "
     DELETE FROM programs
     WHERE  NOT EXISTS
       (SELECT activity_id
        FROM   activities
        WHERE  activities.program_id = programs.program_id)"
-  # begin_debug
-  if { $::logging } {
-    set deleted_count [$::tvdiarydb changes]
-    puts "Deleted $deleted_count programs for being unreferenced."
-  }
-  # end_debug
 }
 
 #
 # Add details for a program being watched or recorded.
 #
 proc log_program_activity { activity_type log_time channel_name title synopsis start_time duration } {
-  #puts "log_program_activity( $activity_type, $log_time, $channel_name, $title, $synopsis, $start_time, $duration )"
-
   # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
   if { $channel_name ne "" } {
     set _prog_id [$::tvdiarydb query "
@@ -248,21 +198,9 @@ proc get_data {} {
       }
     }
   } on error { msg } {
-    puts "[clock format $::current_time -format {%a %b %d %H:%M (%Z)}]: Error listing humaxtv files."
+    puts "$logging_time: Error listing humaxtv files. \[$msg\]"
   }
   return $ret
-}
-
-#
-# Convert from the handle of a service to the service ID.
-#
-proc hsvc_to_svcid { hsvc } {
-  set _svcid [$::rsvdb query "SELECT usSvcid FROM channel.TBL_SVC WHERE hSvc = $hsvc LIMIT 1"]
-  if { [llength $_svcid] != 1 } {
-    throw "Failed to get svcid for hsvc=$hsvc"
-  }
-  set svcid [lindex [lindex $_svcid 0] 1]
-  return $svcid;
 }
 
 # Pre-load the set of unfinished activities.
@@ -316,19 +254,24 @@ if { [llength $data] } {
 # Check if we're watching live TV instead.
 if { ![system instandby] && $watching < 1 } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
-  set svcid [hsvc_to_svcid $hsvc]
+
+  set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
+  if { [llength $_svcid] != 1 } {
+    throw "Failed to get svcid for hsvc=$hsvc"
+  }
+  lassign [lindex $_svcid 0] x svcid x lcn x channel_name
+
   set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
-  set prog ""
   if { [llength $epgs] == 1 } {
     lassign $epgs epg
-    log_program_activity "W" $current_time [$epg get channel_name] [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
+    log_program_activity "W" $current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
   } else {
-    puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: Unable to get the EPG for the program being watched on service $svcid."
+    log_program_activity "W" $current_time $channel_name "Not in EPG" "No information available" 0 0
   }
 }
 
 if { $::logging && [system instandby] } {
-  puts "[clock format $current_time -format {%a %b %d %H:%M (%Z)}]: The system is in standby."
+  puts "$logging_time: The system is in standby."
 }
 
 # Update any activities that are now finished.
