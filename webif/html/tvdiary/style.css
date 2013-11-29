@@ -94,3 +94,54 @@
   font-style:italic;
   text-align: center;
 }
+
+/* Temporary styling for active recording, playing or watching. */
+tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+  border-left: thin solid #a00000;
+  color: #a00000;
+}
+tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+  color: #a00000;
+  //font-weight:bold;
+}
+tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+  content: "\00A0\25CF";
+  color: #ff0000;
+  font-size: 150%;
+}
+
+tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+  border-left: thin solid #005000;
+  color: #005000;
+}
+tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+  color: #005000;
+  //font-weight:bold;
+}
+tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+  content: "\00A0\25B6";
+  color: #00cc00;
+  font-size: 150%;
+}
+
+tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+  border-left: thin solid #005000;
+  color: #005000;
+}
+tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+  color: #005000;
+  //font-weight:bold;
+}
+tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+  content: "\00A0\25B6";
+  color: #C8A2C8;
+  font-size: 150%;
+}
+
+/* Live broadcast shown lilac. */
+/*
+tr[tvdiary_type="L"] .tvchannel {
+  color: #040000;
+  background: #C8A2C8;
+}
+*/

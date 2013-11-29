@@ -7,7 +7,7 @@
 # CGI usage: /tvdiary/day_view.jim?start=<time_start>&type=<type>
 # CLI usage: day_view.jim <time_start> <type> [<icons_path> <icons_url>]
 #   time_start = seconds since 1 Jan 1970 epoch.
-#   type = R or W for Recorded or Watched.
+#   type = R or W for Recorded or Watched (including both Played and Live watched).
 #   icons_path = disk path to the TV channel icons.
 #   icons_url = URL path to the TV channel icons.
 #
@@ -53,7 +53,7 @@ case $runmode {
     if { $argc != 2 && $argc != 4 } {
       puts "Usage: $argv0 <time_start> <type> \[<icons_path> <icons_url>\]"
       puts " time_start = seconds since 1 Jan 1970 epoch"
-      puts " type = R or W for Recorded or Watched"
+      puts " type = R or W for Recorded or Watched (including both Played and Live watched)"
       puts " icons_path = disk path to the TV channel icons"
       puts " icons_url = URL path to the TV channel icons"
       puts ""
@@ -71,6 +71,9 @@ case $runmode {
 }
 set time_end [expr $time_start + 86400]
 
+# TODO: add CGI and cli parameters to exclude the future events if not needed.
+set include_future_events 1
+
 # In case of error - break glass!
 #puts "<!-- "
 #foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
@@ -86,7 +89,7 @@ set time_end [expr $time_start + 86400]
 # Updates the global $::total_duration.
 #
 proc output_past_record { record } {
-  altrow
+  altrow "tvdiary_type=\"$record(type)\" tvdiary_active=\"$record(unfinished)\""
 
   #
   # Column 1. The actual record or watching time. This is always present.
@@ -143,8 +146,8 @@ proc output_past_record { record } {
 #
 proc output_future_event { service_id event_start event_end } {
   # Get the EPG entry for the other details displayed.
-  # NB: Adding 10 seconds because the EPG class checks > rather than >= start time.
-  set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 10]]
+  # NB: Adding 1 second because the EPG class checks > rather than >= start time.
+  set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 1]]
   if { [llength $epgs] != 1 } {
     throw error "Unable to get the EPG for the program being watched on service $service_id at $event_start."
   }
@@ -230,11 +233,7 @@ proc filter_and_add_to_future_events {start end service_id channel_name} {
 # Filter the events and add future events to the global $::future_events.
 #
 proc add_future_event { event } {
-  # begin_debug
-  #set debug_info ""
-  #set debug_incl "OUT"
-  # end_debug
-  
+  set in 0
   # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
   if { [$event get ersvtype] == 3 } {
     set ucRecKind [$event get ucRecKind]
@@ -246,36 +245,12 @@ proc add_future_event { event } {
       foreach e $elist {
         lassign $e hservice start end event_id
         set in [filter_and_add_to_future_events $start $end [hsvc_to_svcid $hservice] [$event channel_name]]
-        # begin_debug
-        #if { $in } {
-        #  set debug_incl "IN"
-        #}
-        # end_debug
       }
 
       set in [filter_and_add_to_future_events [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]]
-      # begin_debug
-      #if { $in } {
-      #  set debug_incl "IN"
-      #}
-      # end_debug
-
     }
   }
-
-  # begin_debug
-  #set elist [$event aul]
-  #foreach e $elist {
-  #  lassign $e hservice start end event_id
-  #  if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
-  #    set inout "IN"
-  #  } else {
-  #    set inout "OUT"
-  #  }
-  #  set debug_info "$debug_info \{ $inout, [hsvc_to_svcid $hservice], [clock format $start -format "%a %d-%m-%Y %H:%M"], [clock format $end -format "%a %d-%m-%Y %H:%M"] \}"
-  #}
-  #puts "<!-- add_future_event{ $debug_incl, \"[$event channel_name]\", \"[$event name]\",$debug_info, [hsvc_to_svcid [$event fix_hsvc]], [clock format [$event get nsttime] -format "%a %d-%m-%Y %H:%M"], [$event get nduration], [$event get ersvtype], [$event get ucRecKind] } -->"
-  # end_debug
+  return $in
 }
 
 #
@@ -301,11 +276,16 @@ proc main {} {
   #
   # Query the set of records for the specified type and time range.
   #
+  if {$::type == "R"} {
+    set type_clause "activities.type='R'"
+  } else {
+    set type_clause "activities.type!='R'"
+  }
   set records [$tvdiarydb query "
-    SELECT activities.start, activities.end, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
+    SELECT activities.start, activities.type, activities.end, activities.unfinished, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
     FROM activities, programs
-    WHERE activities.type=\"%s\" AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
-    ORDER BY activities.start" $::type $::time_start $::time_end]
+    WHERE $type_clause AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
+    ORDER BY activities.start" $::time_start $::time_end]
 
   # Finished with the DB.
   $tvdiarydb close
@@ -313,7 +293,7 @@ proc main {} {
   #
   # Determine if future recording events need to be included.
   #
-  if { $::type == "R" && $::time_end > $::current_time } {
+  if { $::include_future_events && $::type == "R" && $::time_end > $::current_time } {
     # Get the details of the scheduled events.
     set events [rsv list]
     foreach event $events {
@@ -379,8 +359,12 @@ proc main {} {
   }
 }
 
-try {
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "<span class=\"nothing\">Error: $msg</span>"
+  }
+} else {
   main
-} on error { msg } {
-  puts "<span class=\"nothing\">Error: $msg</span>"
 }

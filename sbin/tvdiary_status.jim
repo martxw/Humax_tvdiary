@@ -17,6 +17,9 @@ set logging 0
 
 set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
+# TODO: Add a configuration setting for this.
+set include_live_tv 1
+
 #
 # The time for this polling period.
 #
@@ -88,7 +91,7 @@ proc update_finished_activities {} {
 }
 
 #
-# Add details for a program being watched or recorded.
+# Add details for a program being watched live, played or recorded.
 #
 proc log_program_activity { activity_type log_time channel_name title synopsis start_time duration } {
   # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
@@ -158,18 +161,17 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
 }
 
 #
-# Add details for a media file being watched. Stored like a TV program except blank channel name and no start time or duration.
+# Add details for a media file being played. Stored like a TV program except blank channel name and no start time or duration.
 #
 proc log_stream_activity { activity_type log_time filename } {
-  log_program_activity "W" $log_time "" $filename "" 0 0
+  log_program_activity "P" $log_time "" $filename "" 0 0
 }
 
 #
 # Find the Video files accessed by the humaxtv process.
 # Includes .ts files and other media files like .mp4, and checks for the downloaded stream file used by the portal.
-# By not limiting the location to My Videos, also have to check for the Tsr (Time Shift Recording?) directory.
 # Returns a dictionary map from the FULL path of the file to its current size,
-# unless the file appears twice (record & watch), where -1 is set instead.
+# unless the file appears twice (record & play), where -1 is set instead.
 # Because it's a dictionary, files an only appear once.
 #
 proc get_data {} {
@@ -184,11 +186,6 @@ proc get_data {} {
       set filepath [regsub {^[^/]*} $line {}]
       set type [string tolower [file extension $filepath]]
       if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::media_file_extensions } {
-        if { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
-          # Remove what I think is "Time Shift Recording", for rewinding or pausing live TV.
-          # We'll log it as watching live instead.
-          continue
-        }
         if { [dict exists $ret $filepath] } {
           set ret($filepath) -1
         } else {
@@ -206,8 +203,8 @@ proc get_data {} {
 # Pre-load the set of unfinished activities.
 load_unfinished_activities
 
-# Count of files being watched. If it remains at zero we must be watching live TV.
-set watching 0
+# Flag set if we explicitly know we're watching live.
+set watching_live_tv 0
 
 # Get the data once, wait, then get the data again to see if files are growing as they're recorded.
 set data [get_data]
@@ -225,34 +222,41 @@ if { [llength $data] } {
 
       if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
         # "Decrypting"
+
+      } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
+        # This file exists only when watching live TV. "Time Shift Recording" I assume.
+        set watching_live_tv 1
+
       } elseif { $ndata($filepath) == -1 } {
         # "Chase Playing"
-        incr watching
         log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
-        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        log_program_activity "P" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+
       } elseif { $ndata($filepath) > $data($filepath) } {
         # "Recording"
         log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+
       } else {
         # "Playing"
-        incr watching
-        log_program_activity "W" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        log_program_activity "P" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
       }
 
     } elseif { $extension in $::media_file_extensions } {
       # "Playing .mp4 etc"
-      incr watching
-      log_stream_activity "W" $current_time $filename
+      log_stream_activity "P" $current_time $filename
+
     } elseif { $filename eq "Streamer_down_file" } {
       # "Playing network streamed media"
-      incr watching
-      log_stream_activity "W" $current_time "Network streamed media"
+      log_stream_activity "P" $current_time "Network streamed media"
     }
   }
 }
 
-# Check if we're watching live TV instead.
-if { ![system instandby] && $watching < 1 } {
+# Report if we're watching live TV instead.
+# The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
+# However, that didn't take account of being in the TV Portal but not actually playing anything yet.
+# So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
+if { $include_live_tv && $watching_live_tv } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
 
   set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
@@ -264,14 +268,10 @@ if { ![system instandby] && $watching < 1 } {
   set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
   if { [llength $epgs] == 1 } {
     lassign $epgs epg
-    log_program_activity "W" $current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
+    log_program_activity "L" $current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
   } else {
-    log_program_activity "W" $current_time $channel_name "Not in EPG" "No information available" 0 0
+    log_program_activity "L" $current_time $channel_name "Not in EPG" "No information available" 0 0
   }
-}
-
-if { $::logging && [system instandby] } {
-  puts "$logging_time: The system is in standby."
 }
 
 # Update any activities that are now finished.

@@ -1,8 +1,8 @@
 Package: tvdiary
 Priority: optional
 Section: misc
-Version: 0.0.1-3
+Version: 0.0.1-4
 Architecture: mipsel
-Maintainer: martin@mwink.co.uk
+Maintainer: martxw
 Depends: webif (>= 1.0.7-7)
 Description: tvdiary is an add-on to the web interface. It tracks the TV programs you record and watch, and presents a diary view through the web interface.
