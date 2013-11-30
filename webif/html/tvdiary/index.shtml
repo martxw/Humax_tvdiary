@@ -5,6 +5,9 @@
 <script type="text/javascript" src="/js/easing.js"></script>
 <link type="text/css" href="/css/ui.totop.css" rel="stylesheet" />
 
+<link href=/css/iphone-style-checkboxes.css rel=stylesheet type=text/css />
+<script type="text/javascript" src="/js/iphone-style-checkboxes.js"></script>
+
 <script type="text/javascript" src="/tvdiary/calendar_params.jim"></script>
 <script type="text/javascript" src="/tvdiary/script.js"></script>
 <link type="text/css" href="/tvdiary/style.css" rel="stylesheet" />
@@ -29,6 +32,7 @@
   <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
     <div class="outer_hdr ui-widget-header ui-corner-all">
       Watched
+      <input id="include_live" type="checkbox" value="1" checked>
     </div>
     <div>
       <div id="watched_inner"></div>

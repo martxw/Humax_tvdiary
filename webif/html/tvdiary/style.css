@@ -29,15 +29,15 @@
   text-align: center;
 }
 
-.tvdiary_table {
+.events_table {
   line-height: 1.1em;
 }
 
-.time_range_value {
+.event_start, event_end  {
   white-space: nowrap;
 }
 
-.time_range_duration {
+.event_duration {
   white-space: nowrap;
   margin: 0 0 0 0.5em;
   padding: 0.75em 0.25em 0.75em 1em;
@@ -71,11 +71,11 @@
   white-space: nowrap;
 }
 
-.future_event {
+tr.future_event {
   font-style: italic;
 }
 
-.future_event.time_range_duration {
+tr.future_event div.event_duration {
   border-left: thin dashed #000000;
 }
 
@@ -95,53 +95,58 @@
   text-align: center;
 }
 
-/* Temporary styling for active recording, playing or watching. */
-tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+/* Active recording, playing or watching. */
+tr.record_event.active_event div.event_duration {
   border-left: thin solid #a00000;
   color: #a00000;
 }
-tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+tr.record_event.active_event div.event_end {
   color: #a00000;
-  //font-weight:bold;
 }
-tr[tvdiary_type="R"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+tr.record_event.active_event div.event_end:after {
   content: "\00A0\25CF";
   color: #ff0000;
   font-size: 150%;
 }
 
-tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+tr.play_event.active_event div.event_duration {
   border-left: thin solid #005000;
   color: #005000;
 }
-tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+tr.play_event.active_event div.event_end {
   color: #005000;
-  //font-weight:bold;
 }
-tr[tvdiary_type="P"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+tr.play_event.active_event div.event_end:after {
   content: "\00A0\25B6";
   color: #00cc00;
   font-size: 150%;
 }
 
-tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_value + .time_range_duration {
+tr.live_event.active_event div.event_duration {
   border-left: thin solid #005000;
   color: #005000;
 }
-tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_duration + .time_range_value {
+tr.live_event.active_event div.event_end {
   color: #005000;
-  //font-weight:bold;
 }
-tr[tvdiary_type="L"][tvdiary_active="1"] .time_range_duration + .time_range_value:after {
+tr.live_event.active_event div.event_end:after {
   content: "\00A0\25B6";
   color: #C8A2C8;
   font-size: 150%;
 }
 
-/* Live broadcast shown lilac. */
-/*
-tr[tvdiary_type="L"] .tvchannel {
-  color: #040000;
-  background: #C8A2C8;
+/* Separator between recorded & future events */
+tr.record_event + tr.future_event td {
+  border-collapse: collapse;
+  border-top: thin dashed #000000;
 }
-*/
+
+/* Live broadcast shown lilac. */
+tr.live_event td.tvchannel div {
+  color: #000000;
+  background: #d6b2d6;
+}
+
+tr.hidden_event {
+  display: none;
+}
