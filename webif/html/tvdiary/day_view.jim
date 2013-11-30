@@ -68,7 +68,7 @@ case $runmode {
 }
 set time_end [expr $time_start + 86400]
 
-# TODO: add CGI and cli parameters to exclude the future events if not needed.
+# TODO: Possibly add CGI and cli parameters to exclude the future events if not needed.
 set include_future_events 1
 
 # In case of error - break glass!
@@ -85,7 +85,8 @@ set include_future_events 1
 # Output the table row for one record of past details.
 #
 proc output_past_record { record } {
-  set typeclass ""
+  # Default in case of old W records.
+  set typeclass "play_event"
   case $record(type) {
     R {
       set typeclass "record_event"
@@ -314,6 +315,10 @@ proc main {} {
     # started and more than a minute has been recorded.
     # So instead, suppress by spotting & removing duplicates.
     #
+    # NB: It's arguable that future events that should have started but not yet finished
+    # should be included, but marked as active, and that the filtering be done in JavaScript.
+    # That way the minutes remaining to be recorded can be included in the total counts.
+    #
     if { [llength $records] > 0 && [llength $::future_events] > 0 } {
       foreach record $records {
         set key "$record(scheduled_start):$record(channel_name)"
@@ -323,7 +328,6 @@ proc main {} {
       }
     }
 
-    set total_rows 0
     puts "<table class=\"events_table\">"
 
     foreach record $records {
@@ -340,9 +344,7 @@ proc main {} {
     }
 
     puts "</table>"
-  }
-
-  if { $total_rows == 0 } {
+  } else {
     #
     # For zero length results.
     #

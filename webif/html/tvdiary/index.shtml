@@ -15,6 +15,7 @@
 <h1>TV Diary<span id="title_date"></span></h1>
 
 <div id="datepicker"></div>
+<input id="include_live" type="checkbox" value="1" checked>
 
 <div class="table_wrapper">
   <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
@@ -30,9 +31,8 @@
     </div>
   </div>
   <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
-    <div class="outer_hdr ui-widget-header ui-corner-all">
+    <div id="watched_caption" class="outer_hdr ui-widget-header ui-corner-all">
       Watched
-      <input id="include_live" type="checkbox" value="1" checked>
     </div>
     <div>
       <div id="watched_inner"></div>
