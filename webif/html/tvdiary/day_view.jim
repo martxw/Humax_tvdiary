@@ -301,10 +301,10 @@ proc main {} {
       add_future_event $event
     }
 
-    # I considered processing the pending events here to add/remove from the map,
+    # I considered processing the pending scheduled events here to add or remove from the map,
     # but pending events only have the first occurance of a series. So I can't
     # add anything but the first, and I can't remove anything but the first.
-    # So, take the policy decision that the diary predicts what will be recorded
+    # So, took the policy decision that the diary predicts what will be recorded
     # if you don't restart the machine.
   }
 
@@ -332,7 +332,6 @@ proc main {} {
 
     foreach record $records {
       output_past_record $record
-      incr total_rows
     }
 
     set keys [lsort [dict keys $::future_events]]
@@ -340,7 +339,6 @@ proc main {} {
       set vals [dict get $::future_events $key]
       lassign $vals service_id start_time end_time
       output_future_event $service_id $start_time $end_time
-      incr total_rows
     }
 
     puts "</table>"

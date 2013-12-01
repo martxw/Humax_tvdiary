@@ -13,76 +13,64 @@ source /mod/webif/lib/setup
 require epg.class rsv.class ts.class
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
-set logging 0
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set logging 1
 
 set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
-# TODO: Add a configuration setting for this.
+# TODO: Maybe add a configuration setting for this.
 set include_live_tv 1
 
 #
 # The time for this polling period.
 #
 set current_time [clock seconds]
-set logging_time [clock format $current_time -format {%a %b %d %H:%M (%Z)}]
-if { $::logging } {
-  puts "\n$logging_time: tvdiary_status.jim"
-}
+set log_date_fmt "%d/%m/%Y-%H:%M"
+set logging_time [clock format $current_time -format $log_date_fmt]
+#if { $::logging } {
+#  puts "\n$logging_time: tvdiary_status.jim"
+#}
 
-try {
-  set pid [exec /mod/bin/busybox/pgrep -n humaxtv]
-} on error { msg } {
-  puts "$logging_time: Cannot find humaxtv process. \[$msg\]"
-  exit
-}
-
-#
-# Create or open the database file, declaring the global $::tvdiarydb.
-#
-if { ![file exists /mod/etc/tvdiary.db] } {
-  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-  try {
-    $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
-    $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
-  } on error { msg } {
-    puts "$logging_time: Failed to create the database tables. \[$msg\]"
-    exit
-  }
-} else {
-  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-}
-
-#
-# We load the IDs of the activities currently marked as unfinished into this list.
-# As we update activities we remove their IDs from the list. At the end, any IDs
-# remaining will be the ones previously marked as unfinished but are now finished.
-#
-set finished_activities {}
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
 
 #
 # Load the IDs of previously unfinished activities.
 #
-proc load_unfinished_activities {} {
-  set ::finished_activities {}
+proc load_unfinished_activities { tvdiarydb } {
+  set unfinished_activities {}
 
-  set res [$::tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished=1"]
+  set res [$tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished=1"]
   foreach rec $res {
-    lappend ::finished_activities $rec(activity_id)
+    lappend unfinished_activities $rec(activity_id)
   }
+  return $unfinished_activities;
 }
 
 #
 # Update the flags on activities that are now finished.
 # Any activities that haven't got end times (ie represent less than a minute) are deleted.
 #
-proc update_finished_activities {} {
-  foreach activity_id $::finished_activities {
-    $::tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
+proc update_finished_activities { tvdiarydb &finished_activities } {
+  foreach activity_id $finished_activities {
+    $tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
+    if { $::logging } {
+      puts "$::logging_time: Finished activity $activity_id, [get_activitiy_program_details $tvdiarydb $activity_id]"
+    }
   }
 
-  $::tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
+  if { $::logging } {
+    set res [$tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished = 0 AND end = 0"]
+    foreach rec $res {
+      puts "$::logging_time: Deleted zero length activity $rec(activity_id), [get_activitiy_program_details $tvdiarydb $activity_id]"
+    }
+  }
+  $tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
 
-  $::tvdiarydb query "
+  $tvdiarydb query "
     DELETE FROM programs
     WHERE  NOT EXISTS
       (SELECT activity_id
@@ -91,19 +79,31 @@ proc update_finished_activities {} {
 }
 
 #
+# For debug logging - find the program that goes with an activity.
+#
+proc get_activitiy_program_details { tvdiarydb activity_id } {
+  set _rec [$tvdiarydb query "
+    SELECT activities.type, activities.start, activities.end, activities.unfinished, programs.channel_name, programs.title, programs.start AS scheduled_start, programs.duration AS scheduled_duration
+    FROM activities, programs
+    WHERE activities.program_id = programs.program_id AND activities.activity_id = '%s'" $activity_id]
+  set rec [lindex $_rec 0]
+  return "'$rec(type)', $rec(channel_name), '$rec(title)', [clock format $rec(start) -format $::log_date_fmt] - [clock format $rec(end) -format $::log_date_fmt], [clock format $rec(scheduled_start) -format $::log_date_fmt], $rec(scheduled_duration)";
+}
+
+#
 # Add details for a program being watched live, played or recorded.
 #
-proc log_program_activity { activity_type log_time channel_name title synopsis start_time duration } {
+proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration } {
   # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
   if { $channel_name ne "" } {
-    set _prog_id [$::tvdiarydb query "
+    set _prog_id [$tvdiarydb query "
       SELECT program_id
       FROM programs
       WHERE channel_name = '%s' AND start = %s
       LIMIT 1
       " $channel_name $start_time]
   } else {
-    set _prog_id [$::tvdiarydb query "
+    set _prog_id [$tvdiarydb query "
       SELECT program_id
       FROM programs
       WHERE channel_name = '' AND title = '%s'
@@ -118,7 +118,7 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
 
   if { $prog_id ne {} } {
     # If there's an existing program entry, check for an unfinished activity of the right type for it that we can update.
-    set _act_id [$::tvdiarydb query "
+    set _act_id [$tvdiarydb query "
       SELECT activity_id
       FROM activities
       WHERE program_id = %s AND type = '%s' AND unfinished = 1
@@ -132,39 +132,71 @@ proc log_program_activity { activity_type log_time channel_name title synopsis s
 
     if { $act_id ne {} } {
       # Update the unfinished activity's end time, and remove the ID from the finished activities set.
-      $::tvdiarydb query "UPDATE activities SET end = %s WHERE activity_id = %s" $log_time $act_id
-      
-      set idx [lsearch $::finished_activities $act_id]
-      set ::finished_activities [lreplace $::finished_activities $idx $idx]
+      $tvdiarydb query "UPDATE activities SET end = %s WHERE activity_id = %s" $log_time $act_id
+      set idx [lsearch $finished_activities $act_id]
+      set finished_activities [lreplace $finished_activities $idx $idx]
+      if { $::logging } {
+        puts "$::logging_time: Updated activity $act_id"
+      }
+
     } else {
       # If no unfinished activity, create a new activity with a start time but zero end time, marked unfinished.
-      $::tvdiarydb query "
+      $tvdiarydb query "
         INSERT INTO activities (program_id, type, start, end, unfinished)
         VALUES (%s, '%s', %s, 0, 1)
         " $prog_id $activity_type $log_time
-      #set act_id [$::tvdiarydb lastid]
+      if { $::logging } {
+        set act_id [$tvdiarydb lastid]
+        puts "$::logging_time: Started new activity $act_id, [get_activitiy_program_details $tvdiarydb $act_id]"
+      }
     }
   } else {
     # If there's no existing entry for the program, create a new entry, and a new activity.
-    $::tvdiarydb query "
+    $tvdiarydb query "
       INSERT INTO programs (channel_name, title, synopsis, start, duration)
       VALUES ('%s', '%s', '%s', %s, %s)
       " $channel_name $title $synopsis $start_time $duration
-    set prog_id [$::tvdiarydb lastid]
+    set prog_id [$tvdiarydb lastid]
 
-    $::tvdiarydb query "
+    $tvdiarydb query "
       INSERT INTO activities (program_id, type, start, end, unfinished)
       VALUES (%s, '%s', %s, 0, 1)
       " $prog_id $activity_type $log_time
-    #set act_id [$::tvdiarydb lastid]
+    if { $::logging } {
+      set act_id [$tvdiarydb lastid]
+      puts "$::logging_time: Started new activity $act_id, [get_activitiy_program_details $tvdiarydb $act_id]"
+    }
   }
 }
 
 #
 # Add details for a media file being played. Stored like a TV program except blank channel name and no start time or duration.
 #
-proc log_stream_activity { activity_type log_time filename } {
-  log_program_activity "P" $log_time "" $filename "" 0 0
+proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time filename } {
+  log_program_activity $tvdiarydb finished_activities "P" $log_time "" $filename "" 0 0
+}
+
+#
+# Report if we're watching live TV.
+# The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
+# However, that didn't take account of being in the TV Portal but not actually playing anything yet.
+# So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
+proc log_watching_live_tv { tvdiarydb &finished_activities } {
+  set hsvc [system param CUR_SVC Value USERCONFIG]
+
+  set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
+  if { [llength $_svcid] != 1 } {
+    throw "Failed to get svcid for hsvc=$hsvc"
+  }
+  lassign [lindex $_svcid 0] x svcid x lcn x channel_name
+
+  set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
+  if { [llength $epgs] == 1 } {
+    lassign $epgs epg
+    log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
+  } else {
+    log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name "Not in EPG" "No information available" 0 0
+  }
 }
 
 #
@@ -174,10 +206,10 @@ proc log_stream_activity { activity_type log_time filename } {
 # unless the file appears twice (record & play), where -1 is set instead.
 # Because it's a dictionary, files an only appear once.
 #
-proc get_data {} {
+proc get_data { pid } {
   set ret {}
   try {
-    set data [exec /mod/bin/lsof -p $::pid]
+    set data [exec /mod/bin/lsof -p $pid]
     foreach line [split $data "\n"] {
       # Replace multiple whitespaces with single spaces.
       regsub -all -- {[[:space:]]+} $line " " line
@@ -195,84 +227,101 @@ proc get_data {} {
       }
     }
   } on error { msg } {
-    puts "$logging_time: Error listing humaxtv files. \[$msg\]"
+    puts "$::logging_time: Error listing humaxtv files. \[$msg\]"
   }
   return $ret
 }
 
-# Pre-load the set of unfinished activities.
-load_unfinished_activities
+#
+# Create or open the database file.
+#
+proc openDB {} {
+  if { ![file exists /mod/etc/tvdiary.db] } {
+    set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+    try {
+      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+      $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+    } on error { msg } {
+      puts "$::logging_time: Failed to create the database tables. \[$msg\]"
+      exit
+    }
+  } else {
+    set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+  }
+  return $tvdiarydb;
+}
 
-# Flag set if we explicitly know we're watching live.
-set watching_live_tv 0
+#
+# Main
+#
+proc main {} {
+  try {
+    set pid [exec /mod/bin/busybox/pgrep -n humaxtv]
+  } on error { msg } {
+    puts "$::logging_time: Cannot find humaxtv process. \[$msg\]"
+    exit
+  }
 
-# Get the data once, wait, then get the data again to see if files are growing as they're recorded.
-set data [get_data]
-if { [llength $data] } {
-  sleep 3
-  set ndata [get_data]
-  foreach filepath [array names ndata] {
-    if { ![dict exists $data $filepath] } { set data($filepath) 0 }
+  set tvdiarydb [openDB]
+  #
+  # We load the IDs of the activities currently marked as unfinished into this list.
+  # As we update activities we remove their IDs from the list. At the end, any IDs
+  # remaining will be the ones previously marked as unfinished but are now finished.
+  #
+  set finished_activities [load_unfinished_activities $tvdiarydb]
 
-    set filename [file tail $filepath]
-    set extension [string tolower [file extension $filename]]
-    if { $extension eq ".ts" } {
-      set basename [file rootname $filename]
-      set ts [ts fetch $filepath]
+  # Get the data once, wait, then get the data again to see if files are growing as they're recorded.
+  set data [get_data $pid]
+  if { [llength $data] } {
+    sleep 3
+    set ndata [get_data $pid]
 
-      if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
-        # "Decrypting"
+    foreach filepath [array names ndata] {
+      if { ![dict exists $data $filepath] } { set data($filepath) 0 }
 
-      } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
-        # This file exists only when watching live TV. "Time Shift Recording" I assume.
-        set watching_live_tv 1
+      set filename [file tail $filepath]
+      set extension [string tolower [file extension $filename]]
+      if { $extension eq ".ts" } {
+        set basename [file rootname $filename]
+        set ts [ts fetch $filepath]
 
-      } elseif { $ndata($filepath) == -1 } {
-        # "Chase Playing"
-        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
-        log_program_activity "P" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
+          # "Decrypting"
 
-      } elseif { $ndata($filepath) > $data($filepath) } {
-        # "Recording"
-        log_program_activity "R" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
+          # This file exists only when watching live TV. "Time Shift Recording" I assume.
+          if { $::include_live_tv } {
+            log_watching_live_tv $tvdiarydb finished_activities
+          }
 
-      } else {
-        # "Playing"
-        log_program_activity "P" $current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        } elseif { $ndata($filepath) == -1 } {
+          # "Chase Playing"
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+
+        } elseif { $ndata($filepath) > $data($filepath) } {
+          # "Recording"
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+
+        } else {
+          # "Playing"
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+        }
+
+      } elseif { $extension in $::media_file_extensions } {
+        # "Playing .mp4 etc"
+        log_stream_activity $tvdiarydb finished_activities "P" $::current_time $filename
+
+      } elseif { $filename eq "Streamer_down_file" } {
+        # "Playing network streamed media"
+        log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
       }
-
-    } elseif { $extension in $::media_file_extensions } {
-      # "Playing .mp4 etc"
-      log_stream_activity "P" $current_time $filename
-
-    } elseif { $filename eq "Streamer_down_file" } {
-      # "Playing network streamed media"
-      log_stream_activity "P" $current_time "Network streamed media"
     }
   }
+
+  # Update any activities that are now finished.
+  update_finished_activities $tvdiarydb finished_activities
+  $tvdiarydb close
 }
 
-# Report if we're watching live TV instead.
-# The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
-# However, that didn't take account of being in the TV Portal but not actually playing anything yet.
-# So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
-if { $include_live_tv && $watching_live_tv } {
-  set hsvc [system param CUR_SVC Value USERCONFIG]
-
-  set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
-  if { [llength $_svcid] != 1 } {
-    throw "Failed to get svcid for hsvc=$hsvc"
-  }
-  lassign [lindex $_svcid 0] x svcid x lcn x channel_name
-
-  set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
-  if { [llength $epgs] == 1 } {
-    lassign $epgs epg
-    log_program_activity "L" $current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
-  } else {
-    log_program_activity "L" $current_time $channel_name "Not in EPG" "No information available" 0 0
-  }
-}
-
-# Update any activities that are now finished.
-update_finished_activities
+main
