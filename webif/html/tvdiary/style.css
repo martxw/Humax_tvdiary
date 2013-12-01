@@ -3,24 +3,34 @@
  * Author: Martin Wink, 2013.
  */
 
+/* Size tables, and keep them apart in different orientations */
 #recorded_outer, #watched_outer {
   width: 51em;
+  float: left;
   margin: 0 1em 1em 0;
 }
 
+/* Space from tables on right, and other fields below */
 #datepicker {
   float: left;
-  margin: 0 1em 1em 0;
+  margin: 0 1em 0.3em 0;
 }
 
-#recorded_outer, #watched_outer {
-  float: left;
+/* Prompt - as th.key but no background */
+td.prompt
+{
+  font-weight: bold;
+  text-align: right;
+  color: black;
+  padding: 0.5em;
 }
 
+/* Keep tables & fields together */
 .table_wrapper {
   float: left;
 }
 
+/* The header above the tables, sized to match the datepicker */
 .outer_hdr {
   display: block;
   margin: .2em .2em .2em .2em;
@@ -29,73 +39,83 @@
   text-align: center;
 }
 
+/* Space all text in the whole table */
 .events_table {
   line-height: 1.1em;
 }
 
-.event_start, event_end  {
+/* Don't wrap any of the times */
+.event_start, .event_end, .event_duration {
   white-space: nowrap;
 }
 
+/* The duration provides the height for the vertical line drawn as its left border */
 .event_duration {
-  white-space: nowrap;
   margin: 0 0 0 0.5em;
   padding: 0.75em 0.25em 0.75em 1em;
   border-left: thin solid #000000;
   vertical-align: middle;
   text-align: right;
 }
-      
+
+/* The TV channel name and icon centred */    
 .tvchannel {
   text-align:center;
   vertical-align: middle;
   white-space: nowrap;
 }
 
+/* The TV programme title text */
 .tvtitle {
   display: block;
+  white-space: nowrap;
   text-align:left;
   font-weight:bold;
-  white-space: nowrap;
 }
 
+/* The large block of synopsis text */
 .tvsynopsis {
   display: block;
   text-align:left;
 }
 
+/* The full date and time text */
 .tvschedule {
   display: block;
+  white-space: nowrap;
   text-align:right;
   font-size:90%;
-  white-space: nowrap;
 }
 
+/* All to be recorded text */
 tr.future_event {
   font-style: italic;
 }
 
+/* To be recorded dashed vertical line */
 tr.future_event div.event_duration {
   border-left: thin dashed #000000;
 }
 
-.total_duration {
-  display: block;
-  font-weight:bold;
-  text-align: center;
+/* The separator between recorded & future events */
+tr.record_event + tr.future_event td {
+  border-collapse: collapse;
+  border-top: thin dashed #000000;
 }
 
+/* Progress indicators centred */
 #recorded_spinner, #watched_spinner {
   text-align: center;
 }
 
+/* When no results to be shown */
 .nothing {
   display: block;
   font-style:italic;
   text-align: center;
 }
 
-/* Active recording, playing or watching. */
+/* Show when recording is active */
 tr.record_event.active_event div.event_duration {
   border-left: thin solid #a00000;
   color: #a00000;
@@ -109,6 +129,7 @@ tr.record_event.active_event div.event_end:after {
   font-size: 150%;
 }
 
+/* Show when playing media */
 tr.play_event.active_event div.event_duration {
   border-left: thin solid #005000;
   color: #005000;
@@ -122,6 +143,7 @@ tr.play_event.active_event div.event_end:after {
   font-size: 150%;
 }
 
+/* Show when watching live */
 tr.live_event.active_event div.event_duration {
   border-left: thin solid #005000;
   color: #005000;
@@ -135,18 +157,19 @@ tr.live_event.active_event div.event_end:after {
   font-size: 150%;
 }
 
-/* Separator between recorded & future events */
-tr.record_event + tr.future_event td {
-  border-collapse: collapse;
-  border-top: thin dashed #000000;
+/* For hiding live events */
+tr.hidden_event {
+  display: none;
+}
+
+/* Live TV count - when not shown. */
+span.live_count_hidden {
+  color: #5e5e5e;
+  text-decoration: line-through;
 }
 
 /* Live broadcast shown lilac. */
 tr.live_event td.tvchannel div {
   color: #000000;
   background: #d6b2d6;
-}
-
-tr.hidden_event {
-  display: none;
 }

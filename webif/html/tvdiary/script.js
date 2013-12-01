@@ -16,6 +16,32 @@ var including_live = true;
 var display_start;
 var display_end;
 
+function setCookie(c_name, value) {
+  var exdate = new Date();
+  exdate.setDate(exdate.getDate() + 365);
+  var c_value = escape(value) + "; expires=" + exdate.toUTCString();
+  document.cookie = c_name + "=" + c_value;
+}
+
+function getCookie(c_name) {
+  var c_value = document.cookie;
+  var c_start = c_value.indexOf(" " + c_name + "=");
+  if (c_start == -1) {
+    c_start = c_value.indexOf(c_name + "=");
+  }
+  if (c_start == -1) {
+    c_value = null;
+  } else {
+    c_start = c_value.indexOf("=", c_start) + 1;
+    var c_end = c_value.indexOf(";", c_start);
+    if (c_end == -1) {
+      c_end = c_value.length;
+    }
+    c_value = unescape(c_value.substring(c_start,c_end));
+  }
+  return c_value;
+}
+
 $(document).ready(function() {
 
   $().UItoTop({easingType: 'easeOutQuart'});
@@ -35,13 +61,24 @@ $(document).ready(function() {
           }
   });
 
+  // The cookie is loaded as a string - convert to boolean, but default to true if missing.
+  // Set the checked state before initializing the iphoneStyle checkbox.
+  including_live = getCookie("tvdiary_live_tv");
+  including_live = (including_live != "false");
+  if (including_live) {
+    $('#include_live').attr("checked","checked").change();
+  } else {
+    $('#include_live').removeAttr("checked").change();
+  }
+
   $('#include_live').iphoneStyle({
-    checkedLabel: 'Show',
-    uncheckedLabel: 'Hide'
+    checkedLabel: 'Yes',
+    uncheckedLabel: 'No'
   });
+
   $('#include_live').change(function() {
+    // I can't get other methods, including is(":checked"), to work.
     show_live($(this).is('[checked=checked]'));
-    //show_live($(this).prop('checked'));
   });
 
   function show_live(state) {
@@ -54,8 +91,12 @@ $(document).ready(function() {
       }
     });
     apply_altrow( $("#watched_inner") );
-    update_watched_duration( $('#watched_inner') );
-
+    if (state) {
+      $(".live_count").removeClass('live_count_hidden');
+    } else {
+      $(".live_count").addClass('live_count_hidden');
+    }
+    setCookie("tvdiary_live_tv", including_live);
   }
 
   function apply_altrow(data) {
@@ -96,8 +137,7 @@ $(document).ready(function() {
   }
 
   function format_duration(duration) {
-    //if (duration == 0) {return "nothing";}
-    return two_digits(Math.floor(duration / 60) + ":" + two_digits(duration % 60));
+    return two_digits(Math.floor(duration / 60)) + ":" + two_digits(duration % 60);
   }
 
   function update_recorded_duration(data) {
@@ -106,20 +146,14 @@ $(document).ready(function() {
     var total_scheduled = 0;
 
     $("tr.record_event", data).each(function(i, tr) {
-      //var duration = $(tr).attr('event_duration');
       var constrained_duration = duration_within_display_range(tr);
-      //console.log("tr.record_event " + i + " duration=" + format_duration(duration) + "constrained_duration=" + constrained_duration);
       total_recorded += constrained_duration;
     });
-    //console.log("tr.record_event total_recorded=" + total_recorded + "format_duration=" + format_duration(total_recorded));
 
     $("tr.future_event", data).each(function(i, tr) {
-      //var duration = $(tr).attr('event_duration');
       var constrained_duration = duration_within_display_range(tr);
-      //console.log("tr.future_event " + i + " duration=" + format_duration(duration) + "constrained_duration=" + format_duration(constrained_duration));
       total_scheduled += constrained_duration;
     });
-    //console.log("tr.future_event total_scheduled=" + total_scheduled + "format_duration=" + format_duration(total_scheduled));
 
     if (display_start < today_start) {
       if (total_recorded == 0) {
@@ -152,32 +186,25 @@ $(document).ready(function() {
     var total_live = 0;
 
     $("tr.play_event", data).each(function(i, tr) {
-      //var duration = $(tr).attr('event_duration');
       var constrained_duration = duration_within_display_range(tr);
-      //console.log("tr.play_event " + i + " duration=" + format_duration(duration) + "constrained_duration=" + constrained_duration);
       total_played += constrained_duration;
     });
-    //console.log("tr.play_event total_played=" + total_played + "format_duration=" + format_duration(total_played));
 
     $("tr.live_event", data).each(function(i, tr) {
-      //var duration = $(tr).attr('event_duration');
       var constrained_duration = duration_within_display_range(tr);
-      //console.log("tr.live_event " + i + " duration=" + format_duration(duration) + "constrained_duration=" + format_duration(constrained_duration));
       total_live += constrained_duration;
     });
-    //console.log("tr.live_event total_live=" + total_live + "format_duration=" + format_duration(total_live));
 
     var combined_duration = total_played + total_live;
-    //console.log("combined_duration=" + combined_duration + "=" + format_duration(combined_duration));
     
     if (combined_duration == 0) {
       $('#watched_caption').html( "Watched nothing");
     } else if (total_live == 0) {
       $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (Media: " + format_duration(total_played) + ")");
     } else if (total_played == 0) {
-      $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (Live: " + format_duration(total_live) + ")");
+      $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (<span class=\"live_count\">Live: " + format_duration(total_live) + "<span>)");
     } else {
-      $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (Media: " + format_duration(total_played) + " / Live: " + format_duration(total_live) + ")");
+      $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (Media: " + format_duration(total_played) + " <span class=\"live_count\">/ Live: " + format_duration(total_live) + "</span>)");
     }
   }
 
@@ -226,6 +253,7 @@ $(document).ready(function() {
       url: "/tvdiary/day_view.jim?start=" + chosen + "&type=W",
       success: function(data) {
         $('#watched_inner').html(make_all_visible(data));
+        update_watched_duration( $('#watched_inner') );
         show_live(including_live);
         $('#watched_spinner').hide('slow');
       },
