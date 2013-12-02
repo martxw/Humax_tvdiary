@@ -162,6 +162,11 @@ tr.hidden_event {
   display: none;
 }
 
+/* Live TV count is clickable */
+span.live_count {
+  cursor: pointer;
+}
+
 /* Live TV count - when not shown. */
 span.live_count_hidden {
   color: #5e5e5e;
