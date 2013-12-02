@@ -158,7 +158,7 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
       $tvdiarydb query "UPDATE activities SET end = %s WHERE activity_id = %s" $log_time $act_id
       set idx [lsearch $finished_activities $act_id]
       set finished_activities [lreplace $finished_activities $idx $idx]
-      if { $::logging } {
+      if { $::logging > 1 } {
         puts "$::logging_time: Updated activity $act_id"
       }
 

@@ -129,31 +129,17 @@ tr.record_event.active_event div.event_end:after {
   font-size: 150%;
 }
 
-/* Show when playing media */
-tr.play_event.active_event div.event_duration {
+/* Show when playing media and watching live */
+tr.play_event.active_event div.event_duration, tr.live_event.active_event div.event_duration {
   border-left: thin solid #005000;
   color: #005000;
 }
-tr.play_event.active_event div.event_end {
+tr.play_event.active_event div.event_end, tr.live_event.active_event div.event_end {
   color: #005000;
 }
-tr.play_event.active_event div.event_end:after {
+tr.play_event.active_event div.event_end:after, tr.live_event.active_event div.event_end:after {
   content: "\00A0\25B6";
   color: #00cc00;
-  font-size: 150%;
-}
-
-/* Show when watching live */
-tr.live_event.active_event div.event_duration {
-  border-left: thin solid #005000;
-  color: #005000;
-}
-tr.live_event.active_event div.event_end {
-  color: #005000;
-}
-tr.live_event.active_event div.event_end:after {
-  content: "\00A0\25B6";
-  color: #C8A2C8;
   font-size: 150%;
 }
 
@@ -174,7 +160,7 @@ span.live_count_hidden {
 }
 
 /* Live broadcast icon. */
-tr.live_event td.event_time:before {
+tr.live_event td.event_time:before /*, tr.record_event.active_event td.event_time:before*/ {
   content: url('tvmast.png');
   float: right;
 }
@@ -183,4 +169,5 @@ tr.live_event td.event_time:before {
 #toTop {
   bottom: 0px;
   margin-left: 0px;
+  right: 0;
 }
