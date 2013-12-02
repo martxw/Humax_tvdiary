@@ -9,15 +9,18 @@ source /mod/webif/lib/setup
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+set CONF_FILEPATH "/mod/etc/tvdiary.conf"
+
 #
 # Open the database file just to get the min and max times for the calendar.
 # Round them to the start & end of the day.
 # Can't use ceil() & floor() as they aren't currently compiled into Jim.
 #
-if { ![file exists /mod/etc/tvdiary.db] } {
+if { ![file exists $DB_FILEPATH] } {
   set min_time 0
 } else {
-  set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+  set tvdiarydb [sqlite3.open $DB_FILEPATH]
   
   set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
   if { [llength $_minstart] == 1 } {
@@ -33,7 +36,7 @@ set max_time [expr int(([clock seconds] + 86399) / 86400) * 86400]
 # Converted to seconds. Default here to 00:00 (0 * 60 + 0).
 set day_start [expr (0 * 60 + 0) * 60]
 try {
-  set settings_fd [open "/mod/etc/tvdiary.conf" r]
+  set settings_fd [open $CONF_FILEPATH r]
   foreach line [split [read $settings_fd] "\n"] {
     lassign $line settings_key settings_val
     switch $settings_key {

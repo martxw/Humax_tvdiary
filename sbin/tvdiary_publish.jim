@@ -17,13 +17,16 @@ set seconds_per_day 86400
 set days_forward 7
 
 # The script to render the updates.
-set day_view_path "/mod/webif/html/tvdiary/day_view.jim"
+set DAY_VIEW_PATH "/mod/webif/html/tvdiary/day_view.jim"
 
 # The TV channel icons on the Humax.
-set channel_icons_path "/mod/webif/html/img/channels/out"
+set CHANNEL_ICONS_PATH "/mod/webif/html/img/channels/out"
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+set CONF_FILEPATH "/mod/etc/tvdiary.conf"
 
 # I'm storing the icons relative to the HTML.
-set channel_icons_url "channels"
+set CHANNEL_ICONS_URL "channels"
 
 # --------------------------------------------------------------
 # Command line parameters
@@ -50,7 +53,7 @@ proc main {} {
   # Converted to seconds. Default here to 00:00 (0 * 60 + 0).
   set day_start [expr (0 * 60 + 0) * 60]
   try {
-    set settings_fd [open "/mod/etc/tvdiary.conf" r]
+    set settings_fd [open $::CONF_FILEPATH r]
     foreach line [split [read $settings_fd] "\n"] {
       lassign $line settings_key settings_val
       switch $settings_key {
@@ -90,8 +93,8 @@ proc main {} {
   # Find out how much data there is in the database to find the absolute min time for the update,
   # rounded to the start of the day. Default to today so planned recordings are included at the very least.
   set db_min_start $today_start
-  if { [file exists /mod/etc/tvdiary.db] } {
-    set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
+  if { [file exists $::DB_FILEPATH] } {
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
     set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
     if { [llength $_minstart] == 1 } {
@@ -160,7 +163,7 @@ proc main {} {
   for { set t $update_from_time } { $t <= $update_to_time } { incr t $::seconds_per_day } {
     foreach type {R W} {
       set target_file "[clock format $t -format $::date_fmt]_$type.html"
-      set cmd "exec $::day_view_path $t $type $::channel_icons_path $::channel_icons_url > $tmpfile"
+      set cmd "exec $::DAY_VIEW_PATH $t $type $::CHANNEL_ICONS_PATH $::CHANNEL_ICONS_URL > $tmpfile"
       puts $cmd
       eval $cmd
       set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host $::ftp_dir/$target_file $tmpfile"

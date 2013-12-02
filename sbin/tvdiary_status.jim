@@ -18,6 +18,10 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 set logging 1
 
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+set LSOF "/mod/bin/lsof"
+set PGREP "/mod/bin/busybox/pgrep"
+
 set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
 # TODO: Maybe add a configuration setting for this.
@@ -36,6 +40,25 @@ set logging_time [clock format $current_time -format $log_date_fmt]
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------
+
+#
+# Create or open the database file.
+#
+proc openDB {} {
+  if { ![file exists $::DB_FILEPATH] } {
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+    try {
+      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+      $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+    } on error { msg } {
+      puts "$::logging_time: Failed to create the database tables. \[$msg\]"
+      exit
+    }
+  } else {
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+  }
+  return $tvdiarydb;
+}
 
 #
 # Load the IDs of previously unfinished activities.
@@ -58,14 +81,14 @@ proc update_finished_activities { tvdiarydb &finished_activities } {
   foreach activity_id $finished_activities {
     $tvdiarydb query "UPDATE activities SET unfinished=0 WHERE activity_id=%s" $activity_id
     if { $::logging } {
-      puts "$::logging_time: Finished activity $activity_id, [get_activitiy_program_details $tvdiarydb $activity_id]"
+      puts "$::logging_time: Finished activity $activity_id, [get_activity_program_details $tvdiarydb $activity_id]"
     }
   }
 
   if { $::logging } {
     set res [$tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished = 0 AND end = 0"]
     foreach rec $res {
-      puts "$::logging_time: Deleted zero length activity $rec(activity_id), [get_activitiy_program_details $tvdiarydb $activity_id]"
+      puts "$::logging_time: Deleted zero length activity $rec(activity_id), [get_activity_program_details $tvdiarydb $activity_id]"
     }
   }
   $tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
@@ -81,7 +104,7 @@ proc update_finished_activities { tvdiarydb &finished_activities } {
 #
 # For debug logging - find the program that goes with an activity.
 #
-proc get_activitiy_program_details { tvdiarydb activity_id } {
+proc get_activity_program_details { tvdiarydb activity_id } {
   set _rec [$tvdiarydb query "
     SELECT activities.type, activities.start, activities.end, activities.unfinished, programs.channel_name, programs.title, programs.start AS scheduled_start, programs.duration AS scheduled_duration
     FROM activities, programs
@@ -147,7 +170,7 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
         " $prog_id $activity_type $log_time
       if { $::logging } {
         set act_id [$tvdiarydb lastid]
-        puts "$::logging_time: Started new activity $act_id, [get_activitiy_program_details $tvdiarydb $act_id]"
+        puts "$::logging_time: Started new activity $act_id, [get_activity_program_details $tvdiarydb $act_id]"
       }
     }
   } else {
@@ -164,7 +187,7 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
       " $prog_id $activity_type $log_time
     if { $::logging } {
       set act_id [$tvdiarydb lastid]
-      puts "$::logging_time: Started new activity $act_id, [get_activitiy_program_details $tvdiarydb $act_id]"
+      puts "$::logging_time: Started new activity $act_id, [get_activity_program_details $tvdiarydb $act_id]"
     }
   }
 }
@@ -209,7 +232,7 @@ proc log_watching_live_tv { tvdiarydb &finished_activities } {
 proc get_data { pid } {
   set ret {}
   try {
-    set data [exec /mod/bin/lsof -p $pid]
+    set data [exec $::LSOF -p $pid]
     foreach line [split $data "\n"] {
       # Replace multiple whitespaces with single spaces.
       regsub -all -- {[[:space:]]+} $line " " line
@@ -233,30 +256,11 @@ proc get_data { pid } {
 }
 
 #
-# Create or open the database file.
-#
-proc openDB {} {
-  if { ![file exists /mod/etc/tvdiary.db] } {
-    set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-    try {
-      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
-      $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
-    } on error { msg } {
-      puts "$::logging_time: Failed to create the database tables. \[$msg\]"
-      exit
-    }
-  } else {
-    set tvdiarydb [sqlite3.open /mod/etc/tvdiary.db]
-  }
-  return $tvdiarydb;
-}
-
-#
 # Main
 #
 proc main {} {
   try {
-    set pid [exec /mod/bin/busybox/pgrep -n humaxtv]
+    set pid [exec $::PGREP -n humaxtv]
   } on error { msg } {
     puts "$::logging_time: Cannot find humaxtv process. \[$msg\]"
     exit

@@ -1,0 +1,105 @@
+#!/mod/bin/jimsh
+#
+# Purge the TV Diary database of old data.
+#
+# Author: Martin Wink, 2013.
+#
+
+package require sqlite3
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+
+set current_time [clock seconds]
+set seconds_per_day 86400
+
+set log_date_fmt "%a %d %b %Y %H:%M"
+set logging_time [clock format $current_time -format $log_date_fmt]
+
+set usage_msg "Usage: $argv0 <num-days-to-retain> \[Y\]"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+proc main {} {
+  if { $::argc != 1 && $::argc != 2 } {
+    puts $::usage_msg
+    exit -1
+  }
+  set num_days [lindex $::argv 0]
+  set yes_response 0
+  if { $::argc == 2 && [string tolower [lindex $::argv 1]] == "y"} {
+    set yes_response 1
+  }
+
+  if { $num_days < 1 || $num_days > 1000 } {
+    puts $::usage_msg
+    puts "  $num_days is not a sensible number of days."
+    exit -1
+  }
+
+  if { ![file exists $::DB_FILEPATH] } {
+    puts "Error: Unable to open the database file $::DB_FILEPATH"
+    exit -1
+  }
+
+  set purge_time [expr $::current_time - ($num_days * $::seconds_per_day)]
+
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+  try {
+    set _rec [$tvdiarydb query "SELECT COUNT(*) as count, MIN(start) as min, MAX(start) as max FROM activities WHERE start < %s" $purge_time]
+    if { [llength $_rec] != 1 } {
+      puts "Error: Couldn't query the number of events that will be purged."
+      exit -1
+    }
+    set rec [lindex $_rec 0]
+
+    set count $rec(count)
+    set min_time $rec(min)
+    set max_time $rec(max)
+
+    if { $count == 0 } {
+      puts "There are no events prior to [clock format $purge_time -format $::log_date_fmt]."
+      exit
+    }
+
+    if { !$yes_response } {
+      puts "Delete the $count events between [clock format $min_time -format $::log_date_fmt] and [clock format $max_time -format $::log_date_fmt]?"
+      puts -nonewline "Continue? Y or N>"
+      set line [gets stdin]
+      puts $line
+
+      if { [string tolower $line] == "y" } {
+        set yes_response 1
+      }
+    } else {
+      puts "Deleting $count events between [clock format $min_time -format $::log_date_fmt] and [clock format $max_time -format $::log_date_fmt]."
+    }
+
+    if { $yes_response } {
+      $tvdiarydb query "DELETE FROM activities WHERE start < %s" $purge_time
+      set num_events [$tvdiarydb changes]
+
+      $tvdiarydb query "
+        DELETE FROM programs
+        WHERE  NOT EXISTS
+          (SELECT activity_id
+           FROM   activities
+           WHERE  activities.program_id = programs.program_id)"
+      set num_programs [$tvdiarydb changes]
+      puts "Successfully deleted $num_events events, and details of $num_programs programmes."
+
+    } else {
+      puts "OK. Leaving all of the data there."
+    }
+
+  } finally {
+    $tvdiarydb close
+  }
+}
+
+main
