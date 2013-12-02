@@ -178,3 +178,9 @@ tr.live_event td.event_time:before {
   content: url('tvmast.png');
   float: right;
 }
+
+/* Override as default blocks too much */
+#toTop {
+  bottom: 0px;
+  margin-left: 0px;
+}
