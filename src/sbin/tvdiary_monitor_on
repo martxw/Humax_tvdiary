@@ -1,0 +1,15 @@
+#!/bin/sh
+
+export tmpf=/tmp/cronf.$$
+
+crontab=/mod/bin/crontab
+if [ -x $crontab ]; then
+  $crontab -l | grep -v tvdiary_status.jim > $tmpf
+  cat $tmpf - << EOM | $crontab -
+* * * * * /mod/sbin/tvdiary_status.jim  >>/mod/tmp/tvdiary.log 2>&1
+EOM
+fi
+
+[ -f $tmpf ] && rm -f $tmpf
+
+exit 0

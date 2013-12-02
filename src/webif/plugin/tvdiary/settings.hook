@@ -1,0 +1,60 @@
+#!/mod/bin/jimsh
+
+set day_start "00:00"
+try {
+  set settings_fd [open "/mod/etc/tvdiary.conf" r]
+  foreach line [split [read $settings_fd] "\n"] {
+    lassign $line settings_key settings_val
+    switch $settings_key {
+      "day_start" { set day_start $settings_val }
+    }
+  }
+  $settings_fd close
+} on error { msg } {
+  # Use the default if no file.
+}
+
+try {
+  set monitoring [expr [string first "tvdiary_status" [exec /mod/bin/crontab -l | grep tvdiary_status]] != -1]
+} on error { msg } {
+  set monitoring 0
+}
+
+if { $monitoring } { set f "checked" } else { set f "" }
+puts "
+  <fieldset style=\"display: inline\">
+  <legend>
+    TV Diary Settings
+  </legend>
+  <form class=\"auto\" id=\"tvdiary\" method=\"post\" action=\"/plugin/tvdiary/update.jim\">
+  <table>
+  <tr>
+    <th class=\"key\">Monitor usage:</th>
+    <td>
+      <input id=\"tvdiary_monitoring\" name=\"tvdiary_monitoring\" type=\"checkbox\" value=\"1\" $f>
+    </td>
+  </tr>
+  <tr>
+    <th class=\"key\">Start of the TV day:</th>
+    <td><select id=\"tvdiary_day_start\" name=\"tvdiary_day_start\" class=\"ui-widget-content ui-corner-all\">
+"
+foreach time_option {"00:00" "01:00" "02:00" "03:00" "04:00" "05:00" "06:00" "07:00" "08:00"} {
+  if { $time_option == $day_start } { set f "selected" } else { set f "" }
+  puts "<option value=\"$time_option\" $f>$time_option</option>"
+}
+puts "
+    </select></td>
+  </tr>
+"
+
+# NB: tvdiary_output is where the output from submitting the form appears.
+puts "
+  <tr>
+    <td><input type=submit value=\"Update settings\">
+      <div id=tvdiary_output></div>
+    </td>
+  </tr>
+  </table>
+  </form>
+  </fieldset>
+"

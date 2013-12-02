@@ -1,0 +1,25 @@
+#!/mod/bin/jimsh
+
+package require cgi
+
+cgi_input
+puts "Content-Type: text/html"
+puts ""
+
+set monitoring [cgi_get tvdiary_monitoring]
+set day_start [cgi_get tvdiary_day_start]
+
+#puts "Parameters: $monitoring, $day_start<br>"
+
+set fd [open "/mod/etc/tvdiary.conf" w]
+puts $fd "day_start $day_start"
+close $fd
+
+if { $monitoring } {
+  exec "/mod/sbin/tvdiary_monitor_on"
+} else {
+  exec "/mod/sbin/tvdiary_monitor_off"
+}
+
+puts "Updated Successfully"
+

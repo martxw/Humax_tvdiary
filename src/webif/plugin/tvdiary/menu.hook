@@ -1,0 +1,5 @@
+menuitem \
+  "TV Diary" \
+  "/plugin/tvdiary/icon.png" \
+  "/tvdiary/index.shtml"
+
