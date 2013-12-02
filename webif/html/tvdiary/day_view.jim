@@ -154,18 +154,21 @@ proc output_past_record { record } {
 #
 # Output the table row for a future event.
 #
-proc output_future_event { service_id event_start event_end } {
+proc output_future_event { service_id channel_name event_start event_end } {
   # Get the EPG entry for the other details displayed.
   # NB: Adding 1 second because the EPG class checks > rather than >= start time.
+  # NB2: It is possible that the EPG entry doesn't get found, so be prepared to substitute "No information".
   set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 1]]
-  if { [llength $epgs] != 1 } {
-    throw error "Unable to get the EPG for the program being watched on service $service_id at $event_start."
+  if { [llength $epgs] == 1 } {
+    lassign $epgs epg
+    set title [$epg get name]
+    set synopsis [$epg get text]
+    set channel_name [$epg get channel_name]
+  } else {
+    set title "Not in EPG"
+    set synopsis "No information available"
+    # channel_name was passed in.
   }
-  lassign $epgs epg
-
-  set title [$epg get name]
-  set synopsis [$epg get text]
-  set channel_name [$epg get channel_name]
 
   set calculated_duration [expr ($event_end - $event_start + 30) / 60]
 
@@ -225,7 +228,7 @@ proc hsvc_to_svcid { hsvc } {
 proc filter_and_add_to_future_events {start end service_id channel_name} {
   if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
     set key "$start:$channel_name"
-    set vals [concat $service_id $start $end ]
+    set vals [concat $service_id $start $end]
     dict set ::future_events $key $vals
     return 1
   }
@@ -340,7 +343,8 @@ proc main {} {
     foreach key $keys {
       set vals [dict get $::future_events $key]
       lassign $vals service_id start_time end_time
-      output_future_event $service_id $start_time $end_time
+      lassign [split $key ":"] x channel_name
+      output_future_event $service_id $channel_name $start_time $end_time
     }
 
     puts "</table>"

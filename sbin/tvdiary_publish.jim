@@ -187,4 +187,35 @@ proc main {} {
   file delete $tmpfile
 }
 
+proc send_images {} {
+  set icon_files [glob $::CHANNEL_ICONS_PATH/*.png]
+  puts "#icon_files=[llength $icon_files]"
+  foreach filename [lsort $icon_files] {
+    if { !([file isfile $filename] && [file readable $filename]) } {
+      puts "Cant read $filename"
+    } else {
+      set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host \"$::ftp_dir/$::CHANNEL_ICONS_URL/[file tail $filename]\" \"$filename\""
+      puts $cmd
+      eval $cmd
+    }
+  }
+
+  set additional {
+    "/opt/share/images/blue/516_1_26_Freeview_Logo.png"
+    "/opt/share/images/blue/154_1_00_WIN_MD116_1L.png"
+    "/opt/share/images/blue/154_1_00_WIN_MD116_3R.png"
+    "/opt/share/images/blue/154_1_00_WIN_MD116_2C.png"
+  }
+  foreach filename [lsort $additional] {
+    if { !([file isfile $filename] && [file readable $filename]) } {
+      puts "Cant read $filename"
+    } else {
+      set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host \"$::ftp_dir/images/[file tail $filename]\" \"$filename\""
+      puts $cmd
+      eval $cmd
+    }
+  }
+}
+
 main
+#send_images
