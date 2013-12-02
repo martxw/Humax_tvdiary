@@ -173,8 +173,8 @@ span.live_count_hidden {
   text-decoration: line-through;
 }
 
-/* Live broadcast shown lilac. */
-tr.live_event td.tvchannel div {
-  color: #000000;
-  background: #d6b2d6;
+/* Live broadcast icon. */
+tr.live_event td.event_time:before {
+  content: url('tvmast.png');
+  float: right;
 }
