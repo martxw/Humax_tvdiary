@@ -16,11 +16,14 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 1
+set logging 3
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
 set PGREP "/mod/bin/busybox/pgrep"
+
+# Time between checking files, to allow recordings to grow.
+set SLEEP_TIME 10
 
 set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
@@ -245,6 +248,7 @@ proc get_data { pid } {
           set ret($filepath) -1
         } else {
           set size [lindex [split $line " "] 6]
+          #set size [file size $filepath]
           set ret($filepath) $size
         }
       }
@@ -266,19 +270,19 @@ proc main {} {
     exit
   }
 
-  set tvdiarydb [openDB]
-  #
-  # We load the IDs of the activities currently marked as unfinished into this list.
-  # As we update activities we remove their IDs from the list. At the end, any IDs
-  # remaining will be the ones previously marked as unfinished but are now finished.
-  #
-  set finished_activities [load_unfinished_activities $tvdiarydb]
-
   # Get the data once, wait, then get the data again to see if files are growing as they're recorded.
   set data [get_data $pid]
   if { [llength $data] } {
-    sleep 3
+    sleep $::SLEEP_TIME
     set ndata [get_data $pid]
+
+    set tvdiarydb [openDB]
+    #
+    # We load the IDs of the activities currently marked as unfinished into this list.
+    # As we update activities we remove their IDs from the list. At the end, any IDs
+    # remaining will be the ones previously marked as unfinished but are now finished.
+    #
+    set finished_activities [load_unfinished_activities $tvdiarydb]
 
     foreach filepath [array names ndata] {
       if { ![dict exists $data $filepath] } { set data($filepath) 0 }
@@ -295,20 +299,32 @@ proc main {} {
         } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
           # This file exists only when watching live TV. "Time Shift Recording" I assume.
           if { $::include_live_tv } {
+            if { $::logging > 2 } {
+              puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
+            }
             log_watching_live_tv $tvdiarydb finished_activities
           }
 
         } elseif { $ndata($filepath) == -1 } {
           # "Chase Playing"
+          if { $::logging > 2 } {
+            puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
+          }
           log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
           log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
 
         } elseif { $ndata($filepath) > $data($filepath) } {
           # "Recording"
+          if { $::logging > 2 } {
+            puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
+          }
           log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
 
         } else {
           # "Playing"
+          if { $::logging > 2 } {
+            puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
+          }
           log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
         }
 
@@ -321,11 +337,10 @@ proc main {} {
         log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
       }
     }
+    # Update any activities that are now finished.
+    update_finished_activities $tvdiarydb finished_activities
+    $tvdiarydb close
   }
-
-  # Update any activities that are now finished.
-  update_finished_activities $tvdiarydb finished_activities
-  $tvdiarydb close
 }
 
 main

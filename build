@@ -1,0 +1,24 @@
+#!/bin/sh
+ver=`grep Version src/CONTROL/control | sed -e "s/.*: *//"`
+echo "Building tvdiary version $ver"
+
+echo "opkg-pack src"
+opkg-pack src
+
+# Always returns 0, so have to check manually for errors.
+read -p "If there were no errors, type 'y' to update." GO
+if [ "$GO" == "y" ]; then
+  echo "mv tvdiary_${ver}_mipsel.opk out"
+  mv tvdiary_${ver}_mipsel.opk out
+
+  echo "opkg remove tvdiary"
+  opkg remove tvdiary
+  
+  # Sometimes errors if install too soon after remove.
+  sleep 2
+
+  echo "opkg install out/tvdiary_${ver}_mipsel.opk"
+  opkg install out/tvdiary_${ver}_mipsel.opk
+else
+  echo "Not updated."
+fi

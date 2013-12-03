@@ -4,7 +4,7 @@ export tmpf=/tmp/cronf.$$
 
 crontab=/mod/bin/crontab
 if [ -x $crontab ]; then
-  $crontab -l | grep -v tvdiary_status.jim > $tmpf
+  $crontab -l | grep -v tvdiary_status > $tmpf
   [ -s $tmpf ] && $crontab $tmpf || $crontab -r
 fi
 
