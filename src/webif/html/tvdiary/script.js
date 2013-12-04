@@ -7,7 +7,10 @@
 // day_start comes from calendar_params.js/jim
 
 // Today's calendar date start. Fixed at page load.
-var today_start = Math.floor(new Date().getTime() / 86400000.0) * 86400 + day_start;
+// Counter-intuitively - first *subtract* the day_start so at 1am we get yesterday's TV listings,
+// but then add day_start back on so we get yesterdays listings from the right start time.
+var today_start = Math.floor(((new Date().getTime() / 1000.0) - day_start) / 86400) * 86400 + day_start;
+console.log("Initializing today_start=" + new Date(today_start * 1000) + "day_start=" + day_start);
 
 // Whether live broadcasts are to be displayed. Toggled on and off.
 var including_live = true;
@@ -30,12 +33,15 @@ $(document).ready(function() {
           dateFormat: '@',  //@=ms since 01/01/1970.
           minDate: new Date(min_time * 1000),
           maxDate: 7,
+          defaultDate: new Date(today_start * 1000),
           onSelect: function(val, inst) {
                   // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
+                  console.log("Got onSelect for datetime. val=" + new Date(Number(val)));
                   var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;
                   request_update(chosen);                  
           }
   });
+  console.log("Set the default datepicker time to " + new Date(today_start * 1000));
 
   // Load the cookie. Convert the string to boolean, but default to true if it's missing.
   // Set the initial checked state before initializing the iphoneStyle checkbox.
@@ -141,6 +147,35 @@ $(document).ready(function() {
       total_scheduled += constrained_duration;
     });
 
+    // Add on the remaining time for active recordings
+    $("tr.record_event.active_event", el).each(function(i, tr) {
+      var now_time = Math.round(new Date().getTime() / 1000);
+      var scheduled_end = Number($(tr).attr('scheduled_end'));
+      var constrained_duration = 0;
+      if (now_time < display_start) {
+        // Now is before the range - only include time from the range start to scheduled end.
+        constrained_duration = Math.ceil((scheduled_end - display_start) / 60);
+
+      } else if (now_time > display_end) {
+        // Now is after the range - nothing to include, it's all tomorrow.
+        constrained_duration = 0;
+
+      } else if (scheduled_end > display_end) {
+        // Now is near the end of day, within range - include from now to the range end.
+        constrained_duration = Math.ceil((display_end - now_time) / 60);
+
+      } else {
+        // Now must be near the start of day, within range - include from now to the scheduled end.
+        constrained_duration = Math.ceil((scheduled_end - now_time) / 60);
+
+      }
+      console.log("remaining recording time for " + new Date(scheduled_end * 1000) + " remaining=" + (scheduled_end - now_time) + " constrained_duration=" + constrained_duration);
+      if (constrained_duration < 0) {
+        alert("constrained_duration=" + constrained_duration);
+      }
+      total_scheduled += constrained_duration;
+    });
+
     if (display_start < today_start) {
       if (total_recorded == 0) {
         $('#recorded_caption').html( "Recorded nothing");
@@ -207,6 +242,7 @@ $(document).ready(function() {
   function request_update(chosen) {
     display_start = chosen;
     display_end = display_start + 86400;
+    console.log("request_update display_start=" + new Date(display_start * 1000) + ", display_end=" + new Date(display_end * 1000));
 
     // Main page heading.
     $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(display_start * 1000)) );

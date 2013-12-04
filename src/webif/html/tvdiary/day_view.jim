@@ -107,9 +107,20 @@ proc output_past_record { record } {
     set activeclass ""
   }
 
+  # All events have their actual duration.
   set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
-
-  puts "<tr class=\"event_row $typeclass $activeclass\" event_start=\"$record(start)\" event_end=\"$record(end)\" event_duration=\"$calculated_duration\">"
+  
+  # But unfinished recordings also have the time from now to their scheduled end to take into account.
+  # After experimentation I'm NOT calculating the remaining time left, because rounding errors and the
+  # rough granularity of samples means that the times don't add up accurately, which looks very odd.
+  # So only show the scheduled end time, which in any case may not be accurate.
+  set scheduled_end [expr $record(scheduled_start) + ($record(scheduled_duration) * 60)]
+  if { $record(type) == "R" && $record(unfinished) } {
+    set scheduled_end_text " scheduled_end=\"$scheduled_end\""
+  } else {
+    set scheduled_end_text ""
+  }
+  puts "<tr class=\"event_row $typeclass $activeclass\" event_start=\"$record(start)\" event_end=\"$record(end)\" event_duration=\"$calculated_duration\"$scheduled_end_text>"
 
   #
   # Column 1. The actual record or watching time. This is always known.
@@ -117,8 +128,15 @@ proc output_past_record { record } {
   puts "<td class=\"event_time\">"
   puts "<div class=\"event_start\">[clock format $record(start) -format $::time_fmt]</div>"
   if {$calculated_duration == 1} { set min_mins "min" } else { set min_mins "mins" }
-  puts "<div class=\"event_duration\">($calculated_duration $min_mins)</div>"
-  puts "<div class=\"event_end\">[clock format $record(end) -format $::time_fmt]</div>"
+  if { $record(type) == "R" && $record(unfinished) } {
+    puts "<div class=\"event_duration in_progress\">$calculated_duration $min_mins</div>"
+    puts "<div class=\"event_end in_progress\">[clock format $record(end) -format $::time_fmt]</div>"
+    puts "<div class=\"event_duration\">&nbsp;</div>"
+    puts "<div class=\"event_end\">[clock format $scheduled_end -format $::time_fmt]</div>"
+  } else {
+    puts "<div class=\"event_duration\">$calculated_duration $min_mins</div>"
+    puts "<div class=\"event_end\">[clock format $record(end) -format $::time_fmt]</div>"
+  }
   puts "</td>"
 
   #
@@ -180,7 +198,7 @@ proc output_future_event { service_id channel_name event_start event_end } {
   puts "<td class=\"event_time\">"
   puts "<div class=\"event_start\">[clock format $event_start -format $::time_fmt]</div>"
   if {$calculated_duration == 1} { set min_mins "min" } else { set min_mins "mins" }
-  puts "<div class=\"event_duration\">($calculated_duration $min_mins)</div>"
+  puts "<div class=\"event_duration\">$calculated_duration $min_mins</div>"
   puts "<div class=\"event_end\">[clock format $event_end -format $::time_fmt]</div>"
   puts "</td>"
 

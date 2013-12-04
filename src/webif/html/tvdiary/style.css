@@ -115,15 +115,26 @@ tr.record_event + tr.future_event td {
   text-align: center;
 }
 
-/* Show when recording is active */
+/* Show when recording is active. As future_event except the in_progress elements. */
 tr.record_event.active_event div.event_duration {
+  border-left: thin dashed #000000;
+  padding: 0.0em 0.25em 0.0em 1em;
+  line-height: 0.75em;
+}
+tr.record_event.active_event div.event_duration.in_progress {
   border-left: thin solid #a00000;
+  padding: 0.1em 0.25em 0.1em 1em;
+  line-height: 1.1em;
   color: #a00000;
 }
 tr.record_event.active_event div.event_end {
-  color: #a00000;
+  font-style:italic;
 }
-tr.record_event.active_event div.event_end:after {
+tr.record_event.active_event div.event_end.in_progress {
+  color: #a00000;
+  font-style: normal;
+}
+tr.record_event.active_event div.event_end.in_progress:after {
   content: "\00A0\25CF";
   color: #ff0000;
   font-size: 150%;
@@ -160,7 +171,7 @@ span.live_count_hidden {
 }
 
 /* Live broadcast icon. */
-tr.live_event td.event_time:before /*, tr.record_event.active_event td.event_time:before*/ {
+tr.live_event td.event_time:before {
   content: url('tvmast.png');
   float: right;
 }

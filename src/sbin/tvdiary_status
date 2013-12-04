@@ -16,7 +16,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 3
+set logging 0
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
@@ -247,8 +247,8 @@ proc get_data { pid } {
         if { [dict exists $ret $filepath] } {
           set ret($filepath) -1
         } else {
-          set size [lindex [split $line " "] 6]
-          #set size [file size $filepath]
+          #set size [lindex [split $line " "] 6]
+          set size [file size $filepath]
           set ret($filepath) $size
         }
       }

@@ -1,0 +1,17 @@
+#!/bin/sh
+diff live/sbin/tvdiary_purge.jim src/sbin/tvdiary_purge
+diff live/sbin/tvdiary_status.jim src/sbin/tvdiary_status
+diff live/sbin/tvdiary_publish.jim src/sbin/tvdiary_publish
+diff live/sbin/tvdiary_monitor_on src/sbin/tvdiary_monitor_on
+diff live/sbin/tvdiary_monitor_off src/sbin/tvdiary_monitor_off
+diff live/webif/html/tvdiary/script.js src/webif/html/tvdiary/script.js
+diff live/webif/html/tvdiary/calendar_params.jim src/webif/html/tvdiary/calendar_params.jim
+diff live/webif/html/tvdiary/tvmast.png src/webif/html/tvdiary/tvmast.png
+diff live/webif/html/tvdiary/style.css src/webif/html/tvdiary/style.css
+diff live/webif/html/tvdiary/day_view.jim src/webif/html/tvdiary/day_view.jim
+diff live/webif/html/tvdiary/index.shtml src/webif/html/tvdiary/index.shtml
+diff live/webif/plugin/tvdiary/menu.hook src/webif/plugin/tvdiary/menu.hook
+diff live/webif/plugin/tvdiary/icon.png src/webif/plugin/tvdiary/icon.png
+diff live/webif/plugin/tvdiary/toolbar.hook src/webif/plugin/tvdiary/toolbar.hook
+diff live/webif/plugin/tvdiary/update.jim src/webif/plugin/tvdiary/update.jim
+diff live/webif/plugin/tvdiary/settings.hook src/webif/plugin/tvdiary/settings.hook

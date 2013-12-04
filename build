@@ -6,7 +6,7 @@ echo "opkg-pack src"
 opkg-pack src
 
 # Always returns 0, so have to check manually for errors.
-read -p "If there were no errors, type 'y' to update." GO
+read -p "If there were no errors, type 'y' to update:" GO
 if [ "$GO" == "y" ]; then
   echo "mv tvdiary_${ver}_mipsel.opk out"
   mv tvdiary_${ver}_mipsel.opk out
