@@ -16,6 +16,12 @@ var including_live = true;
 var display_start;
 var display_end;
 
+// While awaiting Ajax responses.
+var isBusyR = false;
+var isBusyW = false;
+
+function log_stuff(x) { /*console.log(x);*/ }
+
 $(document).ready(function() {
 
   // Initialize the to-top scroller.
@@ -34,13 +40,17 @@ $(document).ready(function() {
           maxDate: 7,
           defaultDate: new Date(today_start * 1000),
           onSelect: function(val, inst) {
-                  // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
-                  console.log("\ndatepicker.onSelect(" + new Date(Number(val)) + ")");
-                  var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;
-                  request_update(chosen);                  
+                  if (isBusyR || isBusyW) {
+                    log_stuff("UI is busy - not changing the date.");
+                  } else {
+                    // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
+                    log_stuff("\ndatepicker.onSelect(" + new Date(Number(val)) + ")");
+                    var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;
+                    request_update(chosen);
+                  }
           }
   });
-  console.log("Initialized the default datepicker time to " + new Date(today_start * 1000));
+  log_stuff("Initialized the default datepicker time to " + new Date(today_start * 1000));
 
   // Load the cookie. Convert the string to boolean, but default to true if it's missing.
   // Set the initial checked state before initializing the iphoneStyle checkbox.
@@ -67,7 +77,7 @@ $(document).ready(function() {
     // Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
     // we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
     var today_start = Math.floor(((new Date().getTime() / 1000.0) - day_start) / 86400) * 86400 + day_start;
-    console.log("get_today_start()=" + new Date(today_start * 1000) + "day_start=" + day_start);
+    log_stuff("get_today_start()=" + new Date(today_start * 1000) + "day_start=" + day_start);
     return today_start;
   }
 
@@ -152,7 +162,7 @@ $(document).ready(function() {
       var current_time = Number($(tab).attr('current_time'));
       var time_start = Number($(tab).attr('time_start'));
       var time_end = Number($(tab).attr('time_end'));
-      console.log("update_recorded_duration() server times: current_time=" + new Date(current_time*1000) + ", time_start=" + new Date(time_start*1000) + ", time_end=" + new Date(time_end*1000));
+      log_stuff("update_recorded_duration() server times: current_time=" + new Date(current_time*1000) + ", time_start=" + new Date(time_start*1000) + ", time_end=" + new Date(time_end*1000));
     });
 
     $("tr.record_event", el).each(function(i, tr) {
@@ -189,7 +199,7 @@ $(document).ready(function() {
         constrained_duration = Math.ceil((scheduled_end - now_time) / 60);
 
       }
-      console.log("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", now_time=" + new Date(now_time*1000) + " scheduled_end=" + new Date(scheduled_end*1000) + ", display_start=" + new Date(display_start*1000) + ", display_end=" + new Date(display_end*1000));
+      log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", now_time=" + new Date(now_time*1000) + " scheduled_end=" + new Date(scheduled_end*1000) + ", display_start=" + new Date(display_start*1000) + ", display_end=" + new Date(display_end*1000));
       if (constrained_duration < 0) {
         alert("constrained_duration=" + constrained_duration);
       }
@@ -220,7 +230,7 @@ $(document).ready(function() {
         $('#recorded_caption').html( "Recorded - " + format_duration(total_recorded) + " / To be recorded - " + format_duration(total_scheduled));
       }
     }
-    console.log("Recorded caption now=" + new Date() + ", update_recorded_duration() display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Recorded caption now=" + new Date() + ", update_recorded_duration() display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
   }
   
   // Upon loading the watched data, count the played & live durations & update the heading.
@@ -270,7 +280,7 @@ $(document).ready(function() {
     today_start = get_today_start()
     display_start = chosen;
     display_end = display_start + 86400;
-    console.log("request_update today_start=" + new Date(today_start*1000) + ", display_start=" + new Date(display_start * 1000) + ", display_end=" + new Date(display_end * 1000));
+    log_stuff("request_update today_start=" + new Date(today_start*1000) + ", display_start=" + new Date(display_start * 1000) + ", display_end=" + new Date(display_end * 1000));
 
     // Main page heading.
     $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(display_start * 1000)) );
@@ -290,12 +300,13 @@ $(document).ready(function() {
       $('#recorded_caption').html( "Recorded / To be recorded" );
     }
     $('#watched_caption').html( "Watched" );
-    console.log("Temp caption now=" + new Date() + ", request_update(" + new Date(chosen*1000) + ") display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Temp caption now=" + new Date() + ", request_update(" + new Date(chosen*1000) + ") display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", set caption to=" + $('#recorded_caption').html());
 
     // Pass the browser's time to the web server - helps when clocks aren't synced.
     var now_time = Math.round(new Date().getTime() / 1000);
 
     // Asynchronously request the recorded table data.
+    isBusyR = true;
     $.ajax({
       type: "GET",
       dataType: "text",
@@ -305,17 +316,20 @@ $(document).ready(function() {
         apply_altrow($('#recorded_inner'));
         update_recorded_duration($('#recorded_inner'));
         $('#recorded_spinner').hide('slow');
+        isBusyR = false;
       },
       error: function(_, _, e) {
         if (window.console) {
-          console.log("ajax error " + e);
+          log_stuff("ajax error " + e);
         }
         $('#recorded_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#recorded_spinner').hide('slow');
+        isBusyR = false;
       }
     });
     
     // Asynchronously request the watched table data.
+    isBusyW = true;
     $.ajax({
       type: "GET",
       dataType: "text",
@@ -325,13 +339,15 @@ $(document).ready(function() {
         update_watched_duration( $('#watched_inner') );
         show_live(including_live);
         $('#watched_spinner').hide('slow');
+        isBusyW = false;
       },
       error: function(_, _, e) {
         if (window.console) {
-          console.log("ajax error " + e);
+          log_stuff("ajax error " + e);
         }
         $('#watched_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#watched_spinner').hide('slow');
+        isBusyW = false;
       }
     });
   }
