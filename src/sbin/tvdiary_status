@@ -313,6 +313,9 @@ proc main {} {
 
         if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
           # "Decrypting"
+          if { $::logging > 2 } {
+            puts "$::logging_time: Decrypting /mod/tmp/webif_auto/decrypting.$basename.ts"
+          }
 
         } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
           # This file exists only when watching live TV. "Time Shift Recording" I assume.
@@ -353,11 +356,17 @@ proc main {} {
 
       } elseif { $extension in $::media_file_extensions } {
         # "Playing .mp4 etc"
+        if { $::logging > 2 } {
+          puts "$::logging_time: P $filepath"
+        }
         log_stream_activity $tvdiarydb finished_activities "P" $::current_time $filename
         dict set playing_channels $filename 1
 
       } elseif { $filename eq "Streamer_down_file" } {
         # "Playing network streamed media"
+        if { $::logging > 2 } {
+          puts "$::logging_time: P Network streamed media"
+        }
         log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
         dict set playing_channels "Network streamed media" 1
       }
