@@ -16,7 +16,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 1
+set logging 3
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
@@ -91,7 +91,7 @@ proc update_finished_activities { tvdiarydb &finished_activities } {
   if { $::logging } {
     set res [$tvdiarydb query "SELECT activity_id FROM activities WHERE unfinished = 0 AND end = 0"]
     foreach rec $res {
-      puts "$::logging_time: Deleted zero length activity $rec(activity_id), [get_activity_program_details $tvdiarydb $activity_id]"
+      puts "$::logging_time: Deleted zero length activity $rec(activity_id), [get_activity_program_details $tvdiarydb $rec(activity_id)]"
     }
   }
   $tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"

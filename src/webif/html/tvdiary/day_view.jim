@@ -4,7 +4,7 @@
 # Called over CGI to update a page, or as a CLI for hosting on a different server.
 # If there is no data, or on error, a span is rendered instead of a table.
 #
-# CGI usage: /tvdiary/day_view.jim?start=<time_start>&type=<type>
+# CGI usage: /tvdiary/day_view.jim?start=<time_start>&current_time=<browser's current time>&type=<type>
 # CLI usage: day_view.jim <time_start> <type> [<icons_path> <icons_url>]
 #   time_start = seconds since 1 Jan 1970 epoch.
 #   type = R or W for Recorded or Watched (including both Played and Live watched).
@@ -45,6 +45,8 @@ case $runmode {
   cgi {
     cgi_input
     set time_start [cgi_get start]
+    # use the browser's time - helps when the clocks aren't synced.
+    set current_time [cgi_get current_time]
     set type [cgi_get type]
     httpheader "text/html"
   }
@@ -351,7 +353,7 @@ proc main {} {
       }
     }
 
-    puts "<table class=\"events_table\">"
+    puts "<table class=\"events_table\" current_time=\"$::current_time\" time_start=\"$::time_start\" time_end=\"$::time_end\">"
 
     foreach record $records {
       output_past_record $record
