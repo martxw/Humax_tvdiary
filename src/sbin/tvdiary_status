@@ -16,7 +16,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 0
+set logging 1
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
@@ -207,6 +207,7 @@ proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time
 # The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
 # However, that didn't take account of being in the TV Portal but not actually playing anything yet.
 # So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
+#
 proc log_watching_live_tv { tvdiarydb &finished_activities } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
 
@@ -216,6 +217,13 @@ proc log_watching_live_tv { tvdiarydb &finished_activities } {
   }
   lassign [lindex $_svcid 0] x svcid x lcn x channel_name
 
+  log_watching_live_tv_details $tvdiarydb finished_activities $svcid $channel_name
+}
+
+#
+# Report the live TV details, once we know the servce ID.
+#
+proc log_watching_live_tv_details { tvdiarydb &finished_activities svcid channel_name } {
   set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
   if { [llength $epgs] == 1 } {
     lassign $epgs epg
@@ -284,6 +292,11 @@ proc main {} {
     #
     set finished_activities [load_unfinished_activities $tvdiarydb]
 
+    # Track what's being watched at the moment, for guessing live watching if nothing else.
+    set recording_channels {}
+    set playing_channels {}
+    set watching_live {}
+    
     foreach filepath [array names ndata] {
       if { ![dict exists $data $filepath] } { set data($filepath) 0 }
 
@@ -292,6 +305,11 @@ proc main {} {
       if { $extension eq ".ts" } {
         set basename [file rootname $filename]
         set ts [ts fetch $filepath]
+        set channel_name [$ts get channel_name]
+        set title [$ts get title]
+        set synopsis [$ts get synopsis]
+        set schedstart [$ts get schedstart]
+        set scheddur [expr [$ts get scheddur] / 60]
 
         if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
           # "Decrypting"
@@ -303,6 +321,7 @@ proc main {} {
               puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
             }
             log_watching_live_tv $tvdiarydb finished_activities
+            dict set watching_live "TSR" 1
           }
 
         } elseif { $ndata($filepath) == -1 } {
@@ -310,33 +329,57 @@ proc main {} {
           if { $::logging > 2 } {
             puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          dict set recording_channels $channel_name 1
+          dict set playing_channels $channel_name 1
 
         } elseif { $ndata($filepath) > $data($filepath) } {
           # "Recording"
           if { $::logging > 2 } {
             puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          dict set recording_channels $channel_name 1
 
         } else {
           # "Playing"
           if { $::logging > 2 } {
             puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time [$ts get channel_name] [$ts get title] [$ts get synopsis] [$ts get schedstart] [expr [$ts get scheddur] / 60]
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          dict set playing_channels $channel_name 1
         }
 
       } elseif { $extension in $::media_file_extensions } {
         # "Playing .mp4 etc"
         log_stream_activity $tvdiarydb finished_activities "P" $::current_time $filename
+        dict set playing_channels $filename 1
 
       } elseif { $filename eq "Streamer_down_file" } {
         # "Playing network streamed media"
         log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
+        dict set playing_channels "Network streamed media" 1
       }
     }
+    
+    # Speculative check for watching live, in case live watching a program that's also being recorded.
+    if { [llength $watching_live] == 0 && [llength $playing_channels] == 0 && ![system instandby] } {
+      set hsvc [system param CUR_SVC Value USERCONFIG]
+      set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
+      if { [llength $_svcid] != 1 } {
+        throw "Failed to get svcid for hsvc=$hsvc"
+      }
+      lassign [lindex $_svcid 0] x svcid x lcn x channel_name
+
+      if { [dict exists $recording_channels $channel_name] } {
+        if { $::logging > 2 } {
+          puts "$::logging_time: L $channel_name because not watching anything else and $channel_name is being recorded"
+        }
+        log_watching_live_tv_details $tvdiarydb finished_activities $svcid $channel_name
+      }
+    }
+
     # Update any activities that are now finished.
     update_finished_activities $tvdiarydb finished_activities
     $tvdiarydb close
