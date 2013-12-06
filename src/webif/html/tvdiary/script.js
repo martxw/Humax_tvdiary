@@ -41,7 +41,8 @@ $(document).ready(function() {
           defaultDate: new Date(today_start * 1000),
           onSelect: function(val, inst) {
                   if (isBusyR || isBusyW) {
-                    log_stuff("UI is busy - not changing the date.");
+                    log_stuff("UI is busy - not changing the date to " + new Date(Number(val)) + " - restoring " + new Date(display_start*1000) +".");
+                    $('#datepicker').datepicker("setDate", new Date(display_start * 1000));
                   } else {
                     // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
                     log_stuff("\ndatepicker.onSelect(" + new Date(Number(val)) + ")");

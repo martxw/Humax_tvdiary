@@ -327,7 +327,7 @@ proc main {} {
             dict set watching_live "TSR" 1
           }
 
-        } elseif { $ndata($filepath) == -1 } {
+        } elseif { ($data($filepath) == -1) || ($ndata($filepath) == -1) } {
           # "Chase Playing"
           if { $::logging > 2 } {
             puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
