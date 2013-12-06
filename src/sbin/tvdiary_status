@@ -16,7 +16,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 3
+set logging 1
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"

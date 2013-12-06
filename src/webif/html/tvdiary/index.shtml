@@ -49,10 +49,4 @@
   </div>
 </div>
 
-<!--
-<div class="following">
-  <a href="/tvdiary/db_view.jim">View database</a>
-</div>
--->
-
 <!--#include virtual="/lib/footer.shtml" -->
