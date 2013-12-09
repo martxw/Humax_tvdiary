@@ -3,24 +3,36 @@
  * Author: Martin Wink, 2013.
  */
 
-// Declare globals
-// day_start comes from calendar_params.js/jim
+// calendar_params.js/jim must be included prior to this.
+// day_start seconds offset to the start of the TV day.
+// min_time time of the earliest available information.
+// max_time time of the latest available information.
+// shapshot_time defined only for a published snapshot.
+//
 
-// Today's calendar date start. Updated each request_update().
-var today_start = 0;
+// Declare globals
+
+// Today's calendar date start.
+// Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
+// we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
+var today_start;
+if (typeof shapshot_time == "undefined") {
+  today_start = Math.floor(((new Date().getTime() / 1000.0) - day_start) / 86400) * 86400 + day_start;
+} else {
+  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
+}
 
 // Whether live broadcasts are to be displayed. Toggled on and off.
 var including_live = true;
 
 // Start time for the displayed details, with the day_start offset included. Changed by the datepicker.
-var display_start;
-var display_end;
+var request_start;
 
 // While awaiting Ajax responses.
 var isBusyR = false;
 var isBusyW = false;
 
-function log_stuff(x) { /*console.log(x);*/ }
+function log_stuff(x) { console.log(x); }
 
 $(document).ready(function() {
 
@@ -30,19 +42,17 @@ $(document).ready(function() {
     $('html, body').animate({scrollTop: 0}, 500);
   });
 
-  today_start = get_today_start();
-  
   // Initialize the datepicker.
   $('#datepicker').datepicker({
           firstDay: 1,
           dateFormat: '@',  //@=ms since 01/01/1970.
           minDate: new Date(min_time * 1000),
-          maxDate: 7,
+          maxDate: new Date(max_time * 1000),
           defaultDate: new Date(today_start * 1000),
           onSelect: function(val, inst) {
                   if (isBusyR || isBusyW) {
-                    log_stuff("UI is busy - not changing the date to " + new Date(Number(val)) + " - restoring " + new Date(display_start*1000) +".");
-                    $('#datepicker').datepicker("setDate", new Date(display_start * 1000));
+                    log_stuff("UI is busy - not changing the date to " + new Date(Number(val)) + " - restoring " + new Date(request_start*1000) +".");
+                    $('#datepicker').datepicker("setDate", new Date(request_start * 1000));
                   } else {
                     // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
                     log_stuff("\ndatepicker.onSelect(" + new Date(Number(val)) + ")");
@@ -72,15 +82,6 @@ $(document).ready(function() {
     // I can't get other methods, including is(":checked"), to work.
     show_live($(this).is('[checked=checked]'));
   });
-
-  // Get the start of today, adjusted for the day start offset.
-  function get_today_start() {
-    // Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
-    // we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
-    var today_start = Math.floor(((new Date().getTime() / 1000.0) - day_start) / 86400) * 86400 + day_start;
-    log_stuff("get_today_start()=" + new Date(today_start * 1000) + "day_start=" + day_start);
-    return today_start;
-  }
 
   // Change whether watched live TV is shown.
   function show_live(state) {
@@ -127,13 +128,13 @@ $(document).ready(function() {
 
   // Calculate the duration for one row, constrained by the display range.
   // NB durations are all in minutes, times are in seconds.
-  function duration_within_display_range(tr) {
+  function duration_within_display_range(tr, time_start, time_end) {
     var start = $(tr).attr('event_start');
     var end = $(tr).attr('event_end');
-    if (start < display_start) {
-      return Math.round((end - display_start) / 60);
-    } else if (end > display_end) {
-      return Math.round((display_end - start) / 60);
+    if (start < time_start) {
+      return Math.round((end - time_start) / 60);
+    } else if (end > time_end) {
+      return Math.round((time_end - start) / 60);
     } else {
       return Math.round((end - start) / 60);
     }    
@@ -159,48 +160,53 @@ $(document).ready(function() {
     var nothing_recorded = true;
     var nothing_scheduled = true;
 
+    // Calculate based on the time range from the table, not what was requested.
+    var report_time = 0;
+    var report_day_start = 0;
+    var table_time_start = 0;
+    var table_time_end = 0;
     $("table", el).each(function(i, tab) {
-      var current_time = Number($(tab).attr('current_time'));
-      var time_start = Number($(tab).attr('time_start'));
-      var time_end = Number($(tab).attr('time_end'));
-      log_stuff("update_recorded_duration() server times: current_time=" + new Date(current_time*1000) + ", time_start=" + new Date(time_start*1000) + ", time_end=" + new Date(time_end*1000));
+      report_time = Number($(tab).attr('current_time'));
+      report_day_start = Math.floor((report_time - day_start) / 86400) * 86400 + day_start;
+      table_time_start = Number($(tab).attr('time_start'));
+      table_time_end = Number($(tab).attr('time_end'));
+      log_stuff("update_recorded_duration() server times: report_time=" + new Date(report_time * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
     });
 
     $("tr.record_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr);
+      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
       total_recorded += constrained_duration;
       nothing_recorded = false;
     });
 
     $("tr.future_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr);
+      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
       total_scheduled += constrained_duration;
       nothing_scheduled = false;
     });
 
     // Add on the remaining time for active recordings
     $("tr.record_event.active_event", el).each(function(i, tr) {
-      var now_time = Math.round(new Date().getTime() / 1000);
       var scheduled_end = Number($(tr).attr('scheduled_end'));
       var constrained_duration = 0;
-      if (now_time < display_start) {
+      if (report_time < table_time_start) {
         // Now is before the range - only include time from the range start to scheduled end.
-        constrained_duration = Math.ceil((scheduled_end - display_start) / 60);
+        constrained_duration = Math.ceil((scheduled_end - table_time_start) / 60);
 
-      } else if (now_time > display_end) {
+      } else if (report_time > table_time_end) {
         // Now is after the range - nothing to include, it's all tomorrow.
         constrained_duration = 0;
 
-      } else if (scheduled_end > display_end) {
+      } else if (scheduled_end > table_time_end) {
         // Now is near the end of day, within range - include from now to the range end.
-        constrained_duration = Math.ceil((display_end - now_time) / 60);
+        constrained_duration = Math.ceil((table_time_end - report_time) / 60);
 
       } else {
         // Now must be near the start of day, within range - include from now to the scheduled end.
-        constrained_duration = Math.ceil((scheduled_end - now_time) / 60);
+        constrained_duration = Math.ceil((scheduled_end - report_time) / 60);
 
       }
-      log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", now_time=" + new Date(now_time*1000) + " scheduled_end=" + new Date(scheduled_end*1000) + ", display_start=" + new Date(display_start*1000) + ", display_end=" + new Date(display_end*1000));
+      log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(scheduled_end * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
       if (constrained_duration < 0) {
         alert("constrained_duration=" + constrained_duration);
       }
@@ -208,13 +214,13 @@ $(document).ready(function() {
       nothing_scheduled = false;
     });
 
-    if (display_start < today_start) {
+    if (table_time_start < report_day_start) {
       if (nothing_recorded) {
         $('#recorded_caption').html( "Recorded nothing");
       } else {
         $('#recorded_caption').html( "Recorded - " + format_duration(total_recorded));
       }
-    } else if (display_start > today_start) {
+    } else if (table_time_start > report_day_start) {
       if (nothing_scheduled) {
         $('#recorded_caption').html( "Nothing to be recorded");
       } else {
@@ -231,7 +237,7 @@ $(document).ready(function() {
         $('#recorded_caption').html( "Recorded - " + format_duration(total_recorded) + " / To be recorded - " + format_duration(total_scheduled));
       }
     }
-    log_stuff("Recorded caption now=" + new Date() + ", update_recorded_duration() display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Recorded caption now=" + new Date() + ", update_recorded_duration() table_time_start=" + new Date(table_time_start*1000) + ", report_day_start=" + new Date(report_day_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
   }
   
   // Upon loading the watched data, count the played & live durations & update the heading.
@@ -242,14 +248,25 @@ $(document).ready(function() {
     var nothing_played = true;
     var nothing_live = true;
 
+    // Calculate based on the time range from the table, not what was requested.
+    var report_time;
+    var table_time_start;
+    var table_time_end;
+    $("table", el).each(function(i, tab) {
+      report_time = Number($(tab).attr('current_time'));
+      table_time_start = Number($(tab).attr('time_start'));
+      table_time_end = Number($(tab).attr('time_end'));
+      log_stuff("update_recorded_duration() server times: report_time=" + new Date(report_time * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
+    });
+
     $("tr.play_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr);
+      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
       total_played += constrained_duration;
       nothing_played = false;
     });
 
     $("tr.live_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr);
+      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
       total_live += constrained_duration;
       nothing_live = false;
     });
@@ -278,13 +295,11 @@ $(document).ready(function() {
 
   // When the date selection changes, request new recorded & watched tables.
   function request_update(chosen) {
-    today_start = get_today_start()
-    display_start = chosen;
-    display_end = display_start + 86400;
-    log_stuff("request_update today_start=" + new Date(today_start*1000) + ", display_start=" + new Date(display_start * 1000) + ", display_end=" + new Date(display_end * 1000));
+    request_start = chosen;
+    log_stuff("request_update today_start=" + new Date(today_start * 1000) + ", request_start=" + new Date(request_start * 1000));
 
     // Main page heading.
-    $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(display_start * 1000)) );
+    $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(request_start * 1000)) );
 
     // Blank the tables and show progress indicators.
     $('#recorded_inner').html("");
@@ -293,25 +308,36 @@ $(document).ready(function() {
     $('#watched_spinner').show('fast');
 
     // Temporary table headings.
-    if (display_start < today_start) {
+    if (request_start < today_start) {
       $('#recorded_caption').html( "Recorded" );
-    } else if (display_start > today_start) {
+    } else if (request_start > today_start) {
       $('#recorded_caption').html( "To be recorded" );
     } else {
       $('#recorded_caption').html( "Recorded / To be recorded" );
     }
     $('#watched_caption').html( "Watched" );
-    log_stuff("Temp caption now=" + new Date() + ", request_update(" + new Date(chosen*1000) + ") display_start=" + new Date(display_start*1000) + ", today_start=" + new Date(today_start*1000) + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Temp caption now=" + new Date() + ", request_update(" + new Date(chosen * 1000) + ") request_start=" + new Date(request_start * 1000) + ", today_start=" + new Date(today_start * 1000) + ", set caption to=" + $('#recorded_caption').html());
 
-    // Pass the browser's time to the web server - helps when clocks aren't synced.
-    var now_time = Math.round(new Date().getTime() / 1000);
+    var r_url;
+    var w_url;
+    if (typeof shapshot_time == "undefined") {
+      // Pass the browser's time to the web server - helps when clocks aren't synced.
+      var now_time = Math.round(new Date().getTime() / 1000);
+      r_url = "/tvdiary/day_view.jim?start=" + request_start + "&current_time=" + now_time + "&type=R";
+      w_url = "/tvdiary/day_view.jim?start=" + request_start + "&current_time=" + now_time + "&type=W";
+    } else {
+      var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(request_start * 1000));
+      r_url = "/tvdiary/" + date_filename + "_R.html?nocache";
+      w_url = "/tvdiary/" + date_filename + "_W.html?nocache";
+    }
 
     // Asynchronously request the recorded table data.
     isBusyR = true;
     $.ajax({
       type: "GET",
       dataType: "text",
-      url: "/tvdiary/day_view.jim?start=" + display_start + "&current_time=" + now_time + "&type=R",
+      // For standalone page only
+      url: r_url,
       success: function(data) {
         $('#recorded_inner').html(make_all_visible(data));
         apply_altrow($('#recorded_inner'));
@@ -334,7 +360,7 @@ $(document).ready(function() {
     $.ajax({
       type: "GET",
       dataType: "text",
-      url: "/tvdiary/day_view.jim?start=" + display_start + "&current_time=" + now_time + "&type=W",
+      url: w_url,
       success: function(data) {
         $('#watched_inner').html(make_all_visible(data));
         update_watched_duration( $('#watched_inner') );

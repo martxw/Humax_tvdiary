@@ -45,6 +45,10 @@ set ftp_dir [lindex $argv 3]
 # Declare procedures
 # --------------------------------------------------------------
 
+proc round_to_day_start { t day_start } {
+  return [expr int(($t - $day_start) / $::seconds_per_day) * $::seconds_per_day + $day_start]
+}
+
 proc main {} {
   # One temp file for everything.
   set tmpfile [file tempfile]
@@ -88,7 +92,9 @@ proc main {} {
 
   # Calculate the program default from and to times to generate updates for.
   set current_time [clock seconds]
-  set today_start [expr int($current_time / $::seconds_per_day) * $::seconds_per_day]
+  # Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
+  # we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
+  set today_start [round_to_day_start $current_time $day_start]
 
   # Find out how much data there is in the database to find the absolute min time for the update,
   # rounded to the start of the day. Default to today so planned recordings are included at the very least.
@@ -141,11 +147,12 @@ proc main {} {
     # Continue using defaulted srv_min_time.
   }
 
-  # 1 day back from the last update.
+  # 1 day back from the last update, then round to start of the TV day.
   set update_from_time [expr $srv_update_time - $::seconds_per_day]
   if { $update_from_time < $db_min_start } {
     set update_from_time $db_min_start
   }
+  set update_from_time [round_to_day_start $update_from_time $day_start]
 
   # 7 days from today.
   set update_to_time [expr $today_start + ($::days_forward * $::seconds_per_day)]
@@ -164,10 +171,10 @@ proc main {} {
     foreach type {R W} {
       set target_file "[clock format $t -format $::date_fmt]_$type.html"
       set cmd "exec $::DAY_VIEW_PATH $t $type $::CHANNEL_ICONS_PATH $::CHANNEL_ICONS_URL > $tmpfile"
-      puts $cmd
+      puts "[clock format $t] $cmd"
       eval $cmd
       set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host $::ftp_dir/$target_file $tmpfile"
-      puts $cmd
+      puts "$cmd"
       eval $cmd
     }
   }
@@ -176,7 +183,7 @@ proc main {} {
   set params_fd [open $tmpfile w]
   puts $params_fd "var min_time=$srv_min_time; // [clock format $srv_min_time]"
   puts $params_fd "var max_time=$update_to_time; // [clock format $update_to_time]"
-  puts $params_fd "var update_time=$today_start; // [clock format $today_start]"
+  puts $params_fd "var shapshot_time=$today_start; // [clock format $today_start]"
   puts $params_fd "var day_start=$day_start; // "
 
   $params_fd close

@@ -30,7 +30,7 @@ if { ![file exists $DB_FILEPATH] } {
   }
   $tvdiarydb close
 }
-set max_time [expr int(([clock seconds] + 86399) / 86400) * 86400]
+set max_time [expr (int([clock seconds] / 86400) + 7) * 86400]
 
 # Get the configured start time of the TV day just once here, rather than on every time we get a day's data.
 # Converted to seconds. Default here to 00:00 (0 * 60 + 0).
