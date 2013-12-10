@@ -81,6 +81,7 @@ proc main {} {
     }
 
     if { $yes_response } {
+      $tvdiarydb query "BEGIN TRANSACTION"
       $tvdiarydb query "DELETE FROM activities WHERE start < %s" $purge_time
       set num_events [$tvdiarydb changes]
 
@@ -98,6 +99,7 @@ proc main {} {
     }
 
   } finally {
+    $tvdiarydb query "COMMIT TRANSACTION"
     $tvdiarydb close
   }
 }
