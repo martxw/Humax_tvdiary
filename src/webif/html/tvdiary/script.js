@@ -32,7 +32,7 @@ var request_start;
 var isBusyR = false;
 var isBusyW = false;
 
-function log_stuff(x) { console.log(x); }
+function log_stuff(x) { /*console.log(x);*/ }
 
 $(document).ready(function() {
 
