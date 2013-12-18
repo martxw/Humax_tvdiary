@@ -37,7 +37,7 @@ set include_live_tv 1
 # The time for this polling period.
 #
 set current_time [clock seconds]
-set log_date_fmt "%d/%m/%Y-%H:%M"
+set log_date_fmt "%d/%m/%Y-%H:%M:%S"
 set logging_time [clock format $current_time -format $log_date_fmt]
 #if { $::logging } {
 #  puts "\n$logging_time: tvdiary_status.jim"
@@ -256,7 +256,12 @@ proc get_data { pid } {
       set type [string tolower [file extension $filepath]]
       if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::media_file_extensions } {
         if { [dict exists $ret $filepath] } {
-          set ret($filepath) -1
+          # Could be open twice if playing and downloading, not recording.
+          # So check the age. Chase playback if it's newly written, else ignore multiple reads.
+          set age [expr abs([clock seconds] - [file mtime $filepath])]
+          if { $age < $::RECORDING_THRESHOLD } {
+            set ret($filepath) -1
+          }
         } else {
           set ret($filepath) [file size $filepath]
         }

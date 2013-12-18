@@ -1,0 +1,10 @@
+#!/mod/bin/jimsh
+package require cgi
+cgi_input
+puts "Content-Type: text/html"
+puts ""
+set logging_time [clock format [clock seconds] -format "%d/%m/%Y-%H:%M:%S"]
+set fd [open "/mod/tmp/tvdiaryjs.log" a]
+puts $fd "$logging_time: [cgi_get msg]"
+close $fd
+puts "OK"

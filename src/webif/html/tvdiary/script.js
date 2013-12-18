@@ -32,7 +32,20 @@ var request_start;
 var isBusyR = false;
 var isBusyW = false;
 
-function log_stuff(x) { /*console.log(x);*/ }
+function log_stuff(x) {
+  /*console.log(x);*/
+  $.ajax({
+    type: "GET",
+    dataType: "text",
+    url: "/tvdiary/jslog.jim?msg=" + encodeURI(x),
+    success: function(data) {
+      console.log("log_stuff success");
+    },
+    error: function(_, _, e) {
+      console.log("log_stuff ajax error " + e);
+    }
+  });
+}
 
 $(document).ready(function() {
 
@@ -208,7 +221,7 @@ $(document).ready(function() {
       }
       log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(scheduled_end * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
       if (constrained_duration < 0) {
-        alert("constrained_duration=" + constrained_duration);
+        log_stuff("ALERT! constrained_duration=" + constrained_duration);
       }
       total_scheduled += constrained_duration;
       nothing_scheduled = false;
