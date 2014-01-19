@@ -410,6 +410,16 @@ proc main {} {
     # Update any activities that are now finished.
     update_finished_activities $tvdiarydb finished_activities
     $tvdiarydb close
+  } else {
+    # For the cases where there is no activity after a recording finishes, need to mark everything as finished.
+    set tvdiarydb [openDB]
+    set finished_activities [load_unfinished_activities $tvdiarydb]
+    if { [llength $finished_activities] > 0 } {
+      puts "$::logging_time: Inactivity cleanup of [llength $finished_activities] finished activities."
+      # Update any activities that are now finished.
+      update_finished_activities $tvdiarydb finished_activities
+    }
+    $tvdiarydb close
   }
 }
 

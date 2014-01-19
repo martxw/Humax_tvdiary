@@ -34,17 +34,7 @@ var isBusyW = false;
 
 function log_stuff(x) {
   /*console.log(x);*/
-  $.ajax({
-    type: "GET",
-    dataType: "text",
-    url: "/tvdiary/jslog.jim?msg=" + encodeURI(x),
-    success: function(data) {
-      console.log("log_stuff success");
-    },
-    error: function(_, _, e) {
-      console.log("log_stuff ajax error " + e);
-    }
-  });
+  $.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));
 }
 
 $(document).ready(function() {
@@ -68,7 +58,7 @@ $(document).ready(function() {
                     $('#datepicker').datepicker("setDate", new Date(request_start * 1000));
                   } else {
                     // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
-                    log_stuff("\ndatepicker.onSelect(" + new Date(Number(val)) + ")");
+                    log_stuff("datepicker.onSelect(" + new Date(Number(val)) + ")");
                     var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;
                     request_update(chosen);
                   }
@@ -221,7 +211,8 @@ $(document).ready(function() {
       }
       log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(scheduled_end * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
       if (constrained_duration < 0) {
-        log_stuff("ALERT! constrained_duration=" + constrained_duration);
+        log_stuff("ALERT: constrained_duration=" + constrained_duration);
+        alert("constrained_duration=" + constrained_duration);
       }
       total_scheduled += constrained_duration;
       nothing_scheduled = false;
