@@ -25,6 +25,11 @@ td.prompt
   padding: 0.5em;
 }
 
+/* The prev/today/next buttons and their table */
+#next-prev-table, #prev-day, #today, #next-day {
+  width:100%;
+}
+
 /* Keep tables & fields together */
 .table_wrapper {
   float: left;

@@ -86,6 +86,43 @@ $(document).ready(function() {
     show_live($(this).is('[checked=checked]'));
   });
 
+  $('#prev-day').button()
+    .click(function() {
+      updateDate(-1);
+    });
+  $('#today').button()
+    .click(function() {
+      updateDate(0);
+    });
+  $('#next-day').button()
+    .click(function() {
+      updateDate(+1);
+    });
+  
+  // Process the button date changes
+  function updateDate(direction) {
+    if (!(isBusyR || isBusyW)) {
+      var currentDate = $('#datepicker').datepicker( "getDate" );
+      var newTime = currentDate.getTime();
+      if (direction < 0) {
+        newTime -= 86400000;
+      } else if (direction > 0) {
+        newTime += 86400000;
+      } else {
+        newTime = today_start * 1000;
+      }
+      if (newTime >= (min_time * 1000) && newTime <= (max_time * 1000)) {
+        currentDate.setTime(newTime);
+        $('#datepicker').datepicker("setDate", currentDate);
+
+        // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
+        log_stuff("Simulated datepicker.onSelect(" + currentDate + ")");
+        var chosen  = Math.round(newTime / 86400000.0) * 86400 + day_start;
+        request_update(chosen);
+      }
+    }
+  }
+  
   // Change whether watched live TV is shown.
   function show_live(state) {
     including_live = state;
