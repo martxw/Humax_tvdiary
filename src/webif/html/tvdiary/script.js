@@ -86,7 +86,7 @@ $(document).ready(function() {
     show_live($(this).is('[checked=checked]'));
   });
 
-  $('#prev-day').button()
+  $('#prev_day').button()
     .click(function() {
       updateDate(-1);
     });
@@ -94,7 +94,7 @@ $(document).ready(function() {
     .click(function() {
       updateDate(0);
     });
-  $('#next-day').button()
+  $('#next_day').button()
     .click(function() {
       updateDate(+1);
     });

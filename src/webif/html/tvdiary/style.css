@@ -3,6 +3,11 @@
  * Author: Martin Wink, 2013.
  */
 
+/* Keep tables & fields together */
+.table_wrapper {
+  float: left;
+}
+
 /* Size tables, and keep them apart in different orientations */
 #recorded_outer, #watched_outer {
   width: 51em;
@@ -10,10 +15,23 @@
   margin: 0 1em 1em 0;
 }
 
-/* Space from tables on right, and other fields below */
+/* The controls */
+#controls_panel {
+  margin: 0 1em 1em 0;
+}
+
+/* Space from other fields below */
 #datepicker {
-  float: left;
+  margin: 0 0 0.3em 0;
+}
+
+/* The prev/today/next buttons and their table */
+#next_prev_table {
+  width:100%;
   margin: 0 1em 0.3em 0;
+}
+#prev_day, #today, #next_day {
+  width:100%;
 }
 
 /* Prompt - as th.key but no background */
@@ -23,16 +41,6 @@ td.prompt
   text-align: right;
   color: black;
   padding: 0.5em;
-}
-
-/* The prev/today/next buttons and their table */
-#next-prev-table, #prev-day, #today, #next-day {
-  width:100%;
-}
-
-/* Keep tables & fields together */
-.table_wrapper {
-  float: left;
 }
 
 /* The header above the tables, sized to match the datepicker */

@@ -15,16 +15,18 @@
 <h1>TV Diary<span id="title_date"></span></h1>
 
 <div class="table_wrapper">
-  <div id="datepicker"></div>
-  <div style="clear:both;"></div>
-  <table id="next-prev-table"><tr>
-    <td><button id="prev-day">Prev</button></td>
-    <td><button id="today">Today</button></td>
-    <td><button id="next-day">Next</button></td>
-  </tr></table>
-  <table><tr>
-    <td class="prompt"><label for="include_live">Show live TV: </label></td><td><input id="include_live" type="checkbox"></td>
-  </tr></table>
+  <div id="controls_panel">
+    <div id="datepicker"></div>
+    <div style="clear:both;"></div>
+    <table id="next_prev_table"><tr>
+      <td><button id="prev_day">Prev</button></td>
+      <td><button id="today">Today</button></td>
+      <td><button id="next_day">Next</button></td>
+    </tr></table>
+    <table><tr>
+      <td class="prompt"><label for="include_live">Show live TV: </label></td><td><input id="include_live" type="checkbox"></td>
+    </tr></table>
+  </div>
 </div>
 
 <div class="table_wrapper">
