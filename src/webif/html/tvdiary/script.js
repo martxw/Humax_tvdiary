@@ -443,7 +443,6 @@ $(document).ready(function() {
         }
       }
     }
-
   }
   
   //////
@@ -500,7 +499,7 @@ $(document).ready(function() {
     log_stuff("request_update today_start=" + new Date(today_start * 1000) + ", request_start=" + new Date(request_start * 1000));
 
     // Main page heading.
-    $('#title_date').html( " - " + $.datepicker.formatDate("d MM yy", new Date(request_start * 1000)) );
+    $('#title_date').html( " - " + $.datepicker.formatDate("D d MM yy", new Date(request_start * 1000)) );
 
     // Blank the tables and show progress indicators.
     $('#recorded_inner').html("");
