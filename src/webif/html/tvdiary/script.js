@@ -1,6 +1,6 @@
 /*
  * TV Diary main display page scripts.
- * Author: Martin Wink, 2013.
+ * Author: Martin Wink, 2013-2014.
  */
 
 // calendar_params.js/jim must be included prior to this.
@@ -32,11 +32,17 @@ var request_start;
 var isBusyR = false;
 var isBusyW = false;
 
+//////
+// Logging wrapper.
+//////
 function log_stuff(x) {
   /*console.log(x);*/
   $.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));
 }
 
+//////
+// Page loaded - start work.
+//////
 $(document).ready(function() {
 
   // Initialize the to-top scroller.
@@ -99,7 +105,9 @@ $(document).ready(function() {
       updateDate(+1);
     });
   
+  //////
   // Process the button date changes
+  //////
   function updateDate(direction) {
     if (!(isBusyR || isBusyW)) {
       var currentDate = $('#datepicker').datepicker( "getDate" );
@@ -123,7 +131,9 @@ $(document).ready(function() {
     }
   }
   
+  //////
   // Change whether watched live TV is shown.
+  //////
   function show_live(state) {
     including_live = state;
     // Show or hide the rows.
@@ -145,8 +155,109 @@ $(document).ready(function() {
     // Persist the setting.
     setCookie("tvdiary_live_tv", including_live);
   }
+  
+  //////
+  // Escape HTML-specific characters in a string
+  //////
+  var entityMap = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': '&quot;',
+    "'": '&#39;',
+    "/": '&#x2F;'
+  };
 
+  function escapeHtml(string) {
+    return String(string).replace(/[&<>"'\/]/g, function (s) {
+      return entityMap[s];
+    });
+  }
+
+  //////
+  // Render table HTML from JSON.
+  //////
+  function json_to_html(data) {
+    var html = "";
+    if (data.status == "OK") {
+      html += "<table class=\"events_table\">";
+      for (var i = 0, len = data.events.length; i < len; i++) {
+        var event = data.events[i];
+        // typeclass and activeclass CSS.
+        var typeclass;
+        switch (event.type) {
+          case "future":
+            typeclass = "future_event";
+            break;
+          case "record":
+            typeclass = "record_event";
+            break;
+          case "live":
+            typeclass = "live_event";
+            break;
+          case "play":
+          default:
+            typeclass = "play_event";
+            break;
+        }
+        var activeclass = "";
+        if (event.active) {
+          activeclass = " active_event";
+        }
+
+        html += "<tr class=\"event_row visible_event " + typeclass + activeclass + "\">";
+
+        //
+        // Column 1. The actual record or watching time. This is always known.
+        //
+        html += "<td class=\"event_time\">";
+        html += "<div class=\"event_start\">" + formatTime(event.event_start) + "</div>";
+        if (event.type == "record" && event.active) {
+          html += "<div class=\"event_duration in_progress\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
+          html += "<div class=\"event_end in_progress\">" + formatTime(event.event_end) + "</div>";
+          html += "<div class=\"event_duration\">&nbsp;</div>";
+          html += "<div class=\"event_end\">" + formatTime(event.scheduled_end) + "</div>";
+        } else {
+          html += "<div class=\"event_duration\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
+          html += "<div class=\"event_end\">" + formatTime(event.event_end) + "</div>";
+        }
+        html += "</td>";
+
+        //
+        // Column 2. The channel icon and name.
+        //
+        html += "<td class=\"tvchannel\">";
+        html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + event.channel_name + "\"/>";
+        html += "<div>" + event.channel_name + "</div>";
+        html += "</td>";
+
+        //
+        // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
+        //
+        html += "<td class=\"event_descr\">";
+        html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+        if (event.synopsis != "") {
+          html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
+        }
+        if (event.scheduled_start != 0 && event.scheduled_duration != 0) {
+          html += "<span class=\"tvschedule\">(" + formatDateTime(event.scheduled_start) + ", " + event.scheduled_duration + (event.scheduled_duration == 1 ? " min" : " mins") + ")</span>";
+        }
+        html += "</td>"
+
+        html += "</tr>";
+      }
+      html += "</table>";
+    } else if (data.status == "EMPTY") {
+      html = "<span class=\"nothing\">Nothing</span>";
+    } else {
+      html = "<span class=\"nothing\">Error: " + data.status + "</span>";
+    }
+    return $(html);
+  }
+
+  //////
   // Update the alternating colour of rows beneath element "el", taking visibility into account.
+  //////
   function apply_altrow(el) {
     $("tr.event_row.visible_event", el).each(function(i, tr) {
       if (i % 2) {
@@ -157,43 +268,54 @@ $(document).ready(function() {
     });
   }
 
-  // Ensure the data from Ajax has the necessary visibility classes before it's added to the DOM.
-  function make_all_visible(data) {
-    var jqd = $(data);
-    $('tr.event_row', jqd).each(function(i, tr) {
-      $(tr).addClass('visible_event').removeClass('hidden_event');
-    });
-    return jqd;
-  }
-
+  //////
   // Calculate the duration for one row, constrained by the display range.
   // NB durations are all in minutes, times are in seconds.
-  function duration_within_display_range(tr, time_start, time_end) {
-    var start = $(tr).attr('event_start');
-    var end = $(tr).attr('event_end');
-    if (start < time_start) {
-      return Math.round((end - time_start) / 60);
-    } else if (end > time_end) {
-      return Math.round((time_end - start) / 60);
+  //////
+  function duration_within_display_range(range_start, range_end, event_start, event_end) {
+    if (event_start < range_start) {
+      return Math.round((event_end - range_start) / 60);
+    } else if (event_end > range_end) {
+      return Math.round((range_end - event_start) / 60);
     } else {
-      return Math.round((end - start) / 60);
+      return Math.round((event_end - event_start) / 60);
     }    
   }
 
+  //////
   // Format an integer like "04".  
+  //////
   function two_digits(num) {
     var ret = String(num);
     if (ret.length < 2) {ret = "0" + ret;}
     return ret;
   }
 
+  //////
   // Format a duration as hours:minutes like "2:04"
+  //////
   function format_duration(duration) {
     return Math.floor(duration / 60) + ":" + two_digits(duration % 60);
   }
 
+  //////
+  // Format the date and time like "Sat 7 Dec 2013 2:04"
+  //////
+  function formatDateTime(t) {
+    return $.datepicker.formatDate("D d M yy ", new Date(t * 1000)) + formatTime(t);
+  }
+  
+  //////
+  // Format the time like "2:04"
+  //////
+  function formatTime(t) {
+    return format_duration(Math.floor((t % 86400) / 60));
+  }
+  
+  //////
   // Upon loading the recorded data, count the recorded & scheduled durations & update the heading.
-  function update_recorded_duration(el) {
+  //////
+  function update_recorded_duration(data) {
     var total_recorded = 0;
     var total_scheduled = 0;
     // Nothing rather than total == 0 allows 0:00 at date changeovers.
@@ -201,67 +323,59 @@ $(document).ready(function() {
     var nothing_scheduled = true;
 
     // Calculate based on the time range from the table, not what was requested.
-    var report_time = 0;
-    var report_day_start = 0;
-    var table_time_start = 0;
-    var table_time_end = 0;
-    $("table", el).each(function(i, tab) {
-      report_time = Number($(tab).attr('current_time'));
-      report_day_start = Math.floor((report_time - day_start) / 86400) * 86400 + day_start;
-      table_time_start = Number($(tab).attr('time_start'));
-      table_time_end = Number($(tab).attr('time_end'));
-      log_stuff("update_recorded_duration() server times: report_time=" + new Date(report_time * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
-    });
+    var report_time = data.current_time;
+    var report_day_start = Math.floor((report_time - day_start) / 86400) * 86400 + day_start;
 
-    $("tr.record_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
-      total_recorded += constrained_duration;
-      nothing_recorded = false;
-    });
-
-    $("tr.future_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
-      total_scheduled += constrained_duration;
-      nothing_scheduled = false;
-    });
-
-    // Add on the remaining time for active recordings
-    $("tr.record_event.active_event", el).each(function(i, tr) {
-      var scheduled_end = Number($(tr).attr('scheduled_end'));
-      var constrained_duration = 0;
-      if (report_time < table_time_start) {
-        // Now is before the range - only include time from the range start to scheduled end.
-        constrained_duration = Math.ceil((scheduled_end - table_time_start) / 60);
-
-      } else if (report_time > table_time_end) {
-        // Now is after the range - nothing to include, it's all tomorrow.
-        constrained_duration = 0;
-
-      } else if (scheduled_end > table_time_end) {
-        // Now is near the end of day, within range - include from now to the range end.
-        constrained_duration = Math.ceil((table_time_end - report_time) / 60);
-
-      } else {
-        // Now must be near the start of day, within range - include from now to the scheduled end.
-        constrained_duration = Math.ceil((scheduled_end - report_time) / 60);
-
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+      
+      if (event.type == "record") {
+        var constrained_duration = duration_within_display_range(data.time_start, data.time_end, event.event_start, event.event_end);
+        total_recorded += constrained_duration;
+        nothing_recorded = false;
+      } else if (event.type == "future") {
+        var constrained_duration = duration_within_display_range(data.time_start, data.time_end, event.event_start, event.event_end);
+        total_scheduled += constrained_duration;
+        nothing_scheduled = false;
       }
-      log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(scheduled_end * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
-      if (constrained_duration < 0) {
-        log_stuff("ALERT: constrained_duration=" + constrained_duration);
-        alert("constrained_duration=" + constrained_duration);
-      }
-      total_scheduled += constrained_duration;
-      nothing_scheduled = false;
-    });
 
-    if (table_time_start < report_day_start) {
+      // Add on the remaining time for active recordings
+      if (event.type == "record" && event.active) {
+        var constrained_duration = 0;
+        if (report_time < data.time_start) {
+          // Now is before the range - only include time from the range start to scheduled end.
+          constrained_duration = Math.ceil((event.scheduled_end - data.time_start) / 60);
+
+        } else if (report_time > data.time_end) {
+          // Now is after the range - nothing to include, it's all tomorrow.
+          constrained_duration = 0;
+
+        } else if (event.scheduled_end > data.time_end) {
+          // Now is near the end of day, within range - include from now to the range end.
+          constrained_duration = Math.ceil((data.time_end - report_time) / 60);
+
+        } else {
+          // Now must be near the start of day, within range - include from now to the scheduled end.
+          constrained_duration = Math.ceil((event.scheduled_end - report_time) / 60);
+
+        }
+        log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(event.scheduled_end * 1000) + ", data.time_start=" + new Date(data.time_start * 1000) + ", data.time_end=" + new Date(data.time_end * 1000));
+        if (constrained_duration < 0) {
+          log_stuff("ALERT: constrained_duration=" + constrained_duration);
+          alert("constrained_duration=" + constrained_duration);
+        }
+        total_scheduled += constrained_duration;
+        nothing_scheduled = false;
+      }
+    }
+    
+    if (data.time_start < report_day_start) {
       if (nothing_recorded) {
         $('#recorded_caption').html( "Recorded nothing");
       } else {
         $('#recorded_caption').html( "Recorded - " + format_duration(total_recorded));
       }
-    } else if (table_time_start > report_day_start) {
+    } else if (data.time_start > report_day_start) {
       if (nothing_scheduled) {
         $('#recorded_caption').html( "Nothing to be recorded");
       } else {
@@ -278,39 +392,32 @@ $(document).ready(function() {
         $('#recorded_caption').html( "Recorded - " + format_duration(total_recorded) + " / To be recorded - " + format_duration(total_scheduled));
       }
     }
-    log_stuff("Recorded caption now=" + new Date() + ", update_recorded_duration() table_time_start=" + new Date(table_time_start*1000) + ", report_day_start=" + new Date(report_day_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Recorded caption now=" + new Date() + ", update_recorded_duration() data.time_start=" + new Date(data.time_start*1000) + ", report_day_start=" + new Date(report_day_start*1000) + ", total_recorded=" + total_recorded + ", total_scheduled=" + total_scheduled + ", set caption to=" + $('#recorded_caption').html());
   }
   
+  //////
   // Upon loading the watched data, count the played & live durations & update the heading.
-  function update_watched_duration(el) {
+  //////
+  function update_watched_duration(data) {
     var total_played = 0;
     var total_live = 0;
     // Nothing rather than total == 0 allows 0:00 at date changeovers.
     var nothing_played = true;
     var nothing_live = true;
 
-    // Calculate based on the time range from the table, not what was requested.
-    var report_time;
-    var table_time_start;
-    var table_time_end;
-    $("table", el).each(function(i, tab) {
-      report_time = Number($(tab).attr('current_time'));
-      table_time_start = Number($(tab).attr('time_start'));
-      table_time_end = Number($(tab).attr('time_end'));
-      log_stuff("update_recorded_duration() server times: report_time=" + new Date(report_time * 1000) + ", table_time_start=" + new Date(table_time_start * 1000) + ", table_time_end=" + new Date(table_time_end * 1000));
-    });
-
-    $("tr.play_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
-      total_played += constrained_duration;
-      nothing_played = false;
-    });
-
-    $("tr.live_event", el).each(function(i, tr) {
-      var constrained_duration = duration_within_display_range(tr, table_time_start, table_time_end);
-      total_live += constrained_duration;
-      nothing_live = false;
-    });
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+      
+      if (event.type == "play") {
+        var constrained_duration = duration_within_display_range(data.time_start, data.time_end, event.event_start, event.event_end);
+        total_played += constrained_duration;
+        nothing_played = false;
+      } else if (event.type == "live") {
+        var constrained_duration = duration_within_display_range(data.time_start, data.time_end, event.event_start, event.event_end);
+        total_live += constrained_duration;
+        nothing_live = false;
+      }
+    }
 
     var combined_duration = total_played + total_live;
     
@@ -334,7 +441,9 @@ $(document).ready(function() {
     });
   }
 
+  //////
   // When the date selection changes, request new recorded & watched tables.
+  //////
   function request_update(chosen) {
     request_start = chosen;
     log_stuff("request_update today_start=" + new Date(today_start * 1000) + ", request_start=" + new Date(request_start * 1000));
@@ -364,8 +473,8 @@ $(document).ready(function() {
     if (typeof shapshot_time == "undefined") {
       // Pass the browser's time to the web server - helps when clocks aren't synced.
       var now_time = Math.round(new Date().getTime() / 1000);
-      r_url = "/tvdiary/day_view.jim?start=" + request_start + "&current_time=" + now_time + "&type=R";
-      w_url = "/tvdiary/day_view.jim?start=" + request_start + "&current_time=" + now_time + "&type=W";
+      r_url = "/tvdiary/day_json.jim?start=" + request_start + "&current_time=" + now_time + "&type=R";
+      w_url = "/tvdiary/day_json.jim?start=" + request_start + "&current_time=" + now_time + "&type=W";
     } else {
       var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(request_start * 1000));
       r_url = "/tvdiary/" + date_filename + "_R.html?nocache";
@@ -376,13 +485,13 @@ $(document).ready(function() {
     isBusyR = true;
     $.ajax({
       type: "GET",
-      dataType: "text",
+      dataType: "json",
       // For standalone page only
       url: r_url,
       success: function(data) {
-        $('#recorded_inner').html(make_all_visible(data));
+        update_recorded_duration(data);
+        $('#recorded_inner').html(json_to_html(data));
         apply_altrow($('#recorded_inner'));
-        update_recorded_duration($('#recorded_inner'));
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
       },
@@ -400,11 +509,11 @@ $(document).ready(function() {
     isBusyW = true;
     $.ajax({
       type: "GET",
-      dataType: "text",
+      dataType: "json",
       url: w_url,
       success: function(data) {
-        $('#watched_inner').html(make_all_visible(data));
-        update_watched_duration( $('#watched_inner') );
+        update_watched_duration(data);
+        $('#watched_inner').html(json_to_html(data));
         show_live(including_live);
         $('#watched_spinner').hide('slow');
         isBusyW = false;
@@ -420,7 +529,9 @@ $(document).ready(function() {
     });
   }
 
+  //////
   // Save a cookie for a year.
+  //////
   function setCookie(c_name, value) {
     var exdate = new Date();
     exdate.setDate(exdate.getDate() + 365);
@@ -428,7 +539,9 @@ $(document).ready(function() {
     document.cookie = c_name + "=" + c_value;
   }
 
+  //////
   // Read a cookie. Returns a string.
+  //////
   function getCookie(c_name) {
     var c_value = document.cookie;
     var c_start = c_value.indexOf(" " + c_name + "=");

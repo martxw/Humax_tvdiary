@@ -17,7 +17,7 @@ set seconds_per_day 86400
 set days_forward 7
 
 # The script to render the updates.
-set DAY_VIEW_PATH "/mod/webif/html/tvdiary/day_view.jim"
+set DAY_JSON_PATH "/mod/webif/html/tvdiary/day_json.jim"
 
 # The TV channel icons on the Humax.
 set CHANNEL_ICONS_PATH "/mod/webif/html/img/channels/out"
@@ -169,8 +169,8 @@ proc main {} {
   
   for { set t $update_from_time } { $t <= $update_to_time } { incr t $::seconds_per_day } {
     foreach type {R W} {
-      set target_file "[clock format $t -format $::date_fmt]_$type.html"
-      set cmd "exec $::DAY_VIEW_PATH $t $type $::CHANNEL_ICONS_PATH $::CHANNEL_ICONS_URL > $tmpfile"
+      set target_file "[clock format $t -format $::date_fmt]_$type.json"
+      set cmd "exec $::DAY_JSON_PATH $t $type $::CHANNEL_ICONS_PATH $::CHANNEL_ICONS_URL > $tmpfile"
       puts "[clock format $t] $cmd"
       eval $cmd
       set cmd "exec ftpput -u $::ftp_user -p $::ftp_pw $::ftp_host $::ftp_dir/$target_file $tmpfile"
