@@ -1,6 +1,6 @@
 /*
  * TV Diary main display page styles.
- * Author: Martin Wink, 2013.
+ * Author: Martin Wink, 2013-2014.
  */
 
 /* Keep tables & fields together */
@@ -151,6 +151,12 @@ tr.record_event.active_event div.event_end.in_progress:after {
   content: "\00A0\25CF";
   color: #ff0000;
   font-size: 150%;
+}
+
+/* Clashing scheduled recordings */
+tr.clash_event td.event_time {
+  background: #FFDDDD;
+  border-right: medium solid red;
 }
 
 /* Show when playing media and watching live */

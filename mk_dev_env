@@ -58,5 +58,6 @@ mkdir /mod/dev/tvdiary/live/tmp
 TDIR=/mod/tmp
 LDIR=/mod/dev/tvdiary/live/tmp
 ln -s $TDIR/tvdiary.log $LDIR/tvdiary.log
+ln -s $TDIR/tvdiaryjs.log $LDIR/tvdiaryjs.log
 
 mkdir /mod/dev/tvdiary/out

@@ -37,7 +37,7 @@ var isBusyW = false;
 //////
 function log_stuff(x) {
   /*console.log(x);*/
-  $.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));
+  /*$.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));*/
 }
 
 //////
@@ -167,7 +167,6 @@ $(document).ready(function() {
     "'": '&#39;',
     "/": '&#x2F;'
   };
-
   function escapeHtml(string) {
     return String(string).replace(/[&<>"'\/]/g, function (s) {
       return entityMap[s];
@@ -179,79 +178,77 @@ $(document).ready(function() {
   //////
   function json_to_html(data) {
     var html = "";
-    if (data.status == "OK") {
-      html += "<table class=\"events_table\">";
-      for (var i = 0, len = data.events.length; i < len; i++) {
-        var event = data.events[i];
-        // typeclass and activeclass CSS.
-        var typeclass;
-        switch (event.type) {
-          case "future":
-            typeclass = "future_event";
-            break;
-          case "record":
-            typeclass = "record_event";
-            break;
-          case "live":
-            typeclass = "live_event";
-            break;
-          case "play":
-          default:
-            typeclass = "play_event";
-            break;
-        }
-        var activeclass = "";
-        if (event.active) {
-          activeclass = " active_event";
-        }
-
-        html += "<tr class=\"event_row visible_event " + typeclass + activeclass + "\">";
-
-        //
-        // Column 1. The actual record or watching time. This is always known.
-        //
-        html += "<td class=\"event_time\">";
-        html += "<div class=\"event_start\">" + formatTime(event.event_start) + "</div>";
-        if (event.type == "record" && event.active) {
-          html += "<div class=\"event_duration in_progress\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
-          html += "<div class=\"event_end in_progress\">" + formatTime(event.event_end) + "</div>";
-          html += "<div class=\"event_duration\">&nbsp;</div>";
-          html += "<div class=\"event_end\">" + formatTime(event.scheduled_end) + "</div>";
-        } else {
-          html += "<div class=\"event_duration\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
-          html += "<div class=\"event_end\">" + formatTime(event.event_end) + "</div>";
-        }
-        html += "</td>";
-
-        //
-        // Column 2. The channel icon and name.
-        //
-        html += "<td class=\"tvchannel\">";
-        html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + event.channel_name + "\"/>";
-        html += "<div>" + event.channel_name + "</div>";
-        html += "</td>";
-
-        //
-        // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
-        //
-        html += "<td class=\"event_descr\">";
-        html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
-        if (event.synopsis != "") {
-          html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
-        }
-        if (event.scheduled_start != 0 && event.scheduled_duration != 0) {
-          html += "<span class=\"tvschedule\">(" + formatDateTime(event.scheduled_start) + ", " + event.scheduled_duration + (event.scheduled_duration == 1 ? " min" : " mins") + ")</span>";
-        }
-        html += "</td>"
-
-        html += "</tr>";
+    html += "<table class=\"events_table\">";
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+      // typeclass and activeclass CSS.
+      var typeclass;
+      switch (event.type) {
+        case "future":
+          typeclass = "future_event";
+          break;
+        case "record":
+          typeclass = "record_event";
+          break;
+        case "live":
+          typeclass = "live_event";
+          break;
+        case "play":
+        default:
+          typeclass = "play_event";
+          break;
       }
-      html += "</table>";
-    } else if (data.status == "EMPTY") {
-      html = "<span class=\"nothing\">Nothing</span>";
-    } else {
-      html = "<span class=\"nothing\">Error: " + data.status + "</span>";
+      var activeclass = "";
+      if (event.active) {
+        activeclass = " active_event";
+      }
+      var clashclass = "";
+      if (event.overlapWarning) {
+        clashclass = " clash_event";
+      }
+
+      html += "<tr class=\"event_row visible_event " + typeclass + activeclass + clashclass+ "\">";
+
+      //
+      // Column 1. The actual record or watching time. This is always known.
+      //
+      html += "<td class=\"event_time\">";
+      html += "<div class=\"event_start\">" + formatTime(event.event_start) + "</div>";
+      if (event.type == "record" && event.active) {
+        html += "<div class=\"event_duration in_progress\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
+        html += "<div class=\"event_end in_progress\">" + formatTime(event.event_end) + "</div>";
+        html += "<div class=\"event_duration\">&nbsp;</div>";
+        html += "<div class=\"event_end\">" + formatTime(event.scheduled_end) + "</div>";
+      } else {
+        html += "<div class=\"event_duration\">" + event.event_duration + (event.event_duration == 1 ? " min" : " mins") + "</div>";
+        html += "<div class=\"event_end\">" + formatTime(event.event_end) + "</div>";
+      }
+      html += "</td>";
+
+      //
+      // Column 2. The channel icon and name.
+      //
+      html += "<td class=\"tvchannel\">";
+      html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + event.channel_name + "\"/>";
+      html += "<div>" + event.channel_name + "</div>";
+      html += "</td>";
+
+      //
+      // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
+      //
+      html += "<td class=\"event_descr\">";
+      html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+      if (event.synopsis != "") {
+        html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
+      }
+      if (event.scheduled_start != 0 && event.scheduled_duration != 0) {
+        html += "<span class=\"tvschedule\">(" + formatDateTime(event.scheduled_start) + ", " + event.scheduled_duration + (event.scheduled_duration == 1 ? " min" : " mins") + ")</span>";
+      }
+      html += "</td>"
+
+      html += "</tr>";
     }
+    html += "</table>";
     return $(html);
   }
 
@@ -396,6 +393,60 @@ $(document).ready(function() {
   }
   
   //////
+  // Check for too many overlapping scheduled recordings.
+  //////
+  function check_overlaps(data) {
+    // Find overlaps between future events and active recordings.
+    var overlaps = [];
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event_a = data.events[i];
+      if (event_a.type == "future" || (event_a.type == "record" && event_a.active)) {
+        for (var j = i + 1; j < len; j++) {
+          var event_b = data.events[j];
+          if (event_b.type == "future" || (event_b.type == "record" && event_b.active)) {
+            if ((event_b.scheduled_start >= event_a.scheduled_start && event_b.scheduled_start < event_a.scheduled_end)
+              || (event_b.scheduled_end >= event_a.scheduled_start && event_b.scheduled_start < event_a.scheduled_end)
+              || (event_b.scheduled_start < event_a.scheduled_start && event_b.scheduled_end >= event_a.scheduled_end)) {
+              var overlap = {
+                index_a: i,
+                index_b: j,
+                start: Math.max(event_a.scheduled_start, event_b.scheduled_start),
+                end:  Math.min(event_a.scheduled_end, event_b.scheduled_end)
+              };
+              overlaps.push(overlap);
+              log_stuff("Overlap: event_a=" + i + " starts " + new Date(event_a.scheduled_start*1000) + " ends " + new Date(event_a.scheduled_end*1000) + " titled " + event_a.title);
+              log_stuff("Overlap: event_b=" + j + " starts " + new Date(event_b.scheduled_start*1000) + " ends " + new Date(event_b.scheduled_end*1000) + " titled " + event_b.title);
+              log_stuff("Overlap: start=" + new Date(overlap.start*1000) + " end " + new Date(overlap.end*1000));
+            }
+          }
+        }
+      }
+    }
+    
+    // Find overlaps between the overlaps. Because any 2 events can only have 1 overlap, this means there are > 2 events overlapping.
+    for (var i = 0, len = overlaps.length; i < len; i++) {
+      var overlap_a = overlaps[i];
+      for (var j = i + 1; j < len; j++) {
+        var overlap_b = overlaps[j];
+        if ((overlap_b.start >= overlap_a.start && overlap_b.start < overlap_a.end)
+          || (overlap_b.end >= overlap_a.start && overlap_b.start < overlap_a.end)
+          || (overlap_b.start < overlap_a.start && overlap_b.end >= overlap_a.end)) {
+          log_stuff("Overlap: overlap_a start " + new Date(overlap_a.start*1000) + " end " + new Date(overlap_a.end*1000));
+          log_stuff("Overlap: overlap_b start " + new Date(overlap_b.start*1000) + " end " + new Date(overlap_b.end*1000));
+          log_stuff("Overlaping overlap: start " + new Date(Math.max(overlap_a.start, overlap_b.start)*1000) + " end " + new Date(Math.min(overlap_a.end, overlap_b.end)*1000));
+          log_stuff("Affected events: " + overlap_a.index_a + ", " + overlap_a.index_b + ", " + overlap_b.index_a + ", " + overlap_b.index_b);
+          // Mark the affected events.
+          data.events[overlap_a.index_a].overlapWarning = true;
+          data.events[overlap_a.index_b].overlapWarning = true;
+          data.events[overlap_b.index_a].overlapWarning = true;
+          data.events[overlap_b.index_b].overlapWarning = true;
+        }
+      }
+    }
+
+  }
+  
+  //////
   // Upon loading the watched data, count the played & live durations & update the heading.
   //////
   function update_watched_duration(data) {
@@ -489,8 +540,15 @@ $(document).ready(function() {
       // For standalone page only
       url: r_url,
       success: function(data) {
-        update_recorded_duration(data);
-        $('#recorded_inner').html(json_to_html(data));
+        if (data.status == "OK" ) {
+          update_recorded_duration(data);
+          check_overlaps(data);
+          $('#recorded_inner').html(json_to_html(data));
+        } else if (data.status == "EMPTY") {
+          $('#recorded_inner').html("<span class=\"nothing\">Nothing</span>");
+        } else {
+          $('#recorded_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+        }
         apply_altrow($('#recorded_inner'));
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
@@ -512,8 +570,14 @@ $(document).ready(function() {
       dataType: "json",
       url: w_url,
       success: function(data) {
-        update_watched_duration(data);
-        $('#watched_inner').html(json_to_html(data));
+        if (data.status == "OK" ) {
+          update_watched_duration(data);
+          $('#watched_inner').html(json_to_html(data));
+        } else if (data.status == "EMPTY") {
+          $('#watched_inner').html("<span class=\"nothing\">Nothing</span>");
+        } else {
+          $('#watched_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+        }
         show_live(including_live);
         $('#watched_spinner').hide('slow');
         isBusyW = false;
