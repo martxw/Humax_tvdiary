@@ -30,7 +30,6 @@ TDIR=/mod/webif/html/tvdiary
 LDIR=/mod/dev/tvdiary/live/webif/html/tvdiary
 ln -s $TDIR/calendar_params.jim $LDIR/calendar_params.jim
 ln -s $TDIR/day_json.jim $LDIR/day_json.jim
-ln -s $TDIR/day_view.jim $LDIR/day_view.jim
 ln -s $TDIR/jslog.jim $LDIR/jslog.jim
 ln -s $TDIR/index.shtml $LDIR/index.shtml
 ln -s $TDIR/script.js $LDIR/script.js

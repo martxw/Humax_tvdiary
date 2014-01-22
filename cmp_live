@@ -9,7 +9,6 @@ diff live/webif/html/tvdiary/calendar_params.jim src/webif/html/tvdiary/calendar
 diff live/webif/html/tvdiary/tvmast.png src/webif/html/tvdiary/tvmast.png
 diff live/webif/html/tvdiary/style.css src/webif/html/tvdiary/style.css
 diff live/webif/html/tvdiary/day_json.jim src/webif/html/tvdiary/day_json.jim
-diff live/webif/html/tvdiary/day_view.jim src/webif/html/tvdiary/day_view.jim
 diff live/webif/html/tvdiary/jslog.jim src/webif/html/tvdiary/jslog.jim
 diff live/webif/html/tvdiary/index.shtml src/webif/html/tvdiary/index.shtml
 diff live/webif/plugin/tvdiary/menu.hook src/webif/plugin/tvdiary/menu.hook
