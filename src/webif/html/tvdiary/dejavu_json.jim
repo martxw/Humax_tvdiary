@@ -1,0 +1,184 @@
+#!/mod/bin/jimsh
+#
+# Render the details of all programs sharing the title and synopsis of the one identified
+# by the program ID. All of their record and playback activities are listed.
+# After successfully rendering the data, the value "status" is set to "OK".
+# If there is an error, "status" is set to the "<error message>".
+# Clients should therefore check "status" first. If there is a serious server error part way
+# through rendering, the JSON may be malformed and not parsable.
+#
+# CGI usage: /tvdiary/dejavu_json.jim?prog_id=<program_id>
+# CLI usage: dejavu_json.jim <program_id>
+#   program_id = the program ID.
+#
+# Author: Martin Wink, 2014.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+
+# --------------------------------------------------------------
+# CGI or command line parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    set program_id [cgi_get program_id]
+    httpheader "application/json"
+  }
+  cli {
+    if { $argc != 1 } {
+      puts "Usage: $argv0 <program_id>"
+      puts " program_id = the program ID"
+      puts ""
+      puts "Eg: $argv0 1234"
+      exit -1
+    }
+    set program_id [lindex $argv 0]
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Initialize a map from control characters to JSON escaped characters. 
+# Initially all non-null control characters to \u00xx sequences.
+for {set i 1} {$i < 32} {incr i} {
+  set json_escape_map([format %c $i]) \\u[format %04x $i]
+}
+# Then overwrite certain well known control characters with shorter versions.
+set json_escape_map([format %c 8]) \\b; # backspace
+set json_escape_map([format %c 9]) \\t; # tab
+set json_escape_map([format %c 10]) \\n; # lf
+set json_escape_map([format %c 12]) \\f; # ff
+set json_escape_map([format %c 13]) \\r; # cr
+# Other special sequences
+set json_escape_map(\") {\"}
+set json_escape_map(\\) {\\}
+set json_escape_map(/)  {\/}
+
+#
+# Escape a string for inclusion in JSON output.
+#
+proc escape_json_string { in } {
+  return [string map $::json_escape_map $in]
+}
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  #  puts "/* Parameters:
+  #  time_start=$::time_start=[clock format $::time_start]
+  #  time_end=$::time_end=[clock format $::time_end]
+  #  program_id=$::program_id */"
+  # end_debug
+
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists $::DB_FILEPATH] } {
+    # Ajax detects the error if we just exit.
+    throw error "The tvdiary.db database is missing."
+  }
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  #
+  # Query the set of records for the specified type and time range.
+  #
+  set records [$tvdiarydb query "
+    SELECT title, synopsis
+    FROM programs
+    WHERE program_id =  %s
+    LIMIT 1" $::program_id]
+  set record [lindex $records 0]
+  set title $record(title)
+  set synopsis $record(synopsis)
+
+  set records [$tvdiarydb query "
+    SELECT activities.type, activities.start, activities.end, programs.channel_name
+    FROM activities, programs
+    WHERE programs.title = '%s' AND programs.synopsis = '%s' AND activities.program_id = programs.program_id
+    ORDER BY activities.start" $title $synopsis]
+
+  # Finished with the DB.
+  $tvdiarydb close
+
+  puts "{"
+  puts " \"program_id\": $::program_id,"
+  puts " \"title\": \"[escape_json_string $title]\","
+  puts " \"synopsis\": \"[escape_json_string $synopsis]\","
+  puts -nonewline " \"events\": \["
+
+  if { [llength $records] > 0 } {
+    set comma 0
+    foreach record $records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+
+      # Default in case of old W records.
+      set typeclass "play"
+      case $record(type) {
+        R {
+          set typeclass "record"
+        }
+        P {
+          set typeclass "play"
+        }
+        L {
+          set typeclass "live"
+        }
+      }
+
+      puts "{"
+      puts " \"program_id\": $::program_id,"
+      puts " \"type\": \"$typeclass\","
+      puts " \"start\": $record(start),"
+      puts " \"end\": $record(end),"
+      puts " \"channel_name\": \"[escape_json_string $record(channel_name)]\""
+      puts -nonewline "}"
+    }
+  }
+  puts ""
+  puts " \],"
+
+  puts " \"status\": \"OK\""
+  puts "}"
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg]\" }"
+  }
+} else {
+  main
+}
