@@ -55,4 +55,8 @@
   </div>
 </div>
 
+<div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
+  <img src="/img/loading.gif" alt="loading">
+</div>
+
 <!--#include virtual="/lib/footer.shtml" -->

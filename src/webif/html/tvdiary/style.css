@@ -81,14 +81,25 @@ td.prompt
 /* The TV programme title text */
 .tvtitle {
   display: block;
+  float: left;
   white-space: nowrap;
   text-align:left;
   font-weight:bold;
 }
 
+/* Flags for the TV programme */
+.tvflags {
+  display: block;
+  float: right;
+  white-space: nowrap;
+  text-align: right;
+  font-size:90%;
+}
+
 /* The large block of synopsis text */
 .tvsynopsis {
   display: block;
+  clear: both;
   text-align:left;
 }
 
@@ -200,4 +211,20 @@ tr.live_event td.event_time:before {
   bottom: 0px;
   margin-left: 0px;
   right: 0;
+}
+
+#dejavu_dialog {
+  font-size: small;
+  line-height: 1.3em;
+}
+
+div.dv_heading {
+}
+
+table.dv_table {
+  margin-left: 5em;
+}
+
+td.dv_type {
+  text-align: center;
 }

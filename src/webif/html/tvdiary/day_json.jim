@@ -19,7 +19,7 @@
 
 package require cgi
 source /mod/webif/lib/setup
-require altrow rsv.class epg.class
+require rsv.class epg.class
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
@@ -51,7 +51,7 @@ case $runmode {
     # use the browser's time - helps when the clocks aren't synced.
     set current_time [cgi_get current_time]
     set type [cgi_get type]
-    httpheader "text/html"
+    httpheader "application/json"
   }
   cli {
     if { $argc != 2 && $argc != 4 } {
@@ -115,11 +115,17 @@ proc escape_json_string { in } {
 #
 # Common output of a table row.
 #
-proc output_row { type active event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis } {
+proc output_row { type active watched repeats repeat_id event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis } {
 
+  if { $repeats == 0 } {
+    set repeat_id -1
+  }
   puts "  {"
   puts "   \"type\": \"$type\","
   puts "   \"active\": $active,"
+  puts "   \"watched\": $watched,"
+  puts "   \"repeats\": $repeats,"
+  puts "   \"repeat_id\": $repeat_id,"
   puts "   \"event_start\": $event_start,"
   puts "   \"event_end\": $event_end,"
   puts "   \"event_duration\": $event_duration,"
@@ -127,7 +133,7 @@ proc output_row { type active event_start event_end event_duration scheduled_sta
   puts "   \"scheduled_end\": $scheduled_end,"
   puts "   \"scheduled_duration\": $scheduled_duration,"
 
-  puts "   \"channel_name\": \"$channel_name\","
+  puts "   \"channel_name\": \"[escape_json_string $channel_name]\","
   set channel_icon_path "$::channel_icons_url/Unknown.png"
   if { $channel_name != "" } {
     if { [file exists "$::channel_icons_path/$channel_name.png"] } {
@@ -160,42 +166,29 @@ proc output_past_record { record } {
       set typeclass "live"
     }
   }
-
   if { $record(unfinished) } {
     set isactive "true"
   } else {
     set isactive "false"
+  }
+  if { $record(watched) } {
+    set watched "true"
+  } else {
+    set watched "false"
   }
 
   # All events have their actual duration.
   set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
   set scheduled_end [expr $record(scheduled_start) + ($record(scheduled_duration) * 60)]
 
-  output_row $typeclass $isactive $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
+  output_row $typeclass $isactive $watched $record(repeats) $record(repeat_id) $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
 }
 
 #
 # Output the table row for a future event.
 #
-proc output_future_event { service_id channel_name event_start event_end } {
-  # Get the EPG entry for the other details displayed.
-  # NB: Adding 1 second because the EPG class checks > rather than >= start time.
-  # NB2: It is possible that the EPG entry doesn't get found, so be prepared to substitute "No information".
-  set epgs [epg dbfetch get -service $service_id -time [expr $event_start + 1]]
-  if { [llength $epgs] == 1 } {
-    lassign $epgs epg
-    set title [$epg get name]
-    set synopsis [$epg get text]
-    set channel_name [$epg get channel_name]
-  } else {
-    set title "Not in EPG"
-    set synopsis "No information available"
-    # channel_name was passed in.
-  }
-
-  set calculated_duration [expr ($event_end - $event_start + 30) / 60]
-
-  output_row "future" "false" $event_start $event_end $calculated_duration $event_start $event_end $calculated_duration $channel_name $title $synopsis
+proc output_future_record { record } {
+  output_row "future" "false" "false" $record(repeats) $record(repeat_id) $record(scheduled_start) $record(scheduled_end) $record(scheduled_duration) $record(scheduled_start) $record(scheduled_end) $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
 }
 
 #
@@ -213,12 +206,40 @@ proc hsvc_to_svcid { hsvc } {
 }
 
 #
-# Filter by time and add an entry to ::future_events.
+# Filter by time and add a record to ::future_events.
 #
-proc filter_and_add_to_future_events {start end service_id channel_name} {
+proc filter_and_add_to_future_events {tvdiarydb start end service_id channel_name} {
   if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
+
+    # Get the EPG entry for the other details displayed.
+    # NB: Adding 1 second because the EPG class checks > rather than >= start time.
+    # NB2: It is possible that the EPG entry doesn't get found, so be prepared to substitute "No information".
+    set epgs [epg dbfetch get -service $service_id -time [expr $start + 1]]
+    if { [llength $epgs] == 1 } {
+      lassign $epgs epg
+      set title [$epg get name]
+      set synopsis [$epg get text]
+      set channel_name [$epg get channel_name]
+    } else {
+      set title "Not in EPG"
+      set synopsis "No information available"
+      # channel_name was passed in.
+    }
+
+    set calculated_duration [expr ($end - $start + 30) / 60]
+
+    set records [$tvdiarydb query "
+      SELECT COUNT(*) AS repeats, program_id AS repeat_id FROM programs WHERE programs.title = '%s' AND programs.synopsis = '%s'
+      AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 )
+      LIMIT 1
+      " $title $synopsis]
+    set record [lindex $records 0]
+    set repeats $record(repeats)
+    set repeat_id $record(repeat_id)
+
+    set vals [dict create "repeats" $repeats "repeat_id" $repeat_id "scheduled_start" $start "scheduled_end" $end "scheduled_duration" $calculated_duration "channel_name" $channel_name "title" $title "synopsis" $synopsis]
+
     set key "$start:$channel_name"
-    set vals [concat $service_id $start $end]
     dict set ::future_events $key $vals
     return 1
   }
@@ -228,7 +249,7 @@ proc filter_and_add_to_future_events {start end service_id channel_name} {
 #
 # Filter the events and add future events to the global $::future_events.
 #
-proc add_future_event { event } {
+proc add_future_event { tvdiarydb event } {
   set in 0
   # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
   if { [$event get ersvtype] == 3 } {
@@ -240,10 +261,10 @@ proc add_future_event { event } {
       set elist [$event aul]
       foreach e $elist {
         lassign $e hservice start end event_id
-        set in [filter_and_add_to_future_events $start $end [hsvc_to_svcid $hservice] [$event channel_name]]
+        set in [filter_and_add_to_future_events $tvdiarydb $start $end [hsvc_to_svcid $hservice] [$event channel_name]]
       }
 
-      set in [filter_and_add_to_future_events [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]]
+      set in [filter_and_add_to_future_events $tvdiarydb [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]]
     }
   }
   return $in
@@ -273,18 +294,19 @@ proc main {} {
   # Query the set of records for the specified type and time range.
   #
   if {$::type == "R"} {
-    set type_clause "activities.type='R'"
+    set type_clause "a1.type='R'"
   } else {
-    set type_clause "activities.type!='R'"
+    set type_clause "a1.type!='R'"
   }
+  # Subquery checks whether the program has been watched - playback or live - long enough to have an ent time.
   set records [$tvdiarydb query "
-    SELECT activities.start, activities.type, activities.end, activities.unfinished, programs.channel_name, programs.title, programs.synopsis, programs.start AS scheduled_start, programs.duration AS scheduled_duration
-    FROM activities, programs
-    WHERE $type_clause AND activities.end > %s AND activities.start < %s AND activities.program_id=programs.program_id
-    ORDER BY activities.start" $::time_start $::time_end]
-
-  # Finished with the DB.
-  $tvdiarydb close
+    SELECT a1.start, a1.type, a1.end, a1.unfinished,
+    (SELECT COUNT(*) FROM activities a2 WHERE a2.program_id = p1.program_id AND (a2.type = 'P' OR a2.type = 'L') AND a2.end != 0) AS watched,
+    (SELECT COUNT(*) FROM programs p2 WHERE p2.title = p1.title AND p2.synopsis = p1.synopsis AND p1.program_id != p2.program_id) AS repeats,
+    p1.program_id AS repeat_id, p1.channel_name, p1.title, p1.synopsis, p1.start AS scheduled_start, p1.duration AS scheduled_duration
+    FROM activities a1, programs p1
+    WHERE $type_clause AND a1.end > %s AND a1.start < %s AND a1.program_id = p1.program_id
+    ORDER BY a1.start" $::time_start $::time_end]
 
   #
   # Determine if future recording events need to be included.
@@ -293,7 +315,7 @@ proc main {} {
     # Get the details of the scheduled events.
     set events [rsv list]
     foreach event $events {
-      add_future_event $event
+      add_future_event $tvdiarydb $event
     }
 
     # I considered processing the pending scheduled events here to add or remove from the map,
@@ -301,7 +323,12 @@ proc main {} {
     # add anything but the first, and I can't remove anything but the first.
     # So, took the policy decision that the diary predicts what will be recorded
     # if you don't restart the machine.
+    
+    # Initially the $::future_events has just 
   }
+
+  # Finished with the DB.
+  $tvdiarydb close
 
   if { [llength $records] > 0 || [llength $::future_events] > 0 } {
     #
@@ -343,15 +370,16 @@ proc main {} {
     set keys [lsort [dict keys $::future_events]]
     foreach key $keys {
       set vals [dict get $::future_events $key]
-      lassign $vals service_id start_time end_time
-      lassign [split $key ":"] x channel_name
+      #lassign $vals service_id start_time end_time
+      #lassign [split $key ":"] x channel_name
       if { $comma } {
         puts ","
       } else {
         puts ""
         set comma 1
       }
-      output_future_event $service_id $channel_name $start_time $end_time
+      #output_future_event $service_id $channel_name $start_time $end_time
+      output_future_record $vals
     }
     puts ""
     puts " \],"

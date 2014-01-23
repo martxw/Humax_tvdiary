@@ -105,6 +105,21 @@ $(document).ready(function() {
       updateDate(+1);
     });
   
+  // Create reusable dialogue.
+  var $dialog = $('#dejavu_dialog').dialog({
+    title: "D\xe9j\xe0 vu? You might have seen that show before...",
+    modal: true, autoOpen: false,
+    height: 500, width: 600,
+    show: 'scale', hide: 'fade',
+    draggable: false, resizable: false,
+    buttons: { "Close" : function() {
+      $(this).dialog('close');
+    } },
+    close: function(e,u) {
+      $('#dejavu_dialog').empty().html('<img src="/img/loading.gif" alt="loading">');
+    }
+  });
+  
   //////
   // Process the button date changes
   //////
@@ -176,19 +191,25 @@ $(document).ready(function() {
   //////
   // Render table HTML from JSON.
   //////
-  function json_to_html(data) {
+  function day_json_to_html(data) {
     var html = "";
     html += "<table class=\"events_table\">";
     for (var i = 0, len = data.events.length; i < len; i++) {
       var event = data.events[i];
       // typeclass and activeclass CSS.
       var typeclass;
+      var tvflags = "";
       switch (event.type) {
         case "future":
           typeclass = "future_event";
           break;
         case "record":
           typeclass = "record_event";
+          if (event.watched) {
+            tvflags = "";
+          } else {
+            tvflags = "unwatched";
+          }
           break;
         case "live":
           typeclass = "live_event";
@@ -206,7 +227,10 @@ $(document).ready(function() {
       if (event.overlapWarning) {
         clashclass = " clash_event";
       }
-
+      if (event.repeats > 0 /*&& (event.type == "future" || event.type == "record")*/) {
+        tvflags += " <a class=\"dv\" prog_id=\"" + event.repeat_id + "\" href=\"#\">d&eacute;j&agrave; vu?</a>";
+      }
+      
       html += "<tr class=\"event_row visible_event " + typeclass + activeclass + clashclass+ "\">";
 
       //
@@ -229,8 +253,8 @@ $(document).ready(function() {
       // Column 2. The channel icon and name.
       //
       html += "<td class=\"tvchannel\">";
-      html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + event.channel_name + "\"/>";
-      html += "<div>" + event.channel_name + "</div>";
+      html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
+      html += "<div>" + escapeHtml(event.channel_name) + "</div>";
       html += "</td>";
 
       //
@@ -238,6 +262,7 @@ $(document).ready(function() {
       //
       html += "<td class=\"event_descr\">";
       html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+      html += "<span class=\"tvflags\">" + tvflags + "</span>";
       if (event.synopsis != "") {
         html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
       }
@@ -263,6 +288,90 @@ $(document).ready(function() {
         $(tr).addClass('even').removeClass('odd');
       }
     });
+  }
+  
+  //////
+  // Bind click handler to all deja vu links.
+  //////
+  function bind_dejavu(el) {
+    $('a.dv', el).click(function(e) {
+      e.preventDefault();
+
+      var prog_id = $(this).attr('prog_id');
+      var url = '/tvdiary/dejavu_json.jim?program_id=' + prog_id;
+      $.ajax({
+        type: "GET",
+        dataType: "json",
+        url: url,
+        success: function(data) {
+          if (data.status == "OK" ) {
+            $dialog.html(dejavu_json_to_html(data));
+          } else {
+            $dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          }
+        },
+        error: function(_, _, e) {
+          log_stuff("ajax error " + e);
+          $dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        }
+      });
+
+      $dialog.dialog('open');
+    });
+  }
+
+  //////
+  // Render dialog HTML from JSON.
+  //////
+  function dejavu_json_to_html(data) {
+    var html = "";
+    html += "<div class=\"dv_heading\">";
+    html += "<span class=\"tvtitle\">" + escapeHtml(data.title) + "</span>";
+    if (data.synopsis != "") {
+      html += "<span class=\"tvsynopsis\">" + escapeHtml(data.synopsis) + "</span>";
+    }
+    html += "</div>";
+    html += "<table class=\"dv_table\">";
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+      var type_icon;
+      switch (event.type) {
+        case "future":
+        case "record":
+          type_icon = "/images/745_1_11_Video_1REC.png";
+          break;
+        case "live":
+          type_icon = "/tvdiary/tvmast.png";
+          break;
+        case "play":
+        default:
+          type_icon = "/images/745_1_10_Video_2Live.png";
+          break;
+      }
+      var duration = Math.round((event.end - event.start) / 60);
+
+      html += "<tr class=\"dv_row\">";
+
+      html += "<td class=\"dv_type\">";
+      html += "<img src=\"" + type_icon + "\" width=22 height=22 alt=\"" + event.type + "\" title=\"" + event.type + "\"/>";
+      html += "</td>";
+
+      html += "<td class=\"dv_date\">";
+      html += formatDateTime(event.start);
+      html += "</td>";
+
+      html += "<td class=\"dv_duration\">";
+      html += duration + (duration == 1 ? " min" : " mins");
+      html += "</td>";
+
+      html += "<td class=\"dv_channel\">";
+      html += "<div>" + escapeHtml(event.channel_name) + "</div>";
+      html += "</td>";
+
+      html += "</tr>";
+    }
+    html += "</table>";
+    return $(html);
   }
 
   //////
@@ -542,20 +651,19 @@ $(document).ready(function() {
         if (data.status == "OK" ) {
           update_recorded_duration(data);
           check_overlaps(data);
-          $('#recorded_inner').html(json_to_html(data));
+          $('#recorded_inner').html(day_json_to_html(data));
         } else if (data.status == "EMPTY") {
           $('#recorded_inner').html("<span class=\"nothing\">Nothing</span>");
         } else {
           $('#recorded_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
         }
         apply_altrow($('#recorded_inner'));
+        bind_dejavu($('#recorded_inner'));
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
       },
       error: function(_, _, e) {
-        if (window.console) {
-          log_stuff("ajax error " + e);
-        }
+        log_stuff("ajax error " + e);
         $('#recorded_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
@@ -571,20 +679,19 @@ $(document).ready(function() {
       success: function(data) {
         if (data.status == "OK" ) {
           update_watched_duration(data);
-          $('#watched_inner').html(json_to_html(data));
+          $('#watched_inner').html(day_json_to_html(data));
         } else if (data.status == "EMPTY") {
           $('#watched_inner').html("<span class=\"nothing\">Nothing</span>");
         } else {
           $('#watched_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
         }
         show_live(including_live);
+        bind_dejavu($('#watched_inner'));
         $('#watched_spinner').hide('slow');
         isBusyW = false;
       },
       error: function(_, _, e) {
-        if (window.console) {
-          log_stuff("ajax error " + e);
-        }
+        log_stuff("ajax error " + e);
         $('#watched_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#watched_spinner').hide('slow');
         isBusyW = false;
