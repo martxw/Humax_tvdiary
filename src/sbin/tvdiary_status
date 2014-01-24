@@ -16,7 +16,7 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 3
+set logging 1
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
@@ -62,13 +62,14 @@ proc openDB {} {
     }
   } else {
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-    
-    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_program_id ON activities (program_id);"
-    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_start ON activities (start);"
-    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_end ON activities (end);"
-    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_title ON programs (title);"
-    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_synopsis ON programs (synopsis);"
   }
+    
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_program_id ON activities (program_id);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_start ON activities (start);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_end ON activities (end);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_title ON programs (title);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_synopsis ON programs (synopsis);"
+
   return $tvdiarydb;
 }
 

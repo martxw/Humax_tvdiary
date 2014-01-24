@@ -469,12 +469,11 @@ $(document).ready(function() {
 
         }
         log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(event.scheduled_end * 1000) + ", data.time_start=" + new Date(data.time_start * 1000) + ", data.time_end=" + new Date(data.time_end * 1000));
-        if (constrained_duration < 0) {
-          log_stuff("ALERT: constrained_duration=" + constrained_duration);
-          alert("constrained_duration=" + constrained_duration);
+        # constrained_duration could be -ve if a show is over-running its scheduled end.
+        if (constrained_duration > 0) {
+          total_scheduled += constrained_duration;
+          nothing_scheduled = false;
         }
-        total_scheduled += constrained_duration;
-        nothing_scheduled = false;
       }
     }
     

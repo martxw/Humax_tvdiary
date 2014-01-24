@@ -10,4 +10,7 @@ echo "Postinstall $*"
 logfile=/mod/tmp/tvdiary.log
 [ -f $logfile ] && rm -f $logfile
 
+logfile=/mod/tmp/tvdiaryjs.log
+[ -f $logfile ] && rm -f $logfile
+
 exit 0
