@@ -10,7 +10,7 @@
 
 /* Size tables, and keep them apart in different orientations */
 #recorded_outer, #watched_outer {
-  width: 51em;
+  width: 53em;
   float: left;
   margin: 0 1em 1em 0;
 }
@@ -204,6 +204,11 @@ span.live_count_hidden {
 tr.live_event td.event_time:before {
   content: url('tvmast.png');
   float: right;
+}
+
+td.event_flags {
+  width: 16px;
+  vertical-align: bottom;
 }
 
 /* Override as default blocks too much */

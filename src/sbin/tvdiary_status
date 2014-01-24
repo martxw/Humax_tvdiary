@@ -62,6 +62,12 @@ proc openDB {} {
     }
   } else {
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+    
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_program_id ON activities (program_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_start ON activities (start);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_end ON activities (end);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_title ON programs (title);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_synopsis ON programs (synopsis);"
   }
   return $tvdiarydb;
 }

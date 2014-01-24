@@ -107,7 +107,7 @@ $(document).ready(function() {
   
   // Create reusable dialogue.
   var $dialog = $('#dejavu_dialog').dialog({
-    title: "D\xe9j\xe0 vu? You might have seen that show before...",
+    title: "D\xe9j\xe0 vu? You might have seen this show before...",
     modal: true, autoOpen: false,
     height: 500, width: 600,
     show: 'scale', hide: 'fade',
@@ -198,18 +198,12 @@ $(document).ready(function() {
       var event = data.events[i];
       // typeclass and activeclass CSS.
       var typeclass;
-      var tvflags = "";
       switch (event.type) {
         case "future":
           typeclass = "future_event";
           break;
         case "record":
           typeclass = "record_event";
-          if (event.watched) {
-            tvflags = "";
-          } else {
-            tvflags = "unwatched";
-          }
           break;
         case "live":
           typeclass = "live_event";
@@ -226,9 +220,6 @@ $(document).ready(function() {
       var clashclass = "";
       if (event.overlapWarning) {
         clashclass = " clash_event";
-      }
-      if (event.repeats > 0 /*&& (event.type == "future" || event.type == "record")*/) {
-        tvflags += " <a class=\"dv\" prog_id=\"" + event.repeat_id + "\" href=\"#\">d&eacute;j&agrave; vu?</a>";
       }
       
       html += "<tr class=\"event_row visible_event " + typeclass + activeclass + clashclass+ "\">";
@@ -262,12 +253,24 @@ $(document).ready(function() {
       //
       html += "<td class=\"event_descr\">";
       html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
-      html += "<span class=\"tvflags\">" + tvflags + "</span>";
+      //html += "<span class=\"tvflags\">" + tvflags + "</span>";
       if (event.synopsis != "") {
         html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
       }
       if (event.scheduled_start != 0 && event.scheduled_duration != 0) {
         html += "<span class=\"tvschedule\">(" + formatDateTime(event.scheduled_start) + ", " + event.scheduled_duration + (event.scheduled_duration == 1 ? " min" : " mins") + ")</span>";
+      }
+      html += "</td>"
+      
+      //
+      // Column 4. Icons for unwatched. deleted-unwatched and deja vu icons.
+      //
+      html += "<td class=\"event_flags\">";
+      if (event.type == "record" && !event.watched) {
+        html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
+      }
+      if (event.repeats > 0 /*&& (event.type == "future" || event.type == "record")*/) {
+        html += " <a class=\"dv\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
 
