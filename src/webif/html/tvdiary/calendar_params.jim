@@ -6,6 +6,7 @@
 
 package require cgi
 source /mod/webif/lib/setup
+source tvdiary_db.jim
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
@@ -20,6 +21,14 @@ set CONF_FILEPATH "/mod/etc/tvdiary.conf"
 if { ![file exists $DB_FILEPATH] } {
   set min_time 0
 } else {
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    puts "Cannot acquire exclusive lock for tvdiary.tb."
+    exit -1
+  }
+
   set tvdiarydb [sqlite3.open $DB_FILEPATH]
   
   set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
@@ -29,6 +38,11 @@ if { ![file exists $DB_FILEPATH] } {
     set min_time 0
   }
   $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
 }
 set max_time [expr (int([clock seconds] / 86400) + 7) * 86400]
 

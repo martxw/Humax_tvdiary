@@ -7,6 +7,7 @@
 #
 
 package require sqlite3
+source /mod/webif/html/tvdiary/tvdiary_db.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -100,6 +101,13 @@ proc main {} {
   # rounded to the start of the day. Default to today so planned recordings are included at the very least.
   set db_min_start $today_start
   if { [file exists $::DB_FILEPATH] } {
+    #
+    # Get a lock for the database
+    #
+    if {![acquire_lock tvdiary_db]} {
+      puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      exit -1
+    }
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
     set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
@@ -108,6 +116,11 @@ proc main {} {
     }
 
     $tvdiarydb close
+
+    #
+    # Closed the DB so release the lock.
+    #
+    release_lock tvdiary_db
   }
 
   # If nothing is found on the server, the min date shown on the calendar and the effective last update is the earliest date we have from the database.

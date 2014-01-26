@@ -6,6 +6,7 @@
 #
 
 package require sqlite3
+source /mod/webif/html/tvdiary/tvdiary_db.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -48,6 +49,14 @@ proc main {} {
   }
 
   set purge_time [expr $::current_time - ($num_days * $::seconds_per_day)]
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+    exit -1
+  }
 
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
   try {
@@ -101,6 +110,11 @@ proc main {} {
   } finally {
     $tvdiarydb query "COMMIT TRANSACTION"
     $tvdiarydb close
+
+    #
+    # Closed the DB so release the lock.
+    #
+    release_lock tvdiary_db
   }
 }
 

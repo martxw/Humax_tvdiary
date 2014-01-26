@@ -35,6 +35,7 @@ ln -s $TDIR/jslog.jim $LDIR/jslog.jim
 ln -s $TDIR/index.shtml $LDIR/index.shtml
 ln -s $TDIR/script.js $LDIR/script.js
 ln -s $TDIR/style.css $LDIR/style.css
+ln -s $TDIR/tvdiary_db.jim $LDIR/tvdiary_db.jim
 ln -s $TDIR/tvmast.png $LDIR/tvmast.png
 
 mkdir /mod/dev/tvdiary/live/webif/plugin

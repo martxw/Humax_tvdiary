@@ -469,7 +469,7 @@ $(document).ready(function() {
 
         }
         log_stuff("update_recorded_duration() recording time for constrained_duration=" + constrained_duration + ", report_time=" + new Date(report_time * 1000) + " scheduled_end=" + new Date(event.scheduled_end * 1000) + ", data.time_start=" + new Date(data.time_start * 1000) + ", data.time_end=" + new Date(data.time_end * 1000));
-        # constrained_duration could be -ve if a show is over-running its scheduled end.
+        // constrained_duration could be -ve if a show is over-running its scheduled end.
         if (constrained_duration > 0) {
           total_scheduled += constrained_duration;
           nothing_scheduled = false;
@@ -641,6 +641,34 @@ $(document).ready(function() {
       r_url = "/tvdiary/" + date_filename + "_R.html?nocache";
       w_url = "/tvdiary/" + date_filename + "_W.html?nocache";
     }
+    
+    // Asynchronously request the watched table data. First, so it may get the DB lock first because it's quicker.
+    isBusyW = true;
+    $.ajax({
+      type: "GET",
+      dataType: "json",
+      url: w_url,
+      success: function(data) {
+        if (data.status == "OK" ) {
+          update_watched_duration(data);
+          $('#watched_inner').html(day_json_to_html(data));
+        } else if (data.status == "EMPTY") {
+          $('#watched_inner').html("<span class=\"nothing\">Nothing</span>");
+        } else {
+          $('#watched_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+        }
+        show_live(including_live);
+        bind_dejavu($('#watched_inner'));
+        $('#watched_spinner').hide('slow');
+        isBusyW = false;
+      },
+      error: function(_, _, e) {
+        log_stuff("ajax error " + e);
+        $('#watched_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#watched_spinner').hide('slow');
+        isBusyW = false;
+      }
+    });
 
     // Asynchronously request the recorded table data.
     isBusyR = true;
@@ -669,34 +697,6 @@ $(document).ready(function() {
         $('#recorded_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
-      }
-    });
-    
-    // Asynchronously request the watched table data.
-    isBusyW = true;
-    $.ajax({
-      type: "GET",
-      dataType: "json",
-      url: w_url,
-      success: function(data) {
-        if (data.status == "OK" ) {
-          update_watched_duration(data);
-          $('#watched_inner').html(day_json_to_html(data));
-        } else if (data.status == "EMPTY") {
-          $('#watched_inner').html("<span class=\"nothing\">Nothing</span>");
-        } else {
-          $('#watched_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
-        }
-        show_live(including_live);
-        bind_dejavu($('#watched_inner'));
-        $('#watched_spinner').hide('slow');
-        isBusyW = false;
-      },
-      error: function(_, _, e) {
-        log_stuff("ajax error " + e);
-        $('#watched_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
-        $('#watched_spinner').hide('slow');
-        isBusyW = false;
       }
     });
   }

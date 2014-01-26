@@ -1,0 +1,58 @@
+#!/mod/bin/jimsh
+
+if { [dict exists $env "REQUEST_METHOD"] } {
+  set log_locking 0
+} else {
+  set log_locking 0
+}
+
+proc _lock_to_port {id} {
+  set len [string length $id]
+  set hash $len
+
+  for {set i 0} {$i < $len} {incr i} {
+    scan [string index $id $i] "%c" asc
+    set hash [expr (($hash<<5)^($hash>>27))^$asc];
+  }
+
+  return [expr (65535 - ($hash % 101))]
+}
+
+proc _lock_dummy {newsock addr port} { }
+
+proc acquire_lock {id} {
+  global _locks
+
+  set port [_lock_to_port $id]
+
+  # Max 10 seconds timeout.
+  set timeout 10
+
+  # 'socket already in use' error will be our lock detection mechanism
+  incr timeout [clock seconds]
+  if {$::log_locking} { puts "acquire_lock{$id} port:$port now:[clock seconds] timeout:$timeout" }
+  while {[catch {set socket [socket stream.server "127.0.0.1:$port"]} msg]} {
+    if { [clock seconds] > $timeout } {
+      if {$::log_locking} { puts "Could not aquire lock" }
+      return 0
+    }
+    if {$::log_locking} { puts "acquire_lock{$id} starting retry sleep at [clock seconds]" }
+    sleep 0.2
+  }
+
+  set _locks($id) $socket
+  if {$::log_locking} { puts "acquire_lock{$id} succeeded at [clock seconds]" }
+  return 1
+}
+
+proc release_lock {id} {
+  global _locks
+
+  if {$::log_locking} { puts "release_lock{$id} at [clock seconds]" }
+  if {[catch {close $_locks($id)} msg]} {
+    if {$::log_locking} { puts "Error releasing lock: $msg" }
+    return 0
+  }
+  unset _locks($id)
+  return 1
+}

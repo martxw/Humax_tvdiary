@@ -11,6 +11,7 @@
 
 source /mod/webif/lib/setup
 require epg.class rsv.class ts.class
+source /mod/webif/html/tvdiary/tvdiary_db.jim
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 # --------------------------------------------------------------
@@ -297,6 +298,14 @@ proc main {} {
     sleep $::SLEEP_TIME
     set ndata [get_data $pid]
 
+    #
+    # Get a lock for the database.
+    #
+    if {![acquire_lock tvdiary_db]} {
+      puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      exit -1
+    }
+
     set tvdiarydb [openDB]
     #
     # We load the IDs of the activities currently marked as unfinished into this list.
@@ -428,6 +437,11 @@ proc main {} {
     }
     $tvdiarydb close
   }
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
 }
 
 main

@@ -20,6 +20,7 @@
 package require cgi
 source /mod/webif/lib/setup
 require rsv.class epg.class
+source tvdiary_db.jim
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
@@ -288,6 +289,14 @@ proc main {} {
     # Ajax detects the error if we just exit.
     throw error "The tvdiary.db database is missing."
   }
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw error "Cannot acquire exclusive lock for tvdiary.tb."
+  }
+
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
   #
@@ -329,6 +338,11 @@ proc main {} {
 
   # Finished with the DB.
   $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
 
   if { [llength $records] > 0 || [llength $::future_events] > 0 } {
     #
