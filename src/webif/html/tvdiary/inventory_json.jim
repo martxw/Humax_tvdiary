@@ -1,15 +1,15 @@
 #!/mod/bin/jimsh
 #
-# Render the details of all programs sharing the title and synopsis of the one identified
-# by the program ID. All of their record and playback activities are listed.
+# Experimental.
+# Render the details of the .ts video files under the My Video directory.
+# Called over CGI to update a page, or as a CLI for hosting on a different server.
 # After successfully rendering the data, the value "status" is set to "OK".
-# If there is an error, "status" is set to the "<error message>".
+# If there is an error, "status" is set to "<error message>".
 # Clients should therefore check "status" first. If there is a serious server error part way
 # through rendering, the JSON may be malformed and not parsable.
 #
-# CGI usage: /tvdiary/dejavu_json.jim?prog_id=<program_id>
-# CLI usage: dejavu_json.jim <program_id>
-#   program_id = the program ID.
+# CGI usage: /tvdiary/inventory_json.jim
+# CLI usage: inventory_json.jim
 #
 # Author: Martin Wink, 2014.
 #
@@ -29,6 +29,9 @@ set date_time_fmt "%a %d %b %Y $time_fmt"
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
+
 # --------------------------------------------------------------
 # CGI or command line parameters
 # --------------------------------------------------------------
@@ -38,18 +41,9 @@ if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
 case $runmode {
   cgi {
     cgi_input
-    set program_id [cgi_get program_id]
     httpheader "application/json"
   }
   cli {
-    if { $argc != 1 } {
-      puts "Usage: $argv0 <program_id>"
-      puts " program_id = the program ID"
-      puts ""
-      puts "Eg: $argv0 1234"
-      exit -1
-    }
-    set program_id [lindex $argv 0]
   }
 }
 
@@ -88,6 +82,44 @@ proc escape_json_string { in } {
 }
 
 #
+# Common output of a table row.
+#
+proc output_record { record } {
+  puts " {"
+  puts "  \"inventory_id\": $record(inventory_id),"
+  puts "  \"directory\": \"$record(directory)\","
+  puts "  \"filename\": \"$record(filename)\","
+  puts "  \"size\": $record(size),"
+  
+  set channel_name $record(channel_name)
+  puts "  \"channel_name\": \"[escape_json_string $channel_name]\","
+  set channel_icon_path "$::channel_icons_url/Unknown.png"
+  if { $channel_name != "" } {
+    if { [file exists "$::channel_icons_path/$channel_name.png"] } {
+      set channel_icon_path "$::channel_icons_url/[cgi_quote_url $channel_name].png"
+    } else {
+      set channel_icon_path "$::channel_icons_url/Unknown.png"
+    }
+  }
+  puts "  \"channel_icon_path\": \"$channel_icon_path\","
+
+  set filepath "$record(directory)/$record(filename)"
+  set thumbnail [file exists "[file rootname $filepath].thm"]
+  puts "  \"has_thumbnail\": [expr { $thumbnail ? {true} : {false} }],"
+  puts "  \"repeats\": $record(repeats),"
+  
+
+  set event_duration [expr ($record(event_end) - $record(event_start) + 30) / 60]
+  puts "  \"title\": \"[escape_json_string $record(title)]\","
+  puts "  \"synopsis\": \"[escape_json_string $record(synopsis)]\","
+  puts "  \"event_start\": $record(event_start),"
+  puts "  \"event_duration\": $event_duration,"
+  puts "  \"scheduled_start\": $record(scheduled_start),"
+  puts "  \"scheduled_duration\": $record(scheduled_duration)"
+  puts -nonewline " }"
+}
+
+#
 # Main
 #
 proc main {} {
@@ -95,7 +127,7 @@ proc main {} {
   #  puts "/* Parameters:
   #  time_start=$::time_start=[clock format $::time_start]
   #  time_end=$::time_end=[clock format $::time_end]
-  #  program_id=$::program_id */"
+  #  type=$::type */"
   # end_debug
 
   #
@@ -116,23 +148,19 @@ proc main {} {
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
   #
-  # Query the set of records for the specified type and time range.
+  # Update the cached inventory.
+  #
+  update_inventory $tvdiarydb [system mediaroot] [system dustbin]
+
+  #
+  # Query the inventory for generating JSON.
   #
   set records [$tvdiarydb query "
-    SELECT title, synopsis
-    FROM programs
-    WHERE program_id =  %s
-    LIMIT 1" $::program_id]
-  set record [lindex $records 0]
-  set title $record(title)
-  set synopsis $record(synopsis)
-
-  set records [$tvdiarydb query "
-    SELECT activities.type, activities.start, activities.end, programs.channel_name
-    FROM activities, programs
-    WHERE programs.title = '%s' AND programs.synopsis = '%s' AND activities.program_id = programs.program_id
-    ORDER BY activities.start" $title $synopsis]
-
+    SELECT inventory.*,
+    (SELECT COUNT(*) FROM programs WHERE programs.title = inventory.title AND programs.synopsis = inventory.synopsis AND programs.start != inventory.scheduled_start) AS repeats
+    FROM inventory
+    ORDER BY directory, event_start, title"]
+  
   # Finished with the DB.
   $tvdiarydb close
 
@@ -140,45 +168,18 @@ proc main {} {
   # Closed the DB so release the lock.
   #
   release_lock tvdiary_db
-
+  
   puts "{"
-  puts " \"program_id\": $::program_id,"
-  puts " \"title\": \"[escape_json_string $title]\","
-  puts " \"synopsis\": \"[escape_json_string $synopsis]\","
   puts -nonewline " \"events\": \["
-
-  if { [llength $records] > 0 } {
-    set comma 0
-    foreach record $records {
-      if { $comma } {
-        puts ","
-      } else {
-        puts ""
-        set comma 1
-      }
-
-      # Default in case of old W records.
-      set typeclass "play"
-      case $record(type) {
-        R {
-          set typeclass "record"
-        }
-        P {
-          set typeclass "play"
-        }
-        L {
-          set typeclass "live"
-        }
-      }
-
-      puts "{"
-      puts " \"program_id\": $::program_id,"
-      puts " \"type\": \"$typeclass\","
-      puts " \"start\": $record(start),"
-      puts " \"end\": $record(end),"
-      puts " \"channel_name\": \"[escape_json_string $record(channel_name)]\""
-      puts -nonewline "}"
+  set comma 0
+  foreach record $records {
+    if { $comma } {
+      puts ","
+    } else {
+      puts ""
+      set comma 1
     }
+    output_record $record
   }
   puts ""
   puts " \],"

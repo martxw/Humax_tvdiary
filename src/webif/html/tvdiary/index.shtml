@@ -59,4 +59,8 @@
   <img src="/img/loading.gif" alt="loading">
 </div>
 
+<div id="inventory_dialog" title="Media - Video">
+  <img src="/img/loading.gif" alt="loading">
+</div>
+
 <!--#include virtual="/lib/footer.shtml" -->

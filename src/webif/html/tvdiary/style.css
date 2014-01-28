@@ -233,3 +233,14 @@ table.dv_table {
 td.dv_type {
   text-align: center;
 }
+
+td.inventory_dir {
+  vertical-align: middle;
+  white-space: nowrap;
+  text-align:left;
+  font-weight:bold;
+  font-size: 150%;
+  height: 32px;
+  background: url("/images/711_1_09_Media_Folder.png") no-repeat white;
+  padding-left: 50px;
+}

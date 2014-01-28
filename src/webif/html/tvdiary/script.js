@@ -104,9 +104,9 @@ $(document).ready(function() {
     .click(function() {
       updateDate(+1);
     });
-  
-  // Create reusable dialogue.
-  var $dialog = $('#dejavu_dialog').dialog({
+
+  // Prepare reusable dialogue.
+  var $dejavu_dialog = $('#dejavu_dialog').dialog({
     title: "D\xe9j\xe0 vu? You might have seen this show before...",
     modal: true, autoOpen: false,
     height: 500, width: 600,
@@ -117,6 +117,21 @@ $(document).ready(function() {
     } },
     close: function(e,u) {
       $('#dejavu_dialog').empty().html('<img src="/img/loading.gif" alt="loading">');
+    }
+  });
+  
+  // Prepare reusable dialogue.
+  var $inventory_dialog = $('#inventory_dialog').dialog({
+    title: "Media - Video",
+    modal: true, autoOpen: false,
+    height: 700, width: 950,
+    show: 'scale', hide: 'fade',
+    draggable: false, resizable: true,
+    buttons: { "Close" : function() {
+      $(this).dialog('close');
+    } },
+    close: function(e,u) {
+      $('#inventory_dialog').empty().html('<img src="/img/loading.gif" alt="loading">');
     }
   });
   
@@ -253,7 +268,6 @@ $(document).ready(function() {
       //
       html += "<td class=\"event_descr\">";
       html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
-      //html += "<span class=\"tvflags\">" + tvflags + "</span>";
       if (event.synopsis != "") {
         html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
       }
@@ -267,10 +281,17 @@ $(document).ready(function() {
       //
       html += "<td class=\"event_flags\">";
       if (event.type == "record" && !event.watched) {
-        html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
+        if (!event.available) {
+          html += "<img src=\"deleted_unwatched.png\" width=16 height=16 title=\"deleted unwatched\">";
+        } else {
+          html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
+        }
       }
-      if (event.repeats > 0 /*&& (event.type == "future" || event.type == "record")*/) {
-        html += " <a class=\"dv\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+      if (event.available) {
+        html += "<a class=\"inventory\" href=\"#\"><img src=\"available.png\" width=16 height=16 title=\"available\"></a>";
+      }
+      if (event.repeats > 0) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
 
@@ -297,29 +318,33 @@ $(document).ready(function() {
   // Bind click handler to all deja vu links.
   //////
   function bind_dejavu(el) {
-    $('a.dv', el).click(function(e) {
+    $('a.dejavu', el).click(function(e) {
       e.preventDefault();
 
-      var prog_id = $(this).attr('prog_id');
-      var url = '/tvdiary/dejavu_json.jim?program_id=' + prog_id;
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        url: url,
-        success: function(data) {
-          if (data.status == "OK" ) {
-            $dialog.html(dejavu_json_to_html(data));
-          } else {
-            $dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+      if (typeof shapshot_time == "undefined") {
+        var prog_id = $(this).attr('prog_id');
+        var url = '/tvdiary/dejavu_json.jim?program_id=' + prog_id;
+        $.ajax({
+          type: "GET",
+          dataType: "json",
+          url: url,
+          success: function(data) {
+            if (data.status == "OK" ) {
+              $dejavu_dialog.html(dejavu_json_to_html(data));
+            } else {
+              $dejavu_dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+            }
+          },
+          error: function(_, _, e) {
+            log_stuff("ajax error " + e);
+            $dejavu_dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
           }
-        },
-        error: function(_, _, e) {
-          log_stuff("ajax error " + e);
-          $dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
-        }
-      });
+        });
 
-      $dialog.dialog('open');
+        $dejavu_dialog.dialog('open');
+      } else {
+        alert("The d\xe9j\xe0 vu view is not available in this snapshot.");
+      }
     });
   }
 
@@ -376,6 +401,106 @@ $(document).ready(function() {
     html += "</table>";
     return $(html);
   }
+  
+  //////
+  // Bind click handler to all inventory links.
+  //////
+  function bind_inventory(el) {
+    $('a.inventory', el).click(function(e) {
+      e.preventDefault();
+
+      if (typeof shapshot_time == "undefined") {
+        var url = '/tvdiary/inventory_json.jim';
+        $.ajax({
+          type: "GET",
+          dataType: "json",
+          url: url,
+          success: function(data) {
+            if (data.status == "OK" ) {
+              $inventory_dialog.html(inventory_json_to_html(data));
+            } else {
+              $inventory_dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+            }
+          },
+          error: function(_, _, e) {
+            log_stuff("ajax error " + e);
+            $inventory_dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+          }
+        });
+
+        $inventory_dialog.dialog('open');
+      } else {
+        alert("The media inventory is not available in this snapshot.");
+      }
+    });
+  }
+
+  //////
+  // Render dialog HTML from JSON.
+  //////
+  function inventory_json_to_html(data) {
+    var cur_dir = "";
+    var count_in_dir = 0;
+    var html = "";
+    html += "<table class=\"events_table\">";
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+
+      if (event.directory != cur_dir) {
+        html += "<tr class=\"inventory_dir\">";
+        html += "<td colspan=\"4\" class=\"inventory_dir\">";
+        html += escapeHtml(event.directory);
+        html += "</td>";
+        html += "</tr>";
+        cur_dir = event.directory;
+        count_in_dir = 1;
+      }
+      
+      html += "<tr class=\"event_row " + (count_in_dir % 2 ? "odd" : "even" ) + "\">";
+      count_in_dir += 1;
+
+      //
+      // Column 1. The channel icon and name.
+      //
+      html += "<td class=\"tvchannel\">";
+      html += "<img src=\"" + event.channel_icon_path + "\" width=50 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
+      html += "<div>" + escapeHtml(event.channel_name) + "</div>";
+      html += "</td>";
+
+      // Column 2 - the thumbnail.
+      html += "<td class=\"tvchannel\">";
+      if (event.has_thumbnail) {
+        html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURI(event.directory + "/" + event.filename) + "\">";
+      }
+      html += "</td>";
+      //
+      // Column 3. Title, times and synopsis.
+      //
+      html += "<td class=\"event_descr\">";
+      html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+      html += "<br><span class=\"\">" + formatTime(event.event_start) + "&nbsp;&nbsp;" + formatVShortDate(event.event_start) + "&nbsp;&nbsp;" + event.event_duration + (event.event_duration == 1 ? "min" : "mins") + "</span>";
+      if (event.synopsis != "") {
+        html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
+      }
+      if (event.scheduled_start != 0 && event.scheduled_duration != 0) {
+        html += "<span class=\"tvschedule\">(" + formatDateTime(event.scheduled_start) + ", " + event.scheduled_duration + (event.scheduled_duration == 1 ? " min" : " mins") + ")</span>";
+      }
+      html += "</td>"
+
+      //
+      // Column 4. Icons for deja vu icon.
+      //
+      html += "<td class=\"event_flags\">";
+      if (event.repeats > 0) {
+        html += " <img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\">";
+      }
+      html += "</td>"
+      
+      html += "</tr>";
+    }
+    html += "</table>";
+    return $(html);
+  }
 
   //////
   // Calculate the duration for one row, constrained by the display range.
@@ -412,6 +537,13 @@ $(document).ready(function() {
   //////
   function formatDateTime(t) {
     return $.datepicker.formatDate("D d M yy ", new Date(t * 1000)) + formatTime(t);
+  }
+  
+  //////
+  // Format the date like "27/01"
+  //////
+  function formatVShortDate(t) {
+    return $.datepicker.formatDate("dd/mm ", new Date(t * 1000));
   }
   
   //////
@@ -638,8 +770,8 @@ $(document).ready(function() {
       w_url = "/tvdiary/day_json.jim?start=" + request_start + "&current_time=" + now_time + "&type=W";
     } else {
       var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(request_start * 1000));
-      r_url = "/tvdiary/" + date_filename + "_R.html?nocache";
-      w_url = "/tvdiary/" + date_filename + "_W.html?nocache";
+      r_url = "/tvdiary/" + date_filename + "_R.json?nocache";
+      w_url = "/tvdiary/" + date_filename + "_W.json?nocache";
     }
     
     // Asynchronously request the watched table data. First, so it may get the DB lock first because it's quicker.
@@ -659,6 +791,7 @@ $(document).ready(function() {
         }
         show_live(including_live);
         bind_dejavu($('#watched_inner'));
+        bind_inventory($('#watched_inner'));
         $('#watched_spinner').hide('slow');
         isBusyW = false;
       },
@@ -689,6 +822,7 @@ $(document).ready(function() {
         }
         apply_altrow($('#recorded_inner'));
         bind_dejavu($('#recorded_inner'));
+        bind_inventory($('#recorded_inner'));
         $('#recorded_spinner').hide('slow');
         isBusyR = false;
       },

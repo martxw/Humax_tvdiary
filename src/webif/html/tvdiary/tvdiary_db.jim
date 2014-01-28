@@ -1,5 +1,13 @@
 #!/mod/bin/jimsh
 
+source /mod/webif/lib/setup
+require ts.class
+
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+######
+# Locking based in webif/lib/lock with retry loop added.
+######
 if { [dict exists $env "REQUEST_METHOD"] } {
   set log_locking 0
 } else {
@@ -55,4 +63,121 @@ proc release_lock {id} {
   }
   unset _locks($id)
   return 1
+}
+
+######
+# Experimental inventory code.
+######
+
+#
+# Get details and add to the cache.
+#
+proc add_to_cache { tvdiarydb directory filename } {
+  try {
+    set ts [ts fetch "$directory/$filename"]
+    set channel_name [$ts get channel_name]
+    set title [$ts get title]
+    set synopsis [$ts get synopsis]
+    set event_start [$ts get start]
+    set event_end [$ts get end]
+    set schedstart [$ts get schedstart]
+    set scheddur [expr [$ts get scheddur] / 60]
+    set size [$ts size]
+
+    $tvdiarydb query "
+      INSERT INTO inventory (flag, directory, filename, size, channel_name, title, synopsis, event_start, event_end, scheduled_start, scheduled_duration)
+      VALUES (%s, '%s', '%s', '%s', '%s', '%s', '%s', %s, %s, %s, %s);" 1 $directory $filename $size $channel_name $title $synopsis $event_start $event_end $schedstart $scheddur
+    set act_id [$tvdiarydb lastid]
+#    puts "//[clock seconds]: Added to inventory: $act_id, 1, $directory, $filename, $size, $channel_name, $title, $synopsis, $schedstart, $scheddur."
+  } on error { msg } {
+    puts "//[clock seconds]: Error accessing information for $directory/$filename - $msg."
+  }
+}
+
+#
+# Check whether there's an entry for this file.
+# Returns the inventory_id.
+#
+proc check_entry { tvdiarydb directory filename } {
+  set _count [$tvdiarydb query "SELECT inventory_id FROM inventory WHERE directory = '%s' AND filename = '%s' LIMIT 1" $directory $filename]
+  if { [llength $_count] > 0 } {
+    return [lindex [lindex $_count 0] 1]
+  }
+  return -1
+}
+
+#
+# Update the cache recursively, starting at this directory.
+#
+proc update_inventory_dir { tvdiarydb directory dustbin } {
+#  puts "//[clock seconds]: update_inventory_dir $tvdiarydb $directory $dustbin"
+  set files [glob -directory $directory *]
+  foreach filename $files {
+    set filepath "$directory/$filename"
+#    puts "//[clock seconds]: Checking file $filepath with extension \"[file extension $filepath]\""
+    if { [file isfile $filepath] && [file extension $filepath] eq ".ts" } {
+      set id [check_entry $tvdiarydb $directory $filename]
+      if { $id != -1} {
+        $tvdiarydb query "UPDATE inventory SET flag = 1 WHERE inventory_id = %s" $id
+#        puts "//[clock seconds]: Set inventory flag for: $id"
+      } else {
+        add_to_cache $tvdiarydb $directory $filename
+      }
+    } elseif { [file isdirectory $filepath] } {
+        if {$filepath ne $dustbin} {
+          update_inventory_dir $tvdiarydb $filepath $dustbin
+        }
+    } else {
+      #puts "//[clock seconds]: Ignoring file $filepath"
+    }
+  }
+}
+
+proc get_setting { tvdiarydb name } {
+  set res [$tvdiarydb query "SELECT value FROM settings WHERE name = '$name'"]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  return ""
+}
+
+proc set_setting { tvdiarydb name value } {
+  $tvdiarydb query "REPLACE INTO settings (name, value) VALUES ('$name', '%s')" $value
+}
+
+#
+# Update the cache.
+#
+proc update_inventory { tvdiarydb directory dustbin} {
+#  puts "//[clock seconds]: update_inventory started."
+
+  # Check the database includes the inventory cache table.
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_name TEXT, title TEXT, synopsis TEXT, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_directory ON inventory (directory);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_filename ON inventory (filename);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_channel_name ON inventory (channel_name);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_scheduled_start ON inventory (scheduled_start);"
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
+  $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS i_name ON settings (name);"
+
+  # Check for recent update
+  set last_update [get_setting $tvdiarydb "inventory_update"]
+#  if {$last_update eq "" } {set last_update 0}
+#  puts "//[clock seconds]: last_update=$last_update and (\[clock seconds\] - \$last_update)=[expr [clock seconds] - $last_update]."
+  if {$last_update eq "" || ([clock seconds] - $last_update) > 60} {
+    # Clear the flags before scanning the disk.
+    $tvdiarydb query "UPDATE inventory SET flag = 0;"
+    set changes [$tvdiarydb changes]
+#    puts "//[clock seconds]: Cleared $changes inventory flags."
+  
+    # Recursive directory search, setting the flag if present, or adding rows if not present.
+    update_inventory_dir $tvdiarydb $directory $dustbin
+
+    # Purge obsolete cache entries.
+    $tvdiarydb query "DELETE FROM inventory WHERE flag = 0;"
+    set changes [$tvdiarydb changes]
+#    puts "//[clock seconds]: Deleted $changes obsolete inventory entries."
+    set_setting $tvdiarydb "inventory_update" [clock seconds]
+  }
+#  puts "//[clock seconds]: update_inventory finished."
 }
