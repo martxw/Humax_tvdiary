@@ -1,20 +1,26 @@
 #!/bin/sh
 diff live/sbin/tvdiary_monitor_off src/sbin/tvdiary_monitor_off
 diff live/sbin/tvdiary_monitor_on src/sbin/tvdiary_monitor_on
-diff live/sbin/tvdiary_publish.jim src/sbin/tvdiary_publish
-diff live/sbin/tvdiary_purge.jim src/sbin/tvdiary_purge
-diff live/sbin/tvdiary_status.jim src/sbin/tvdiary_status
+diff live/sbin/tvdiary_publish src/sbin/tvdiary_publish
+diff live/sbin/tvdiary_purge src/sbin/tvdiary_purge
+diff live/sbin/tvdiary_status src/sbin/tvdiary_status
+diff live/webif/html/tvdiary/available.png src/webif/html/tvdiary/available.png
 diff live/webif/html/tvdiary/calendar_params.jim src/webif/html/tvdiary/calendar_params.jim
 diff live/webif/html/tvdiary/day_json.jim src/webif/html/tvdiary/day_json.jim
+diff live/webif/html/tvdiary/dejavu.png src/webif/html/tvdiary/dejavu.png
 diff live/webif/html/tvdiary/dejavu_json.jim src/webif/html/tvdiary/dejavu_json.jim
+diff live/webif/html/tvdiary/deleted_unwatched.png src/webif/html/tvdiary/deleted_unwatched.png
 diff live/webif/html/tvdiary/index.shtml src/webif/html/tvdiary/index.shtml
+diff live/webif/html/tvdiary/inventory_json.jim src/webif/html/tvdiary/inventory_json.jim
 diff live/webif/html/tvdiary/jslog.jim src/webif/html/tvdiary/jslog.jim
 diff live/webif/html/tvdiary/script.js src/webif/html/tvdiary/script.js
 diff live/webif/html/tvdiary/style.css src/webif/html/tvdiary/style.css
 diff live/webif/html/tvdiary/tvdiary_db.jim src/webif/html/tvdiary/tvdiary_db.jim
 diff live/webif/html/tvdiary/tvmast.png src/webif/html/tvdiary/tvmast.png
+diff live/webif/html/tvdiary/unwatched.png src/webif/html/tvdiary/unwatched.png
 diff live/webif/plugin/tvdiary/icon.png src/webif/plugin/tvdiary/icon.png
 diff live/webif/plugin/tvdiary/menu.hook src/webif/plugin/tvdiary/menu.hook
 diff live/webif/plugin/tvdiary/settings.hook src/webif/plugin/tvdiary/settings.hook
 diff live/webif/plugin/tvdiary/toolbar.hook src/webif/plugin/tvdiary/toolbar.hook
 diff live/webif/plugin/tvdiary/update.jim src/webif/plugin/tvdiary/update.jim
+

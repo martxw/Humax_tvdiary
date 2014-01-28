@@ -13,12 +13,12 @@ mkdir /mod/dev/tvdiary/live/sbin
 
 TDIR=/mod/sbin
 LDIR=/mod/dev/tvdiary/live/sbin
-#ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status
-#ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge
-#ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish
-ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
-ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
-ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
+ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status
+ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge
+ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish
+#ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
+#ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
+#ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
 ln -s $TDIR/tvdiary_monitor_on $LDIR/tvdiary_monitor_on
 ln -s $TDIR/tvdiary_monitor_off $LDIR/tvdiary_monitor_off
 
@@ -28,15 +28,20 @@ mkdir /mod/dev/tvdiary/live/webif/html/tvdiary
 
 TDIR=/mod/webif/html/tvdiary
 LDIR=/mod/dev/tvdiary/live/webif/html/tvdiary
+ln -s $TDIR/available.png $LDIR/available.png
 ln -s $TDIR/calendar_params.jim $LDIR/calendar_params.jim
 ln -s $TDIR/day_json.jim $LDIR/day_json.jim
+ln -s $TDIR/dejavu.png $LDIR/dejavu.png
 ln -s $TDIR/dejavu_json.jim $LDIR/dejavu_json.jim
-ln -s $TDIR/jslog.jim $LDIR/jslog.jim
+ln -s $TDIR/deleted_unwatched.png $LDIR/deleted_unwatched.png
 ln -s $TDIR/index.shtml $LDIR/index.shtml
+ln -s $TDIR/inventory_json.jim $LDIR/inventory_json.jim
+ln -s $TDIR/jslog.jim $LDIR/jslog.jim
 ln -s $TDIR/script.js $LDIR/script.js
 ln -s $TDIR/style.css $LDIR/style.css
 ln -s $TDIR/tvdiary_db.jim $LDIR/tvdiary_db.jim
 ln -s $TDIR/tvmast.png $LDIR/tvmast.png
+ln -s $TDIR/unwatched.png $LDIR/unwatched.png
 
 mkdir /mod/dev/tvdiary/live/webif/plugin
 mkdir /mod/dev/tvdiary/live/webif/plugin/tvdiary
@@ -58,6 +63,8 @@ ln -s $TDIR/tvdiary.db $LDIR/tvdiary.db
 mkdir /mod/dev/tvdiary/live/tmp
 TDIR=/mod/tmp
 LDIR=/mod/dev/tvdiary/live/tmp
+echo "" > $TDIR/tvdiary.log
+echo "" > $TDIR/tvdiaryjs.log
 ln -s $TDIR/tvdiary.log $LDIR/tvdiary.log
 ln -s $TDIR/tvdiaryjs.log $LDIR/tvdiaryjs.log
 
