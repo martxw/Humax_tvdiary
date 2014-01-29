@@ -52,24 +52,9 @@ set logging_time [clock format $current_time -format $log_date_fmt]
 # Create or open the database file.
 #
 proc openDB {} {
-  if { ![file exists $::DB_FILEPATH] } {
-    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-    try {
-      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
-      $tvdiarydb query "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
-    } on error { msg } {
-      puts "$::logging_time: Failed to create the database tables. \[$msg\]"
-      exit
-    }
-  } else {
-    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-  }
-    
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_program_id ON activities (program_id);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_start ON activities (start);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_end ON activities (end);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_title ON programs (title);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_synopsis ON programs (synopsis);"
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  create_tables $tvdiarydb
 
   return $tvdiarydb;
 }

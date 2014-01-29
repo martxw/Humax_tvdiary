@@ -107,7 +107,13 @@ proc output_record { record } {
   set thumbnail [file exists "[file rootname $filepath].thm"]
   puts "  \"has_thumbnail\": [expr { $thumbnail ? {true} : {false} }],"
   puts "  \"repeats\": $record(repeats),"
-  
+
+  if { $record(watched) } {
+    set watched "true"
+  } else {
+    set watched "false"
+  }
+  puts "  \"watched\": $watched,"
 
   set event_duration [expr ($record(event_end) - $record(event_start) + 30) / 60]
   puts "  \"title\": \"[escape_json_string $record(title)]\","
@@ -157,9 +163,12 @@ proc main {} {
   #
   set records [$tvdiarydb query "
     SELECT inventory.*,
+    (SELECT COUNT(*) FROM activities, programs
+      WHERE programs.start = inventory.scheduled_start AND programs.channel_name = inventory.channel_name
+        AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
     (SELECT COUNT(*) FROM programs WHERE programs.title = inventory.title AND programs.synopsis = inventory.synopsis AND programs.start != inventory.scheduled_start) AS repeats
     FROM inventory
-    ORDER BY directory, event_start, title"]
+    ORDER BY directory, event_start DESC, title"]
   
   # Finished with the DB.
   $tvdiarydb close

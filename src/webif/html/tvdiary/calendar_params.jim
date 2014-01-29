@@ -6,7 +6,7 @@
 
 package require cgi
 source /mod/webif/lib/setup
-source tvdiary_db.jim
+source /mod/webif/html/tvdiary/tvdiary_db.jim
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 

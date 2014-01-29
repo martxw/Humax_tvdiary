@@ -9,7 +9,7 @@
 }
 
 /* Size tables, and keep them apart in different orientations */
-#recorded_outer, #watched_outer {
+#recorded_outer, #watched_outer, #inventory_outer {
   width: 53em;
   float: left;
   margin: 0 1em 1em 0;
@@ -128,7 +128,7 @@ tr.record_event + tr.future_event td {
 }
 
 /* Progress indicators centred */
-#recorded_spinner, #watched_spinner {
+#recorded_spinner, #watched_spinner, #inventory_spinner {
   text-align: center;
 }
 
@@ -234,6 +234,10 @@ td.dv_type {
   text-align: center;
 }
 
+#slideset1, #slideset2 {
+  float: left;
+}
+
 td.inventory_dir {
   vertical-align: middle;
   white-space: nowrap;
@@ -243,4 +247,16 @@ td.inventory_dir {
   height: 32px;
   background: url("/images/711_1_09_Media_Folder.png") no-repeat white;
   padding-left: 50px;
+}
+
+#inventory_return {
+  background: url("/plugin/tvdiary/icon.png") no-repeat;
+  background-position-y: -30px;
+  margin: 0 1em 1em 0;
+  width: 96px;
+  height: 50px;
+  padding-top: 50px;
+  cursor: pointer;
+  font-weight: bold;
+  text-align: center;
 }

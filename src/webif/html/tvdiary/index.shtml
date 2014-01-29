@@ -12,6 +12,7 @@
 <script type="text/javascript" src="/tvdiary/script.js"></script>
 <link type="text/css" href="/tvdiary/style.css" rel="stylesheet" />
 
+<div id="slideset1">
 <h1>TV Diary<span id="title_date"></span></h1>
 
 <div class="table_wrapper">
@@ -54,12 +55,32 @@
     </div>
   </div>
 </div>
-
-<div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
-  <img src="/img/loading.gif" alt="loading">
 </div>
 
-<div id="inventory_dialog" title="Media - Video">
+<div id="slideset2">
+  <h1>TV Diary - Video Inventory</h1>
+  <div class="table_wrapper">
+    <div id="inventory_return" class="">
+      Return
+    </div>
+  </div>
+  <div class="table_wrapper">
+    <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
+      <div id="inventory_caption" class="outer_hdr ui-widget-header ui-corner-all">
+        [HDD] My Video
+      </div>
+      <div>
+        <div id="inventory_inner"></div>
+        <div id="inventory_spinner">
+          <img src="/img/loading.gif" alt="Processing request...">
+          Processing request...
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
   <img src="/img/loading.gif" alt="loading">
 </div>
 

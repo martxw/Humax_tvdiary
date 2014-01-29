@@ -146,19 +146,37 @@ proc set_setting { tvdiarydb name value } {
 }
 
 #
+# Create all the tables and indexes.
+# Called by tvdiary_status.
+# TODO: Call in installation.
+#
+proc create_tables { tvdiarydb } {
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title ON programs (title);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis ON programs (synopsis);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_name ON programs (channel_name);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_start ON activities (start);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_end ON activities (end);"
+
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_name TEXT, title TEXT, synopsis TEXT, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_directory ON inventory (directory);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_filename ON inventory (filename);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_channel_name ON inventory (channel_name);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
+
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
+  $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+}
+
+#
 # Update the cache.
 #
 proc update_inventory { tvdiarydb directory dustbin} {
 #  puts "//[clock seconds]: update_inventory started."
-
-  # Check the database includes the inventory cache table.
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_name TEXT, title TEXT, synopsis TEXT, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_directory ON inventory (directory);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_filename ON inventory (filename);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_channel_name ON inventory (channel_name);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS i_scheduled_start ON inventory (scheduled_start);"
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
-  $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS i_name ON settings (name);"
 
   # Check for recent update
   set last_update [get_setting $tvdiarydb "inventory_update"]
