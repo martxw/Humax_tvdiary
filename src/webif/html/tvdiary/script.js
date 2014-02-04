@@ -285,7 +285,7 @@ $(document).ready(function() {
       if (event.available) {
         html += "<a class=\"inventory\" href=\"#\"><img src=\"available.png\" width=16 height=16 title=\"available\"></a>";
       }
-      if (event.repeats > 0) {
+      if (event.repeat_id != -1) {
         html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
@@ -316,30 +316,30 @@ $(document).ready(function() {
     $('a.dejavu', el).click(function(e) {
       e.preventDefault();
 
+      var prog_id = $(this).attr('prog_id');
       if (typeof shapshot_time == "undefined") {
-        var prog_id = $(this).attr('prog_id');
         var url = '/tvdiary/dejavu_json.jim?program_id=' + prog_id;
-        $.ajax({
-          type: "GET",
-          dataType: "json",
-          url: url,
-          success: function(data) {
-            if (data.status == "OK" ) {
-              $dejavu_dialog.html(dejavu_json_to_html(data));
-            } else {
-              $dejavu_dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
-            }
-          },
-          error: function(_, _, e) {
-            log_stuff("ajax error " + e);
-            $dejavu_dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
-          }
-        });
-
-        $dejavu_dialog.dialog('open');
       } else {
-        alert("The d\xe9j\xe0 vu view is not available in this snapshot.");
+        var url = '/tvdiary/dejavu_dummy.json?nocache';
       }
+      $.ajax({
+        type: "GET",
+        dataType: "json",
+        url: url,
+        success: function(data) {
+          if (data.status == "OK" ) {
+            $dejavu_dialog.html(dejavu_json_to_html(data));
+          } else {
+            $dejavu_dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          }
+        },
+        error: function(_, _, e) {
+          log_stuff("ajax error " + e);
+          $dejavu_dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        }
+      });
+
+      $dejavu_dialog.dialog('open');
     });
   }
 
@@ -371,7 +371,7 @@ $(document).ready(function() {
           type_icon = "/images/745_1_10_Video_2Live.png";
           break;
       }
-      var duration = Math.round((event.end - event.start) / 60);
+      var duration = Math.round((event.end - event.start + 30) / 60);
 
       html += "<tr class=\"dv_row\">";
 
@@ -406,34 +406,35 @@ $(document).ready(function() {
 
       if (typeof shapshot_time == "undefined") {
         var url = '/tvdiary/inventory_json.jim';
-        $.ajax({
-          type: "GET",
-          dataType: "json",
-          url: url,
-          success: function(data) {
-            if (data.status == "OK" ) {
-              $('#inventory_inner').html(inventory_json_to_html(data));
-            } else if (data.status == "EMPTY" || data.events.length == 0) {
-              $('#inventory_inner').html("<span class=\"nothing\">Nothing</span>");
-            } else {
-              $('#inventory_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
-            }
-            $('#inventory_spinner').hide('slow');
-          },
-          error: function(_, _, e) {
-            log_stuff("ajax error " + e);
-            $('#inventory_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
-            $('#inventory_spinner').hide('slow');
-          }
-        });
-
-        //$("#slideset1").hide('slide', {direction: 'left'}, 1000);
-        //$("#slideset2").show('slide', {direction: 'left'}, 1000);
-        $("#slideset1").hide("fade");
-        $("#slideset2").show("fade");
       } else {
-        alert("The media inventory is not available in this snapshot.");
+        var url = '/tvdiary/inventory_dummy.json?nocache';
       }
+      $.ajax({
+        type: "GET",
+        dataType: "json",
+        url: url,
+        success: function(data) {
+          if (data.status == "OK" ) {
+            $('#inventory_inner').html(inventory_json_to_html(data));
+            bind_dejavu($('#inventory_inner'));
+          } else if (data.status == "EMPTY" || data.events.length == 0) {
+            $('#inventory_inner').html("<span class=\"nothing\">Nothing</span>");
+          } else {
+            $('#inventory_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          }
+          $('#inventory_spinner').hide('slow');
+        },
+        error: function(_, _, e) {
+          log_stuff("ajax error " + e);
+          $('#inventory_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+          $('#inventory_spinner').hide('slow');
+        }
+      });
+
+      //$("#slideset1").hide('slide', {direction: 'left'}, 1000);
+      //$("#slideset2").show('slide', {direction: 'left'}, 1000);
+      $("#slideset1").hide("fade");
+      $("#slideset2").show("fade");
     });
   }
 
@@ -472,7 +473,11 @@ $(document).ready(function() {
       // Column 2 - the thumbnail.
       html += "<td class=\"tvchannel\">";
       if (event.has_thumbnail) {
-        html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURI(event.directory + "/" + event.filename) + "\">";
+        if (typeof shapshot_time == "undefined") {
+          html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURI(event.directory + "/" + event.filename) + "\">";
+        } else {
+          html += "<img class=\"bmp\" src=\"" + encodeURI(event.filename) + ".png\">";
+        }
       }
       html += "</td>";
       //
@@ -496,8 +501,8 @@ $(document).ready(function() {
       if (!event.watched) {
         html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
       }
-      if (event.repeats > 0) {
-        html += " <img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\">";
+      if (event.repeat_id != -1) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
       

@@ -106,7 +106,12 @@ proc output_record { record } {
   set filepath "$record(directory)/$record(filename)"
   set thumbnail [file exists "[file rootname $filepath].thm"]
   puts "  \"has_thumbnail\": [expr { $thumbnail ? {true} : {false} }],"
-  puts "  \"repeats\": $record(repeats),"
+  
+  set repeat_id $record(repeat_id)
+  if { $repeat_id == {} } {
+    set repeat_id -1
+  }
+  puts "  \"repeat_id\": $repeat_id,"
 
   if { $record(watched) } {
     set watched "true"
@@ -148,7 +153,7 @@ proc main {} {
   # Get a lock for the database
   #
   if {![acquire_lock tvdiary_db]} {
-    throw error "Cannot acquire exclusive lock for tvdiary.tb."
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
   }
 
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
@@ -166,7 +171,7 @@ proc main {} {
     (SELECT COUNT(*) FROM activities, programs
       WHERE programs.start = inventory.scheduled_start AND programs.channel_name = inventory.channel_name
         AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
-    (SELECT COUNT(*) FROM programs WHERE programs.title = inventory.title AND programs.synopsis = inventory.synopsis AND programs.start != inventory.scheduled_start) AS repeats
+    (SELECT program_id FROM programs WHERE programs.title = inventory.title AND programs.synopsis = inventory.synopsis AND programs.start != inventory.scheduled_start) AS repeat_id
     FROM inventory
     ORDER BY directory, event_start DESC, title"]
   

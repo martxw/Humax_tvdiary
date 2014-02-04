@@ -413,6 +413,15 @@ proc main {} {
     $tvdiarydb close
   } else {
     # For the cases where there is no activity after a recording finishes, need to mark everything as finished.
+
+    #
+    # Get a lock for the database.
+    #
+    if {![acquire_lock tvdiary_db]} {
+      puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      exit -1
+    }
+
     set tvdiarydb [openDB]
     set finished_activities [load_unfinished_activities $tvdiarydb]
     if { [llength $finished_activities] > 0 } {

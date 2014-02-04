@@ -33,8 +33,8 @@ proc acquire_lock {id} {
 
   set port [_lock_to_port $id]
 
-  # Max 10 seconds timeout.
-  set timeout 10
+  # Max 15 seconds timeout.
+  set timeout 15
 
   # 'socket already in use' error will be our lock detection mechanism
   incr timeout [clock seconds]
@@ -74,7 +74,8 @@ proc release_lock {id} {
 #
 proc add_to_cache { tvdiarydb directory filename } {
   try {
-    set ts [ts fetch "$directory/$filename"]
+    set filepath "$directory/$filename"
+    set ts [ts fetch $filepath]
     set channel_name [$ts get channel_name]
     set title [$ts get title]
     set synopsis [$ts get synopsis]
@@ -82,7 +83,8 @@ proc add_to_cache { tvdiarydb directory filename } {
     set event_end [$ts get end]
     set schedstart [$ts get schedstart]
     set scheddur [expr [$ts get scheddur] / 60]
-    set size [$ts size]
+    # Use [file] for consistency with checking.
+    set size [file size $filepath]
 
     $tvdiarydb query "
       INSERT INTO inventory (flag, directory, filename, size, channel_name, title, synopsis, event_start, event_end, scheduled_start, scheduled_duration)
@@ -98,11 +100,12 @@ proc add_to_cache { tvdiarydb directory filename } {
 # Check whether there's an entry for this file.
 # Returns the inventory_id.
 #
-proc check_entry { tvdiarydb directory filename } {
-  set _count [$tvdiarydb query "SELECT inventory_id FROM inventory WHERE directory = '%s' AND filename = '%s' LIMIT 1" $directory $filename]
+proc check_entry { tvdiarydb directory filename size } {
+  set _count [$tvdiarydb query "SELECT inventory_id FROM inventory WHERE directory = '%s' AND filename = '%s' AND size = '%s' LIMIT 1" $directory $filename $size]
   if { [llength $_count] > 0 } {
     return [lindex [lindex $_count 0] 1]
   }
+#  puts "Found no match for $directory $filename $size"
   return -1
 }
 
@@ -111,12 +114,12 @@ proc check_entry { tvdiarydb directory filename } {
 #
 proc update_inventory_dir { tvdiarydb directory dustbin } {
 #  puts "//[clock seconds]: update_inventory_dir $tvdiarydb $directory $dustbin"
-  set files [glob -directory $directory *]
+  set files [glob -nocomplain -directory $directory *]
   foreach filename $files {
     set filepath "$directory/$filename"
 #    puts "//[clock seconds]: Checking file $filepath with extension \"[file extension $filepath]\""
     if { [file isfile $filepath] && [file extension $filepath] eq ".ts" } {
-      set id [check_entry $tvdiarydb $directory $filename]
+      set id [check_entry $tvdiarydb $directory $filename [file size $filepath]]
       if { $id != -1} {
         $tvdiarydb query "UPDATE inventory SET flag = 1 WHERE inventory_id = %s" $id
 #        puts "//[clock seconds]: Set inventory flag for: $id"

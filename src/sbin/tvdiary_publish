@@ -208,7 +208,7 @@ proc main {} {
 }
 
 proc send_images {} {
-  set icon_files [glob $::CHANNEL_ICONS_PATH/*.png]
+  set icon_files [glob -nocomplain $::CHANNEL_ICONS_PATH/*.png]
   puts "#icon_files=[llength $icon_files]"
   foreach filename [lsort $icon_files] {
     if { !([file isfile $filename] && [file readable $filename]) } {

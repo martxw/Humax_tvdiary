@@ -110,7 +110,7 @@ proc main {} {
   # Get a lock for the database
   #
   if {![acquire_lock tvdiary_db]} {
-    throw error "Cannot acquire exclusive lock for tvdiary.tb."
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
   }
 
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
