@@ -5,8 +5,8 @@
 <script type="text/javascript" src="/js/easing.js"></script>
 <link type="text/css" href="/css/ui.totop.css" rel="stylesheet" />
 
-<script type="text/javascript" src="/js/iphone-style-checkboxes.js"></script>
-<link type="text/css" href="/css/iphone-style-checkboxes.css" rel="stylesheet" />
+<script type="text/javascript" src="/lib/jquery.plugin/iphone-style-checkboxes/iphone-style-checkboxes.js"></script>
+<link type="text/css" href="/lib/jquery.plugin/iphone-style-checkboxes/iphone-style-checkboxes.css" rel="stylesheet" />
 
 <script type="text/javascript" src="/tvdiary/calendar_params.jim"></script>
 <script type="text/javascript" src="/tvdiary/script.js"></script>

@@ -4,5 +4,5 @@ Section: misc
 Version: 0.0.2-3
 Architecture: mipsel
 Maintainer: martxw
-Depends: webif (>= 1.0.7-7)
+Depends: webif (>= 1.0.9)
 Description: An add-on to the web interface that tracks the TV programmes you record and watch, presenting them in a diary view.
