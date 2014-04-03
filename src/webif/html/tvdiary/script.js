@@ -14,12 +14,6 @@
 
 // Today's calendar date start.
 var today_start;
-if (typeof shapshot_time == "undefined") {
-  today_start = get_tv_day_start(new Date().getTime() / 1000, false);
-} else {
-//  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
-  today_start = get_tv_day_start(shapshot_time, false);
-}
 
 // Whether live broadcasts are to be displayed. Toggled on and off.
 var including_live = true;
@@ -40,23 +34,15 @@ function log_stuff(x) {
 }
 
 //////
-// Calculate the UTC time for the start of the TV day based on a UTC epoch value.
-// Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
-// we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
-// In UTC, but DST must be taken into account prior to rounding to the start of the day, and after adding the day start.
-// If date_only is true, the time t is specified only to the date granularity, and therefore the day_start must NOT
-//   be subtracted, as that would move back to the prceeding day. The datepicker returns midnight at the start of the
-//   selected date.
-//////
-function get_tv_day_start(t, date_only) {
-  var d = new Date(Math.floor(t) * 1000);
-  return Math.floor((((d.getTime() - d.getTimezoneOffset() * 60000) / 1000.0) - (date_only ? 0 : day_start)) / 86400) * 86400 + (day_start + d.getTimezoneOffset() * 60);
-}
-
-//////
 // Page loaded - start work.
 //////
 $(document).ready(function() {
+  if (typeof shapshot_time == "undefined") {
+    today_start = get_tv_day_start(new Date().getTime() / 1000, false);
+  } else {
+  //  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
+    today_start = get_tv_day_start(shapshot_time, false);
+  }
 
   // Initialize the to-top scroller.
   $().UItoTop({easingType: 'easeOutQuart'});
@@ -144,17 +130,34 @@ $(document).ready(function() {
   });
   
   //////
-  // Process the button date changes
-  // TODO: This FAILS at the start/end of DST because the days are NOT 24 hours!
+  // Round the given time to the start of the TV day. The input andoutput times are UTC epoch values.
+  // Since the start of TV day is in the local time, convert from UTC first, and restore to UTC after rounding.
+  // If the input time's granularity includes the current time of day, then we need to *subtract* the day_start
+  // before rounding down to the start of the day, so that between midnight and the start of the TV day we round
+  // to the previous day. E.g. at 1am Tuesday we display Monday's TV schedule.
+  // The granularity is date only for values from the datepicker because it returns midnight local time in UTC.
+  //////
+  function get_tv_day_start(t, date_only) {
+    var d = new Date(Math.floor(t) * 1000);
+    return Math.floor((((d.getTime() - d.getTimezoneOffset() * 60000) / 1000.0) - (date_only ? 0 : day_start)) / 86400) * 86400 + (day_start + d.getTimezoneOffset() * 60);
+  }
+
+  //////
+  // Process the button date changes.
+  // Because days may be 23, 24 or 25 hours long, and because the datepicker always returns midnight of the
+  // selected date, change date by subtracting 20 hours or adding 26 hours. The datepicker takes care of
+  // rounding to mignight again itself.
   //////
   function updateDate(direction) {
     if (!(isBusyR || isBusyW)) {
       var currentDate = $('#datepicker').datepicker( "getDate" );
       var newTime = currentDate.getTime();
       if (direction < 0) {
-        newTime -= 86400000;
+        //newTime -= 86400000;
+        newTime -= 79200000; // 22 hours
       } else if (direction > 0) {
-        newTime += 86400000;
+        //newTime += 86400000;
+        newTime += 93600000; // 26 hours
       } else {
         newTime = today_start * 1000;
       }
