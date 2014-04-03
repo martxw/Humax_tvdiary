@@ -9,7 +9,8 @@
 #
 # CGI usage: /tvdiary/day_json.jim?start=<time_start>&current_time=<browser's current time>&type=<type>
 # CLI usage: day_json.jim <time_start> <type> [<icons_path> <icons_url>]
-#   time_start = seconds since 1 Jan 1970 epoch.
+#   time_start = seconds since 1 Jan 1970 epoch, UTC.
+#   current_time = browser's current seconds since 1 Jan 1970 epoch, UTC.
 #   type = R or W for Recorded or Watched (including both Played and Live watched).
 #   icons_path = disk path to the TV channel icons.
 #   icons_url = URL path to the TV channel icons.

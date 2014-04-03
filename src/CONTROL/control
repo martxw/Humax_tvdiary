@@ -1,7 +1,7 @@
 Package: tvdiary
 Priority: optional
 Section: misc
-Version: 0.0.2-3
+Version: 0.0.2-4
 Architecture: mipsel
 Maintainer: martxw
 Depends: webif (>= 1.0.9)

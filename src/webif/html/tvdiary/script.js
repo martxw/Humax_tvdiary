@@ -4,28 +4,27 @@
  */
 
 // calendar_params.js/jim must be included prior to this.
-// day_start seconds offset to the start of the TV day.
-// min_time time of the earliest available information.
-// max_time time of the latest available information.
+// day_start seconds offset to the start of the TV day. Relative to local time.
+// min_time time of the earliest available information. In UTC.
+// max_time time of the latest available information. In UTC.
 // shapshot_time defined only for a published snapshot.
 //
 
 // Declare globals
 
 // Today's calendar date start.
-// Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
-// we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
 var today_start;
 if (typeof shapshot_time == "undefined") {
-  today_start = Math.floor(((new Date().getTime() / 1000.0) - day_start) / 86400) * 86400 + day_start;
+  today_start = get_tv_day_start(new Date().getTime() / 1000, false);
 } else {
-  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
+//  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
+  today_start = get_tv_day_start(shapshot_time, false);
 }
 
 // Whether live broadcasts are to be displayed. Toggled on and off.
 var including_live = true;
 
-// Start time for the displayed details, with the day_start offset included. Changed by the datepicker.
+// Start time for the displayed details, with the day_start offset included. Changed by the datepicker. In UTC.
 var request_start;
 
 // While awaiting Ajax responses.
@@ -38,6 +37,20 @@ var isBusyW = false;
 function log_stuff(x) {
   /*console.log(x);*/
   /*$.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));*/
+}
+
+//////
+// Calculate the UTC time for the start of the TV day based on a UTC epoch value.
+// Counter-intuitively - *subtract* the day_start before rounding down to the start of the day, so that at 1am
+// we get yesterday's TV listings, but then add day_start back on so we get listings from the right start time.
+// In UTC, but DST must be taken into account prior to rounding to the start of the day, and after adding the day start.
+// If date_only is true, the time t is specified only to the date granularity, and therefore the day_start must NOT
+//   be subtracted, as that would move back to the prceeding day. The datepicker returns midnight at the start of the
+//   selected date.
+//////
+function get_tv_day_start(t, date_only) {
+  var d = new Date(Math.floor(t) * 1000);
+  return Math.floor((((d.getTime() - d.getTimezoneOffset() * 60000) / 1000.0) - (date_only ? 0 : day_start)) / 86400) * 86400 + (day_start + d.getTimezoneOffset() * 60);
 }
 
 //////
@@ -75,7 +88,7 @@ $(document).ready(function() {
                   } else {
                     // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
                     log_stuff("datepicker.onSelect(" + new Date(Number(val)) + ")");
-                    var chosen  = Math.round(val / 86400000.0) * 86400 + day_start;
+                    var chosen = get_tv_day_start(Number(val) / 1000, true);
                     request_update(chosen);
                   }
           }
@@ -132,6 +145,7 @@ $(document).ready(function() {
   
   //////
   // Process the button date changes
+  // TODO: This FAILS at the start/end of DST because the days are NOT 24 hours!
   //////
   function updateDate(direction) {
     if (!(isBusyR || isBusyW)) {
@@ -147,10 +161,11 @@ $(document).ready(function() {
       if (newTime >= (min_time * 1000) && newTime <= (max_time * 1000)) {
         currentDate.setTime(newTime);
         $('#datepicker').datepicker("setDate", currentDate);
+        // Setting the date doesn't fire the onSelect, so repeat that code here.
 
         // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
-        log_stuff("Simulated datepicker.onSelect(" + currentDate + ")");
-        var chosen  = Math.round(newTime / 86400000.0) * 86400 + day_start;
+        log_stuff("Simulated datepicker.onSelect(" + new Date(newTime) + ")");
+        var chosen = get_tv_day_start(newTime / 1000, true);
         request_update(chosen);
       }
     }
@@ -546,20 +561,26 @@ $(document).ready(function() {
   // Format the date and time like "Sat 7 Dec 2013 2:04"
   //////
   function formatDateTime(t) {
-    return $.datepicker.formatDate("D d M yy ", new Date(t * 1000)) + formatTime(t);
+    var d = new Date(t * 1000);
+    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
+    return $.datepicker.formatDate("D d M yy ", d) + formatTime(t);
   }
   
   //////
   // Format the date like "27/01"
   //////
   function formatVShortDate(t) {
-    return $.datepicker.formatDate("dd/mm ", new Date(t * 1000));
+    var d = new Date(t * 1000);
+    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
+    return $.datepicker.formatDate("dd/mm ", d);
   }
   
   //////
   // Format the time like "2:04"
   //////
   function formatTime(t) {
+    var d = new Date(t * 1000);
+    t = (d.getTime() - d.getTimezoneOffset() * 60000) / 1000;
     return format_duration(Math.floor((t % 86400) / 60));
   }
   
@@ -575,7 +596,7 @@ $(document).ready(function() {
 
     // Calculate based on the time range from the table, not what was requested.
     var report_time = data.current_time;
-    var report_day_start = Math.floor((report_time - day_start) / 86400) * 86400 + day_start;
+    var report_day_start = get_tv_day_start(report_time, false);
 
     for (var i = 0, len = data.events.length; i < len; i++) {
       var event = data.events[i];
