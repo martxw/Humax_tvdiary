@@ -34,7 +34,7 @@ ln -s $TDIR/day_json.jim $LDIR/day_json.jim
 ln -s $TDIR/dejavu.png $LDIR/dejavu.png
 ln -s $TDIR/dejavu_json.jim $LDIR/dejavu_json.jim
 ln -s $TDIR/deleted_unwatched.png $LDIR/deleted_unwatched.png
-ln -s $TDIR/index.shtml $LDIR/index.shtml
+ln -s $TDIR/index.jim $LDIR/index.jim
 ln -s $TDIR/inventory_json.jim $LDIR/inventory_json.jim
 ln -s $TDIR/jslog.jim $LDIR/jslog.jim
 ln -s $TDIR/script.js $LDIR/script.js

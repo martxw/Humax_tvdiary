@@ -1,16 +1,14 @@
-<!--#include virtual="/lib/header.shtml" -->
+#!/mod/bin/jimsh
 
-<script type="text/javascript" src="/js/iajax.js"></script>
-<script type="text/javascript" src="/js/jquery.ui.totop.js"></script>
-<script type="text/javascript" src="/js/easing.js"></script>
-<link type="text/css" href="/css/ui.totop.css" rel="stylesheet" />
+source /mod/webif/lib/setup
 
-<script type="text/javascript" src="/lib/jquery.plugin/iphone-style-checkboxes/iphone-style-checkboxes.js"></script>
-<link type="text/css" href="/lib/jquery.plugin/iphone-style-checkboxes/iphone-style-checkboxes.css" rel="stylesheet" />
+jqplugin easing ui.totop iphone-style-checkboxes iajax
+jscss calendar_params.jim style.css
+jscss script.js
 
-<script type="text/javascript" src="/tvdiary/calendar_params.jim"></script>
-<script type="text/javascript" src="/tvdiary/script.js"></script>
-<link type="text/css" href="/tvdiary/style.css" rel="stylesheet" />
+header
+
+puts {
 
 <div id="slideset1">
 <h1>TV Diary<span id="title_date"></span></h1>
@@ -83,5 +81,7 @@
 <div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
   <img src="/img/loading.gif" alt="loading">
 </div>
+}
 
-<!--#include virtual="/lib/footer.shtml" -->
+footer
+
