@@ -119,19 +119,21 @@ proc main {} {
   # Query the set of records for the specified type and time range.
   #
   set records [$tvdiarydb query "
-    SELECT title, synopsis
-    FROM programs
-    WHERE program_id =  %s
+    SELECT programs.title_id, programs.synopsis_id, titles.title, synopses.synopsis
+    FROM programs, titles, synopses
+    WHERE program_id =  %s AND programs.title_id = titles.title_id AND programs.synopsis_id = synopses.synopsis_id
     LIMIT 1" $::program_id]
   set record [lindex $records 0]
+  set title_id $record(title_id)
+  set synopsis_id $record(synopsis_id)
   set title $record(title)
   set synopsis $record(synopsis)
 
   set records [$tvdiarydb query "
-    SELECT activities.type, activities.start, activities.end, programs.channel_name
-    FROM activities, programs
-    WHERE programs.title = '%s' AND programs.synopsis = '%s' AND activities.program_id = programs.program_id
-    ORDER BY activities.start" $title $synopsis]
+    SELECT activities.type, activities.start, activities.end, channels.channel_name
+    FROM activities, programs, channels
+    WHERE programs.title_id = %s AND programs.synopsis_id = %s AND activities.program_id = programs.program_id AND programs.channel_id = channels.channel_id
+    ORDER BY activities.start" $title_id $synopsis_id]
 
   # Finished with the DB.
   $tvdiarydb close

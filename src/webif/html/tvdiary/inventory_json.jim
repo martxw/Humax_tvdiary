@@ -167,12 +167,13 @@ proc main {} {
   # Query the inventory for generating JSON.
   #
   set records [$tvdiarydb query "
-    SELECT inventory.*,
+    SELECT i.inventory_id, i.flag, i.directory, i.filename, i.size, c.channel_name, t.title, s.synopsis, i.event_start, i.event_end, i.scheduled_start, i.scheduled_duration,
     (SELECT COUNT(*) FROM activities, programs
-      WHERE programs.start = inventory.scheduled_start AND programs.channel_name = inventory.channel_name
+      WHERE programs.start = i.scheduled_start AND programs.channel_id = i.channel_id
         AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
-    (SELECT program_id FROM programs WHERE programs.title = inventory.title AND programs.synopsis = inventory.synopsis AND programs.start != inventory.scheduled_start) AS repeat_id
-    FROM inventory
+    (SELECT program_id FROM programs WHERE programs.title_id = i.title_id AND programs.synopsis_id = i.synopsis_id AND programs.start != i.scheduled_start) AS repeat_id
+    FROM inventory i, channels c, titles t, synopses s
+    WHERE c.channel_id = i.channel_id AND t.title_id = i.title_id AND s.synopsis_id  = i.synopsis_id
     ORDER BY directory, event_start DESC, title"]
   
   # Finished with the DB.

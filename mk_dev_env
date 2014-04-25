@@ -7,6 +7,7 @@ LDIR=/mod/dev/tvdiary/sbin.jim
 ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
 ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
 ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
+ln -s $TDIR/tvdiary_migrate $LDIR/tvdiary_migrate.jim
 
 mkdir /mod/dev/tvdiary/live
 mkdir /mod/dev/tvdiary/live/sbin
@@ -66,6 +67,5 @@ LDIR=/mod/dev/tvdiary/live/tmp
 echo "" > $TDIR/tvdiary.log
 echo "" > $TDIR/tvdiaryjs.log
 ln -s $TDIR/tvdiary.log $LDIR/tvdiary.log
-ln -s $TDIR/tvdiaryjs.log $LDIR/tvdiaryjs.log
 
 mkdir /mod/dev/tvdiary/out

@@ -2,15 +2,17 @@
 
 echo "Postinstall $*"
 
-/mod/sbin/tvdiary_monitor_on
-
 #dbfile=/mod/etc/tvdiary.db
 #[ -f $dbfile ] && rm -f $dbfile
+
+logfile=/mod/tmp/tvdiaryjs.log
+[ -f $logfile ] && rm -f $logfile
 
 logfile=/mod/tmp/tvdiary.log
 [ -f $logfile ] && rm -f $logfile
 
-logfile=/mod/tmp/tvdiaryjs.log
-[ -f $logfile ] && rm -f $logfile
+/mod/sbin/tvdiary_migrate >> $logfile 2>&1
+
+/mod/sbin/tvdiary_monitor_on
 
 exit 0

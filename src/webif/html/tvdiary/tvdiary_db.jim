@@ -86,11 +86,15 @@ proc add_to_cache { tvdiarydb directory filename } {
     # Use [file] for consistency with checking.
     set size [file size $filepath]
 
+    set channel_id [get_channel_id $tvdiarydb $channel_name]
+    set title_id [get_title_id $tvdiarydb $title]
+    set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
+
     $tvdiarydb query "
-      INSERT INTO inventory (flag, directory, filename, size, channel_name, title, synopsis, event_start, event_end, scheduled_start, scheduled_duration)
-      VALUES (%s, '%s', '%s', '%s', '%s', '%s', '%s', %s, %s, %s, %s);" 1 $directory $filename $size $channel_name $title $synopsis $event_start $event_end $schedstart $scheddur
+      INSERT INTO inventory (flag, directory, filename, size, channel_id, title_id, synopsis_id, event_start, event_end, scheduled_start, scheduled_duration)
+      VALUES (%s, '%s', '%s', '%s', %s, %s, %s, %s, %s, %s, %s);" 1 $directory $filename $size $channel_id $title_id $synopsis_id $event_start $event_end $schedstart $scheddur
     set act_id [$tvdiarydb lastid]
-#    puts "//[clock seconds]: Added to inventory: $act_id, 1, $directory, $filename, $size, $channel_name, $title, $synopsis, $schedstart, $scheddur."
+#    puts "//[clock seconds]: Added to inventory: $act_id, 1, $directory, $filename, $size, $channel_id, $title_id, $synopsis_id, $schedstart, $scheddur."
   } on error { msg } {
     puts "//[clock seconds]: Error accessing information for $directory/$filename - $msg."
   }
@@ -149,30 +153,51 @@ proc set_setting { tvdiarydb name value } {
 }
 
 #
-# Create all the tables and indexes.
-# Called by tvdiary_status.
-# TODO: Call in installation.
+# Test whether the named table exists.
+# Returns 1 if it exists, else 0.
 #
-proc create_tables { tvdiarydb } {
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title ON programs (title);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis ON programs (synopsis);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_name ON programs (channel_name);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+proc table_exists { tvdiarydb name } {
+  set res [$tvdiarydb query "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '$name'"]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  return 0
+}
 
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_start ON activities (start);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_end ON activities (end);"
+#
+# Get the ID of an existing channel_name, or create a new ID.
+#
+proc get_channel_id { tvdiarydb name } {
+  set res [$tvdiarydb query "SELECT channel_id FROM channels WHERE channel_name = '%s'" $name]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO channels (channel_name) VALUES ('%s')" $name
+  return [$tvdiarydb lastid]
+}
 
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_name TEXT, title TEXT, synopsis TEXT, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_directory ON inventory (directory);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_filename ON inventory (filename);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_channel_name ON inventory (channel_name);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
+#
+# Get the ID of an existing title, or create a new ID.
+#
+proc get_title_id { tvdiarydb title } {
+  set res [$tvdiarydb query "SELECT title_id FROM titles WHERE title = '%s'" $title]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO titles (title) VALUES ('%s')" $title
+  return [$tvdiarydb lastid]
+}
 
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
-  $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+#
+# Get the ID of an existing synopsis, or create a new ID.
+#
+proc get_synopsis_id { tvdiarydb synopsis } {
+  set res [$tvdiarydb query "SELECT synopsis_id FROM synopses WHERE synopsis = '%s'" $synopsis]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO synopses (synopsis) VALUES ('%s')" $synopsis
+  return [$tvdiarydb lastid]
 }
 
 #

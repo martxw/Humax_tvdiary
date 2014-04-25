@@ -54,8 +54,6 @@ set logging_time [clock format $current_time -format $log_date_fmt]
 proc openDB {} {
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
-  create_tables $tvdiarydb
-
   return $tvdiarydb;
 }
 
@@ -105,9 +103,9 @@ proc update_finished_activities { tvdiarydb &finished_activities } {
 #
 proc get_activity_program_details { tvdiarydb activity_id } {
   set _rec [$tvdiarydb query "
-    SELECT activities.type, activities.start, activities.end, activities.unfinished, programs.channel_name, programs.title, programs.start AS scheduled_start, programs.duration AS scheduled_duration
-    FROM activities, programs
-    WHERE activities.program_id = programs.program_id AND activities.activity_id = '%s'" $activity_id]
+    SELECT activities.type, activities.start, activities.end, activities.unfinished, channels.channel_name, titles.title, programs.start AS scheduled_start, programs.duration AS scheduled_duration
+    FROM activities, programs, channels, titles
+    WHERE activities.program_id = programs.program_id AND channels.channel_id = programs.channel_id AND titles.title_id = programs.title_id AND activities.activity_id = %s" $activity_id]
   set rec [lindex $_rec 0]
   return "'$rec(type)', $rec(channel_name), '$rec(title)', [clock format $rec(start) -format $::log_date_fmt] - [clock format $rec(end) -format $::log_date_fmt], [clock format $rec(scheduled_start) -format $::log_date_fmt], $rec(scheduled_duration)";
 }
@@ -117,20 +115,25 @@ proc get_activity_program_details { tvdiarydb activity_id } {
 #
 proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration } {
   # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
+
+  set channel_id [get_channel_id $tvdiarydb $channel_name]
+  set title_id [get_title_id $tvdiarydb $title]
+  set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
+
   if { $channel_name ne "" } {
     set _prog_id [$tvdiarydb query "
       SELECT program_id
       FROM programs
-      WHERE channel_name = '%s' AND start = %s
+      WHERE channel_id = %s AND start = %s
       LIMIT 1
-      " $channel_name $start_time]
+      " $channel_id $start_time]
   } else {
     set _prog_id [$tvdiarydb query "
       SELECT program_id
       FROM programs
-      WHERE channel_name = '' AND title = '%s'
+      WHERE channel_id = %s AND title_id = %s
       LIMIT 1
-      " $title]
+      " $channel_id $title_id]
   }
   if { [llength $_prog_id] == 1 } {
     set prog_id [lindex [lindex $_prog_id 0] 1]
@@ -175,9 +178,9 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
   } else {
     # If there's no existing entry for the program, create a new entry, and a new activity.
     $tvdiarydb query "
-      INSERT INTO programs (channel_name, title, synopsis, start, duration)
-      VALUES ('%s', '%s', '%s', %s, %s)
-      " $channel_name $title $synopsis $start_time $duration
+      INSERT INTO programs (channel_id, title_id, synopsis_id, start, duration)
+      VALUES (%s, %s, %s, %s, %s)
+      " $channel_id $title_id $synopsis_id $start_time $duration
     set prog_id [$tvdiarydb lastid]
 
     $tvdiarydb query "
@@ -243,7 +246,7 @@ proc get_data { pid } {
     foreach line [split $data "\n"] {
       # Replace multiple whitespaces with single spaces.
       regsub -all -- {[[:space:]]+} $line " " line
-      
+
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
       set filepath [regsub {^[^/]*} $line {}]
       set type [string tolower [file extension $filepath]]
@@ -303,7 +306,7 @@ proc main {} {
     set recording_channels {}
     set playing_channels {}
     set watching_live {}
-    
+
     foreach filepath [array names ndata] {
       if { ![dict exists $data $filepath] } {
         # New file exists that didn't on the first pass.
@@ -390,7 +393,7 @@ proc main {} {
         dict set playing_channels "Network streamed media" 1
       }
     }
-    
+
     # Speculative check for watching live, in case live watching a program that's also being recorded.
     if { [llength $watching_live] == 0 && [llength $playing_channels] == 0 && ![system instandby] } {
       set hsvc [system param CUR_SVC Value USERCONFIG]

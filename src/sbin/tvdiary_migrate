@@ -1,0 +1,251 @@
+#!/mod/bin/jimsh
+#
+# Create and migrate the tvdiary database.
+# Author: Martin Wink, 2014.
+#
+
+# In case of error - break glass!
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+
+#source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_db.jim
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set logging 1
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+
+set current_time [clock seconds]
+set log_date_fmt "%d/%m/%Y-%H:%M:%S"
+set logging_time [clock format $current_time -format $log_date_fmt]
+if { $::logging } {
+  puts "\n$logging_time: tvdiary_migrate.jim"
+}
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Create or open the database file.
+#
+proc openDB {} {
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  return $tvdiarydb;
+}
+
+#
+# Main
+#
+proc main {} {
+  try {
+    #
+    # Get a lock for the database.
+    #
+    if {![acquire_lock tvdiary_db]} {
+      throw "Cannot acquire exclusive lock for tvdiary.tb."
+    }
+
+    set tvdiarydb [openDB]
+
+    create_migrate_tables $tvdiarydb
+
+    $tvdiarydb close
+
+    #
+    # Closed the DB so release the lock.
+    #
+    release_lock tvdiary_db
+
+    puts "$::logging_time: Migration completed successfully."
+  } on error { msg } {
+    puts "$::logging_time: Migration failed. \[$msg\]"
+    puts [info stacktrace]
+    exit
+  }
+}
+
+#
+# Create the tables for a new installation, or migrate the DB contents for existing installations.
+# Called after installation and by tvdiary_status.
+#
+proc create_migrate_tables { tvdiarydb } {
+
+  set programs_exists [table_exists $tvdiarydb "programs"]
+  set inventory_exists [table_exists $tvdiarydb "inventory"]
+
+  puts "programs_exists=$programs_exists"
+  puts "inventory_exists=$inventory_exists"
+
+  if { $programs_exists == 0 } {
+    puts "Creating fresh empty database in $::DB_FILEPATH."
+
+    # Completely fresh installation - create everything.
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS channels(channel_id INTEGER PRIMARY KEY, channel_name TEXT);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ic_channel_name ON channels (channel_name);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS titles(title_id INTEGER PRIMARY KEY, title TEXT);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS it_title ON titles (title);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS synopses(synopsis_id INTEGER PRIMARY KEY, synopsis TEXT);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS is_synopsis ON synopses (synopsis);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_id ON programs (channel_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title_id ON programs (title_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis_id ON programs (synopsis_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_start ON activities (start);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_end ON activities (end);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_directory ON inventory (directory);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_filename ON inventory (filename);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_channel_id ON inventory (channel_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
+
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
+    $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+  } else {
+    # There is an existing DB, so migration is necessary.
+    # Originally there was no version number & no settings or inventory table.
+    set db_ver 1
+    if { $inventory_exists != 0 } {
+      set last_db_ver [get_setting $tvdiarydb "db_ver"]
+      if { $last_db_ver != "" } {
+        set db_ver $last_db_ver
+      } else {
+        set db_ver 2
+      }
+    }
+
+    puts "Migrating database from schema v$db_ver in $::DB_FILEPATH."
+
+    # 1) As created initially:
+    # "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+    # "CREATE TABLE activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+
+    # 2) With inventory, settings & indexes added:
+    # "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_name TEXT, title TEXT, synopsis TEXT, start INTEGER, duration INTEGER);"
+    # "CREATE INDEX IF NOT EXISTS ip_title ON programs (title);"
+    # "CREATE INDEX IF NOT EXISTS ip_synopsis ON programs (synopsis);"
+    # "CREATE INDEX IF NOT EXISTS ip_channel_name ON programs (channel_name);"
+    # "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+    # "CREATE TABLE IF NOT EXISTS activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
+    # "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
+    # "CREATE INDEX IF NOT EXISTS ia_start ON activities (start);"
+    # "CREATE INDEX IF NOT EXISTS ia_end ON activities (end);"
+    # "CREATE TABLE IF NOT EXISTS inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_name TEXT, title TEXT, synopsis TEXT, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
+    # "CREATE INDEX IF NOT EXISTS ii_directory ON inventory (directory);"
+    # "CREATE INDEX IF NOT EXISTS ii_filename ON inventory (filename);"
+    # "CREATE INDEX IF NOT EXISTS ii_channel_name ON inventory (channel_name);"
+    # "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
+    # "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
+    # "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+  
+    # 3) Explicit db_ver in settings & separate tables for strings. 
+
+    if { $db_ver == 1 || $db_ver == 2 } {
+      # Create the missing tables if they're not present.    
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS channels(channel_id INTEGER PRIMARY KEY, channel_name TEXT);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ic_channel_name ON channels (channel_name);"
+
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS titles(title_id INTEGER PRIMARY KEY, title TEXT);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS it_title ON titles (title);"
+
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS synopses(synopsis_id INTEGER PRIMARY KEY, synopsis TEXT);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS is_synopsis ON synopses (synopsis);"
+
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
+      $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+
+      # For activities, the table's unchanged so just add indexes.
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_start ON activities (start);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_end ON activities (end);"
+
+      # For programs, rename the table first, create a new table & indexes, then migrate the data, and finally delete the old table.
+      $tvdiarydb query "ALTER TABLE programs RENAME TO old_programs;"
+      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_id ON programs (channel_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title_id ON programs (title_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis_id ON programs (synopsis_id);"
+
+      puts "Normalizing programme information."
+
+      set records [$tvdiarydb query "SELECT program_id, channel_name, title, synopsis, start, duration FROM old_programs"]
+      foreach record $records {
+        set channel_name $record(channel_name)
+        set channel_id [get_channel_id $tvdiarydb $channel_name]
+        #puts "$channel_name -> $channel_id"
+
+        set title $record(title)
+        set title_id [get_title_id $tvdiarydb $title]
+        #puts "$title -> $title_id"
+
+        set synopsis $record(synopsis)
+        set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
+        #puts "$synopsis -> $synopsis_id"
+     
+        $tvdiarydb query "INSERT INTO programs (program_id, channel_id, title_id, synopsis_id, start, duration) VALUES (%s, %s, %s, %s, %s, %s)" $record(program_id) $channel_id $title_id $synopsis_id $record(start) $record(duration)
+      }
+      $tvdiarydb query "DROP TABLE old_programs;"
+
+      # Only create some indexes at the end as names clash with the old table's indexes.
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+
+      # Similarly for inventory, rename the table first, create a new table & indexes, then migrate the data, and finally delete the old table.
+      if { $db_ver == 2 } {
+        $tvdiarydb query "ALTER TABLE inventory RENAME TO old_inventory;"
+      }
+
+      $tvdiarydb query "CREATE TABLE inventory(inventory_id INTEGER PRIMARY KEY, flag INTEGER, directory TEXT, filename TEXT, size TEXT, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, event_start INTEGER, event_end INTEGER, scheduled_start INTEGER, scheduled_duration INTEGER);"
+
+      if { $db_ver == 2 } {
+        puts "Normalizing inventory information."
+
+        set records [$tvdiarydb query "SELECT inventory_id, flag, directory, filename, size, channel_name, title, synopsis, event_start, event_end, scheduled_start, scheduled_duration FROM old_inventory"]
+        foreach record $records {
+          set channel_name $record(channel_name)
+          set channel_id [get_channel_id $tvdiarydb $channel_name]
+          #puts "$channel_name -> $channel_id"
+
+          set title $record(title)
+          set title_id [get_title_id $tvdiarydb $title]
+          #puts "$title -> $title_id"
+
+          set synopsis $record(synopsis)
+          set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
+          #puts "$synopsis -> $synopsis_id"
+
+          $tvdiarydb query "INSERT INTO inventory (inventory_id, flag, directory, filename, size, channel_id, title_id, synopsis_id, event_start, event_end, scheduled_start, scheduled_duration) VALUES (%s, %s, '%s', '%s', '%s', %s, %s, %s, %s, %s, %s, %s)" $record(inventory_id) $record(flag) $record(directory) $record(filename) $record(size) $channel_id $title_id $synopsis_id $record(event_start) $record(event_end) $record(scheduled_start) $record(scheduled_duration)
+        }
+        $tvdiarydb query "DROP TABLE old_inventory;"
+      }
+
+      # Only create some indexes at the end as names clash with the old table's indexes.
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_directory ON inventory (directory);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_filename ON inventory (filename);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_channel_id ON inventory (channel_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
+
+      puts "Cleaning up and compacting database."
+
+      set_setting $tvdiarydb "db_ver" 3
+
+      $tvdiarydb query "VACUUM;"
+    }
+    
+  }
+}
+
+
+main

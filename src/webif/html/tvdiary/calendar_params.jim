@@ -33,7 +33,8 @@ if { ![file exists $DB_FILEPATH] } {
   
   set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
   if { [llength $_minstart] == 1 } {
-    set min_time [expr int([lindex [lindex $_minstart 0] 1] / 86400) * 86400]
+    # + 0 is for when table is empty.
+    set min_time [expr int(([lindex [lindex $_minstart 0] 1] + 0) / 86400) * 86400]
   } else {
     set min_time 0
   }

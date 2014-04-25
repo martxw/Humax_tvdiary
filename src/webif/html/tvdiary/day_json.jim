@@ -233,13 +233,17 @@ proc filter_and_add_to_future_events {tvdiarydb start end service_id channel_nam
       # channel_name was passed in.
     }
 
+    set channel_id [get_channel_id $tvdiarydb $channel_name]
+    set title_id [get_title_id $tvdiarydb $title]
+    set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
+
     set calculated_duration [expr ($end - $start + 30) / 60]
 
     set records [$tvdiarydb query "
-      SELECT program_id AS repeat_id FROM programs WHERE programs.title = '%s' AND programs.synopsis = '%s'
+      SELECT program_id AS repeat_id FROM programs WHERE programs.title_id = %s AND programs.synopsis_id = %s
       AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 )
       LIMIT 1
-      " $title $synopsis]
+      " $title_id $synopsis_id]
     if { [llength $records] == 1 } {
       set record [lindex $records 0]
       set repeat_id $record(repeat_id)
@@ -336,11 +340,11 @@ proc main {} {
     set records [$tvdiarydb query "
       SELECT a1.start, a1.type, a1.end, a1.unfinished,
       (SELECT COUNT(*) FROM activities a2 WHERE a2.program_id = p1.program_id AND (a2.type = 'P' OR a2.type = 'L') AND a2.end != 0) AS watched,
-      (SELECT p2.program_id FROM programs p2 WHERE p2.title = p1.title AND p2.synopsis = p1.synopsis AND p1.program_id != p2.program_id) AS repeat_id,
-      (SELECT COUNT(*) FROM inventory WHERE inventory.channel_name = p1.channel_name AND inventory.scheduled_start = p1.start) AS available,
-      p1.channel_name, p1.title, p1.synopsis, p1.start AS scheduled_start, p1.duration AS scheduled_duration
-      FROM activities a1, programs p1
-      WHERE $type_clause AND a1.end > %s AND a1.start < %s AND a1.program_id = p1.program_id
+      (SELECT p2.program_id FROM programs p2 WHERE p2.title_id = p1.title_id AND p2.synopsis_id = p1.synopsis_id AND p1.program_id != p2.program_id) AS repeat_id,
+      (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = p1.channel_id AND inventory.scheduled_start = p1.start) AS available,
+      channels.channel_name, titles.title, synopses.synopsis, p1.start AS scheduled_start, p1.duration AS scheduled_duration
+      FROM activities a1, programs p1, channels, titles, synopses
+      WHERE $type_clause AND a1.end > %s AND a1.start < %s AND a1.program_id = p1.program_id AND channels.channel_id = p1.channel_id AND titles.title_id = p1.title_id AND synopses.synopsis_id = p1.synopsis_id
       ORDER BY a1.start" $::time_start $::time_end]
 
     #
