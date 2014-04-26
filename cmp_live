@@ -10,7 +10,7 @@ diff live/webif/html/tvdiary/day_json.jim src/webif/html/tvdiary/day_json.jim
 diff live/webif/html/tvdiary/dejavu.png src/webif/html/tvdiary/dejavu.png
 diff live/webif/html/tvdiary/dejavu_json.jim src/webif/html/tvdiary/dejavu_json.jim
 diff live/webif/html/tvdiary/deleted_unwatched.png src/webif/html/tvdiary/deleted_unwatched.png
-diff live/webif/html/tvdiary/index.shtml src/webif/html/tvdiary/index.shtml
+diff live/webif/html/tvdiary/index.jim src/webif/html/tvdiary/index.jim
 diff live/webif/html/tvdiary/inventory_json.jim src/webif/html/tvdiary/inventory_json.jim
 diff live/webif/html/tvdiary/jslog.jim src/webif/html/tvdiary/jslog.jim
 diff live/webif/html/tvdiary/script.js src/webif/html/tvdiary/script.js

@@ -21,9 +21,6 @@ puts {
       <td><button id="today">Today</button></td>
       <td><button id="next_day">Next</button></td>
     </tr></table>
-    <table><tr>
-      <td class="prompt"><label for="include_live">Show live TV: </label></td><td><input id="include_live" type="checkbox"></td>
-    </tr></table>
   </div>
 </div>
 

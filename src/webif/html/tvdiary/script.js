@@ -85,21 +85,6 @@ $(document).ready(function() {
   // Set the initial checked state before initializing the iphoneStyle checkbox.
   including_live = getCookie("tvdiary_live_tv");
   including_live = (including_live != "false");
-  if (including_live) {
-    $('#include_live').attr("checked","checked").change();
-  } else {
-    $('#include_live').removeAttr("checked").change();
-  }
-
-  // Initialize the checkbox.
-  $('#include_live').iphoneStyle({
-    checkedLabel: 'Yes',
-    uncheckedLabel: 'No'
-  });
-  $('#include_live').change(function() {
-    // I can't get other methods, including is(":checked"), to work.
-    show_live($(this).is('[checked=checked]'));
-  });
 
   $('#prev_day').button()
     .click(function() {
@@ -757,14 +742,9 @@ $(document).ready(function() {
     } else {
       $('#watched_caption').html( "Watched - " + format_duration(combined_duration) + " (Media: " + format_duration(total_played) + " / <span class=\"live_count\">Live: " + format_duration(total_live) + "</span>)");
     }
-    // I'd liked to have put the checkox in the heading it refers to, but it's too big.
-    // So instead, make clicking the live time control the checkbox to allow direct manipulation.
+    // Clicking the live time label toggles the display of shows watched live.
     $(".live_count").click(function(){
-      if (!including_live) {
-        $('#include_live').attr("checked","checked").change();
-      } else {
-        $('#include_live').removeAttr("checked").change();
-      }
+      show_live(!including_live);
     });
   }
 
