@@ -1,6 +1,10 @@
 #!/mod/bin/jimsh
 
 package require cgi
+source /mod/webif/html/tvdiary/tvdiary_db.jim
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
 
 cgi_input
 puts "Content-Type: text/html"
@@ -11,15 +15,29 @@ set day_start [cgi_get tvdiary_day_start]
 
 puts "Parameters: $monitoring, $day_start<br>"
 
-set fd [open "/mod/etc/tvdiary.conf" w]
-puts $fd "day_start $day_start"
-close $fd
+try {
+  #
+  # Get a lock for the database.
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw "Cannot acquire exclusive lock for tvdiary.tb."
+  }
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+  set_setting $tvdiarydb "day_start" $day_start
+  $tvdiarydb close
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
 
-if { $monitoring } {
-  exec "/mod/sbin/tvdiary_monitor_on"
-} else {
-  exec "/mod/sbin/tvdiary_monitor_off"
+  if { $monitoring } {
+    exec "/mod/sbin/tvdiary_monitor_on"
+  } else {
+    exec "/mod/sbin/tvdiary_monitor_off"
+  }
+
+  puts "Updated Successfully"
+} on error { msg } {
+  puts $msg
 }
-
-puts "Updated Successfully"
 

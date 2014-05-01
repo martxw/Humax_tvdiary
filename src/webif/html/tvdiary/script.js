@@ -19,17 +19,22 @@ var today_start;
 var including_live = true;
 
 // Start time for the displayed details, with the day_start offset included. Changed by the datepicker. In UTC.
-var request_start;
+var daily_start_time;
+
+// Year and month selectors for the monthly summary.
+var monthly_year;
+var monthly_month;
 
 // While awaiting Ajax responses.
 var isBusyR = false;
 var isBusyW = false;
+var isBusyM = false;
 
 //////
 // Logging wrapper.
 //////
 function log_stuff(x) {
-  /*console.log(x);*/
+  console.log(x);
   /*$.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));*/
 }
 
@@ -50,34 +55,83 @@ $(document).ready(function() {
     $('html, body').animate({scrollTop: 0}, 500);
   });
 
-  $("#slideset1").show();
-  $("#slideset2").hide();
+  // Initialize the tabs.
+  $( "#tvd_tabs" ).tabs({
+    heightStyle: "auto",
+    activate: function( event, ui ) {
+      switch (ui.oldTab.index()) {
+        case 0:
+          $("#daily_panel").hide();
+          break;
 
-  $("#inventory_return").click(function() {
-    $("#slideset1").show("fade");
-    $("#slideset2").hide("fade");
-    $('#inventory_inner').html("");
-    $('#inventory_spinner').show();
+        case 1:
+          $("#monthly_panel").hide();
+          break;
+
+        case 2:
+          $("#trends_panel").hide();
+          break;
+
+        case 3:
+          $("#inventory_panel").hide();
+          $('#inventory_inner').html("");
+          $('#inventory_spinner').show();
+          break;
+
+        default:
+          break;
+      }
+      switch (ui.newTab.index()) {
+        case 0:
+          $("#daily_panel").show("fade");
+          break;
+
+        case 1:
+          $("#monthly_panel").show("fade");
+          update_monthly(2014, 4);
+          break;
+
+        case 2:
+          $("#trends_panel").show("fade");
+          break;
+
+        case 3:
+          $("#inventory_panel").show("fade");
+          update_inventory();
+          break;
+
+        default:
+          break;
+      }
+    }
   });
-  
-  // Initialize the datepicker.
-  $('#datepicker').datepicker({
-          firstDay: 1,
-          dateFormat: '@',  //@=ms since 01/01/1970.
-          minDate: new Date(min_time * 1000),
-          maxDate: new Date(max_time * 1000),
-          defaultDate: new Date(today_start * 1000),
-          onSelect: function(val, inst) {
-                  if (isBusyR || isBusyW) {
-                    log_stuff("UI is busy - not changing the date to " + new Date(Number(val)) + " - restoring " + new Date(request_start*1000) +".");
-                    $('#datepicker').datepicker("setDate", new Date(request_start * 1000));
-                  } else {
-                    // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
-                    log_stuff("datepicker.onSelect(" + new Date(Number(val)) + ")");
-                    var chosen = get_tv_day_start(Number(val) / 1000, true);
-                    request_update(chosen);
-                  }
-          }
+  $("#daily_panel").show();
+  $("#monthly_panel").hide();
+  $("#trends_panel").hide();
+  $("#inventory_panel").hide();
+
+  ///////////////
+  // Initialize the daily panel.
+  ///////////////
+
+  // Initialize the daily datepicker.
+  $('#daily_datepicker').datepicker({
+    firstDay: 1,
+    dateFormat: '@',  //@=ms since 01/01/1970.
+    minDate: new Date(min_time * 1000),
+    maxDate: new Date(max_time * 1000),
+    defaultDate: new Date(today_start * 1000),
+    onSelect: function(val, inst) {
+      if (isBusyR || isBusyW) {
+        log_stuff("UI is busy - not changing the date to " + new Date(Number(val)) + " - restoring " + new Date(daily_start_time*1000) +".");
+        $('#daily_datepicker').datepicker("setDate", new Date(daily_start_time * 1000));
+      } else {
+        // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
+        log_stuff("datepicker.onSelect(" + new Date(Number(val)) + ")");
+        var chosen = get_tv_day_start(Number(val) / 1000, true);
+        update_daily(chosen);
+      }
+    }
   });
   log_stuff("Initialized the default datepicker time to " + new Date(today_start * 1000));
 
@@ -98,6 +152,31 @@ $(document).ready(function() {
     .click(function() {
       updateDate(+1);
     });
+
+  ///////////////
+  // Initialize the monthy summary panel.
+  ///////////////
+  
+  // Initialize the daily datepicker.
+  $('#monthly_datepicker').datepicker({
+    firstDay: 1,
+    dateFormat: '@',  //@=ms since 01/01/1970.
+    minDate: new Date(min_time * 1000),
+    maxDate: new Date(today_start * 1000),
+    defaultDate: new Date(today_start * 1000),
+    beforeShowDay : function(date) {
+      return [false, "", "Only the month is significant here"];
+    },
+    onChangeMonthYear: function(year, month, inst) {
+      log_stuff("Selected month " + year + " " + month + ".");
+      if (isBusyM) {
+        log_stuff("UI is busy - not changing the date to " + year + " " + month + " - restoring " + monthly_year + " " + monthly_month + ".");
+        $('#monthly_datepicker').datepicker("setDate", new new Date(year, month - 1, 1, 0, 0, 0, 0));
+      } else {
+        update_monthly(year, month);
+      }
+    }
+  });
 
   // Prepare reusable dialogue.
   var $dejavu_dialog = $('#dejavu_dialog').dialog({
@@ -135,7 +214,7 @@ $(document).ready(function() {
   //////
   function updateDate(direction) {
     if (!(isBusyR || isBusyW)) {
-      var currentDate = $('#datepicker').datepicker( "getDate" );
+      var currentDate = $('#daily_datepicker').datepicker( "getDate" );
       var newTime = currentDate.getTime();
       if (direction < 0) {
         //newTime -= 86400000;
@@ -148,13 +227,13 @@ $(document).ready(function() {
       }
       if (newTime >= (min_time * 1000) && newTime <= (max_time * 1000)) {
         currentDate.setTime(newTime);
-        $('#datepicker').datepicker("setDate", currentDate);
+        $('#daily_datepicker').datepicker("setDate", currentDate);
         // Setting the date doesn't fire the onSelect, so repeat that code here.
 
         // Get the chosen start time, rounded to midnight plus the TV day start, in seconds.
         log_stuff("Simulated datepicker.onSelect(" + new Date(newTime) + ")");
         var chosen = get_tv_day_start(newTime / 1000, true);
-        request_update(chosen);
+        update_daily(chosen);
       }
     }
   }
@@ -407,42 +486,45 @@ $(document).ready(function() {
     $('a.inventory', el).click(function(e) {
       e.preventDefault();
 
-      if (typeof shapshot_time == "undefined") {
-        var url = '/tvdiary/inventory_json.jim';
-      } else {
-        var url = '/tvdiary/inventory_dummy.json?nocache';
-      }
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        url: url,
-        success: function(data) {
-          if (data.status == "OK" ) {
-            $('#inventory_inner').html(inventory_json_to_html(data));
-            bind_dejavu($('#inventory_inner'));
-          } else if (data.status == "EMPTY" || data.events.length == 0) {
-            $('#inventory_inner').html("<span class=\"nothing\">Nothing</span>");
-          } else {
-            $('#inventory_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
-          }
-          $('#inventory_spinner').hide('slow');
-        },
-        error: function(_, _, e) {
-          log_stuff("ajax error " + e);
-          $('#inventory_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
-          $('#inventory_spinner').hide('slow');
-        }
-      });
-
-      //$("#slideset1").hide('slide', {direction: 'left'}, 1000);
-      //$("#slideset2").show('slide', {direction: 'left'}, 1000);
-      $("#slideset1").hide("fade");
-      $("#slideset2").show("fade");
+      $("#tvd_tabs").tabs( "option", "active", 3 );
     });
   }
 
   //////
-  // Render dialog HTML from JSON.
+  // Update the contents of the inventory panel.
+  //////
+  function update_inventory() {
+    if (typeof shapshot_time == "undefined") {
+      var url = '/tvdiary/inventory_json.jim';
+    } else {
+      var url = '/tvdiary/inventory_dummy.json?nocache';
+    }
+    $.ajax({
+      type: "GET",
+      dataType: "json",
+      url: url,
+      success: function(data) {
+        if (data.status == "OK" ) {
+          $('#inventory_inner').html(inventory_json_to_html(data));
+          bind_dejavu($('#inventory_inner'));
+        } else if (data.status == "EMPTY" || data.events.length == 0) {
+          $('#inventory_inner').html("<span class=\"nothing\">Nothing</span>");
+        } else {
+          $('#inventory_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+        }
+        $('#inventory_spinner').hide('slow');
+      },
+      error: function(_, _, e) {
+        log_stuff("ajax error " + e);
+        $('#inventory_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#inventory_spinner').hide('slow');
+      }
+    });
+  }
+
+
+  //////
+  // Render inventory HTML from JSON.
   //////
   function inventory_json_to_html(data) {
     var cur_dir = "";
@@ -751,12 +833,12 @@ $(document).ready(function() {
   //////
   // When the date selection changes, request new recorded & watched tables.
   //////
-  function request_update(chosen) {
-    request_start = chosen;
-    log_stuff("request_update today_start=" + new Date(today_start * 1000) + ", request_start=" + new Date(request_start * 1000));
+  function update_daily(chosen) {
+    daily_start_time = chosen;
+    log_stuff("update_daily today_start=" + new Date(today_start * 1000) + ", daily_start_time=" + new Date(daily_start_time * 1000));
 
     // Main page heading.
-    $('#title_date').html( " - " + $.datepicker.formatDate("D d MM yy", new Date(request_start * 1000)) );
+    $('#title_date').html( $.datepicker.formatDate("D d MM yy", new Date(daily_start_time * 1000)) );
 
     // Blank the tables and show progress indicators.
     $('#recorded_inner').html("");
@@ -765,25 +847,25 @@ $(document).ready(function() {
     $('#watched_spinner').show('fast');
 
     // Temporary table headings.
-    if (request_start < today_start) {
+    if (daily_start_time < today_start) {
       $('#recorded_caption').html( "Recorded" );
-    } else if (request_start > today_start) {
+    } else if (daily_start_time > today_start) {
       $('#recorded_caption').html( "To be recorded" );
     } else {
       $('#recorded_caption').html( "Recorded / To be recorded" );
     }
     $('#watched_caption').html( "Watched" );
-    log_stuff("Temp caption now=" + new Date() + ", request_update(" + new Date(chosen * 1000) + ") request_start=" + new Date(request_start * 1000) + ", today_start=" + new Date(today_start * 1000) + ", set caption to=" + $('#recorded_caption').html());
+    log_stuff("Temp caption now=" + new Date() + ", update_daily(" + new Date(chosen * 1000) + ") daily_start_time=" + new Date(daily_start_time * 1000) + ", today_start=" + new Date(today_start * 1000) + ", set caption to=" + $('#recorded_caption').html());
 
     var r_url;
     var w_url;
     if (typeof shapshot_time == "undefined") {
       // Pass the browser's time to the web server - helps when clocks aren't synced.
       var now_time = Math.round(new Date().getTime() / 1000);
-      r_url = "/tvdiary/day_json.jim?start=" + request_start + "&current_time=" + now_time + "&type=R";
-      w_url = "/tvdiary/day_json.jim?start=" + request_start + "&current_time=" + now_time + "&type=W";
+      r_url = "/tvdiary/day_json.jim?start=" + daily_start_time + "&current_time=" + now_time + "&type=R";
+      w_url = "/tvdiary/day_json.jim?start=" + daily_start_time + "&current_time=" + now_time + "&type=W";
     } else {
-      var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(request_start * 1000));
+      var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(daily_start_time * 1000));
       r_url = "/tvdiary/" + date_filename + "_R.json?nocache";
       w_url = "/tvdiary/" + date_filename + "_W.json?nocache";
     }
@@ -822,7 +904,6 @@ $(document).ready(function() {
     $.ajax({
       type: "GET",
       dataType: "json",
-      // For standalone page only
       url: r_url,
       success: function(data) {
         if (data.status == "OK" ) {
@@ -847,6 +928,155 @@ $(document).ready(function() {
         isBusyR = false;
       }
     });
+  }
+
+  //
+  // For durations sort on the raw number of minutes.
+  //
+  var myTextExtraction = function(node) 
+  {
+    var sval = node.getAttribute("sval");
+    if (sval != null) {
+      return sval;
+    } else {
+      return node.innerText;
+    }
+  }
+
+  //////
+  // When the date is changed for monthly summaries.
+  //////
+  function update_monthly(year, month) {
+    monthly_year = year;
+    monthly_month = month;
+    log_stuff("update_month year=" + year + ", month=" + month);
+
+    // Blank the tables and show progress indicators.
+    $('#programs_inner').html("");
+    $('#programs_spinner').show('fast');
+    $('#channels_inner').html("");
+    $('#channels_spinner').show('fast');
+
+    // Temporary table headings.
+    //if (daily_start_time < today_start) {
+    //  $('#recorded_caption').html( "Recorded" );
+    //} else if (daily_start_time > today_start) {
+    //  $('#recorded_caption').html( "To be recorded" );
+    //} else {
+    //  $('#recorded_caption').html( "Recorded / To be recorded" );
+    //}
+    //$('#watched_caption').html( "Watched" );
+    //log_stuff("Temp caption now=" + new Date() + ", update_daily(" + new Date(chosen * 1000) + ") daily_start_time=" + new Date(daily_start_time * 1000) + ", today_start=" + new Date(today_start * 1000) + ", set caption to=" + $('#recorded_caption').html());
+
+    var m_url;
+    if (typeof shapshot_time == "undefined") {
+      m_url = "/tvdiary/monthly_json.jim?year=" + year + "&month=" + month;
+    } else {
+      m_url = "/tvdiary/" + year + "_" + month + "_M.json?nocache";
+    }
+    
+    // Asynchronously request the summary tables' data.
+    isBusyM = true;
+    $.ajax({
+      type: "GET",
+      dataType: "json",
+      url: m_url,
+      success: function(data) {
+        if (data.status == "OK" ) {
+          $('#programs_inner').html(monthly_json_to_programs_html(data));
+          $('#channels_inner').html(monthly_json_to_channels_html(data));
+          $("#programs_table").tablesorter({
+            textExtraction: myTextExtraction,
+            sortList: [[0,0],[1,0]]
+          });
+          $("#channels_table").tablesorter({
+            textExtraction: myTextExtraction,
+            sortList: [[0,0]]
+          });
+        } else {
+          $('#programs_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          $('#channels_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+        }
+        //apply_altrow($('#programs_inner'));
+        //apply_altrow($('#channels_inner'));
+        $('#programs_spinner').hide('slow');
+        $('#channels_spinner').hide('slow');
+        isBusyM = false;
+      },
+      error: function(_, _, e) {
+        log_stuff("ajax error " + e);
+        $('#programs_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#programs_spinner').hide('slow');
+        $('#channels_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#channels_spinner').hide('slow');
+        isBusyM = false;
+      }
+    });
+  }
+
+  //////
+  // Render monthly programs table HTML from JSON.
+  //////
+  function monthly_json_to_programs_html(data) {
+    var html = "";
+    var len = data.programs.length;
+    if (len < 1) {
+      html += "<span class=\"nothing\">Nothing</span>";
+    } else {
+      html += "<table id=\"programs_table\" class=\"tablesorter events_table\">";
+      //html += "<thead><tr><th>Title</th><th>Channel</th><th># Rec</th><th># Watch</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
+      html += "<thead><tr><th>Title</th><th>Channel</th><th># Recorded</th><th># Watched</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
+      html += "<tbody>";
+
+      for (var i = 0; i < len; i++) {
+        var program = data.programs[i];
+
+        html += "<tr>";
+        html += "<td>" + escapeHtml(program.title) + "</td>";
+        html += "<td>" + escapeHtml(program.channel_name) + "</td>";
+        html += "<td>" + program.record_count + "</td>";
+        html += "<td>" + program.watch_count + "</td>";
+        //html += "<td>" + program.barely_watched_count + "</td>";
+        html += "<td sval=\"" + program.scheduled_duration + "\">" + format_duration(program.scheduled_duration) + "</td>";
+        html += "<td sval=\"" + program.record_duration +"\">" + format_duration(program.record_duration) + "</td>";
+        html += "<td sval=\"" + program.watch_duration + "\">" + format_duration(program.watch_duration) + "</td>";
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+    }
+    return $(html);
+  }
+
+  //////
+  // Render monthly channels table HTML from JSON.
+  //////
+  function monthly_json_to_channels_html(data) {
+    var html = "";
+    var len = data.channels.length;
+    if (len < 1) {
+      html += "<span class=\"nothing\">Nothing</span>";
+    } else {
+      html += "<table id=\"channels_table\" class=\"tablesorter events_table\">";
+      //html += "<thead><tr><th>Channel</th><th># Recorded</th><th># Watched</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
+      html += "<thead><tr><th>Channel</th><th># Recorded</th><th># Watched</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
+      html += "<tbody>";
+
+      for (var i = 0; i < len; i++) {
+        var channel = data.channels[i];
+
+        html += "<tr>";
+        html += "<td>" + escapeHtml(channel.channel_name) + "</td>";
+        html += "<td>" + channel.record_count + "</td>";
+        html += "<td>" + channel.watch_count + "</td>";
+        //html += "<td>" + channel.barely_watched_count + "</td>";
+        html += "<td sval=\"" + channel.scheduled_duration + "\">" + format_duration(channel.scheduled_duration) + "</td>";
+        html += "<td sval=\"" + channel.record_duration + "\">" + format_duration(channel.record_duration) + "</td>";
+        html += "<td sval=\"" + channel.watch_duration + "\">" + format_duration(channel.watch_duration) + "</td>";
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+    }
+    return $(html);
   }
 
   //////
@@ -882,5 +1112,5 @@ $(document).ready(function() {
   }
 
   // Last thing to do when the page loads: show today's details.
-  request_update(today_start);
+  update_daily(today_start);
 });

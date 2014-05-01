@@ -1,0 +1,202 @@
+#!/mod/bin/jimsh
+#
+# Render the monthly summary details as JSON for rendering into a table.
+# Called over CGI to update a page, or as a CLI for hosting on a different server.
+# After successfully rendering the data, the value "status" is set to "OK".
+# If there is an error, "status" is set to "<error message>".
+# Clients should therefore check "status" first. If there is a serious server error part way
+# through rendering, the JSON may be malformed and not parsable.
+#
+# CGI usage: /tvdiary/monthly_json.jim?year=<year selector>&month=<month selector>
+# CLI usage: monthly_json.jim <year selector> <month selector>
+#   year selector = the year to display (eg 2014)
+#   month selector = the month within the year to display (eg 12)
+#
+# Author: Martin Wink, 2014.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_db.jim
+
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+
+
+# --------------------------------------------------------------
+# CGI or command line parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    set year_selector [cgi_get year]
+    set month_selector [cgi_get month]
+    httpheader "application/json"
+  }
+  cli {
+    if { $argc != 2 } {
+# CLI usage: monthly_json.jim <year selector> <month selector>
+#   year selector = the year to display (eg 2014)
+#   month selector = the month within the year to display (eg 12)
+      puts "Usage: $argv0 <year selector> <month selector>"
+      puts " year selector = the year to display (eg 2014)"
+      puts " month selector = the month within the year to display (eg 12)"
+      puts ""
+      puts "Eg: $argv0 2014 4"
+      exit -1
+    }
+    set year_selector [lindex $argv 0]
+    set month_selector [lindex $argv 1]
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Initialize a map from control characters to JSON escaped characters. 
+# Initially all non-null control characters to \u00xx sequences.
+for {set i 1} {$i < 32} {incr i} {
+  set json_escape_map([format %c $i]) \\u[format %04x $i]
+}
+# Then overwrite certain well known control characters with shorter versions.
+set json_escape_map([format %c 8]) \\b; # backspace
+set json_escape_map([format %c 9]) \\t; # tab
+set json_escape_map([format %c 10]) \\n; # lf
+set json_escape_map([format %c 12]) \\f; # ff
+set json_escape_map([format %c 13]) \\r; # cr
+# Other special sequences
+set json_escape_map(\") {\"}
+set json_escape_map(\\) {\\}
+set json_escape_map(/)  {\/}
+
+#
+# Escape a string for inclusion in JSON output.
+#
+proc escape_json_string { in } {
+  return [string map $::json_escape_map $in]
+}
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  #  puts "/* Parameters:
+  #  year_selector=$::year_selector
+  #  month_selector=$::month_selector
+  # end_debug
+
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists $::DB_FILEPATH] } {
+    # Ajax detects the error if we just exit.
+    throw error "The tvdiary.db database is missing."
+  }
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
+  }
+
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  set program_records [$tvdiarydb query "
+    SELECT program_facts.fact_id, program_facts.title_id, titles.title, program_facts.channel_id, channels.channel_name, program_facts.record_count, program_facts.watch_count, program_facts.barely_watched_count, program_facts.scheduled_duration, program_facts.record_duration, program_facts.watch_duration FROM program_facts, titles, channels
+    WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.title_id = titles.title_id AND program_facts.channel_id = channels.channel_id
+    ORDER BY program_facts.record_duration DESC;" $::year_selector $::month_selector]
+
+  set channel_records [$tvdiarydb query "
+    SELECT program_facts.channel_id, channels.channel_name, SUM(program_facts.record_count) AS record_count, SUM(program_facts.watch_count) AS watch_count, SUM(program_facts.barely_watched_count) AS barely_watched_count, SUM(program_facts.scheduled_duration) AS scheduled_duration, SUM(program_facts.record_duration) AS record_duration, SUM(program_facts.watch_duration) AS watch_duration FROM program_facts, channels
+    WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.channel_id = channels.channel_id
+    GROUP BY program_facts.channel_id
+    ORDER BY channels.channel_name;" $::year_selector $::month_selector]
+
+  # Finished with the DB.
+  $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
+
+  puts "{"
+  puts " \"year\": $::year_selector,"
+  puts " \"month\": $::month_selector,"
+
+  puts -nonewline " \"programs\": \["
+  output_records $program_records "P"
+  puts " \],"
+
+  puts -nonewline " \"channels\": \["
+  output_records $channel_records "C"
+  puts " \],"
+
+  puts " \"status\": \"OK\""
+  puts "}"
+}
+
+#
+# Output the contents of a table.
+#
+proc output_records { records type } {
+  set comma 0
+  foreach record $records {
+    if { $comma } {
+      puts ","
+    } else {
+      puts ""
+      set comma 1
+    }
+
+    puts "  {"
+    if {$type == "P"} {
+      puts "   \"fact_id\": $record(fact_id),"
+      puts "   \"title_id\": $record(title_id),"
+      puts "   \"title\": \"[escape_json_string $record(title)]\","
+    }
+    puts "   \"channel_id\": $record(channel_id),"
+    puts "   \"channel_name\": \"[escape_json_string $record(channel_name)]\","
+    puts "   \"record_count\": $record(record_count),"
+    puts "   \"watch_count\": $record(watch_count),"
+    puts "   \"barely_watched_count\": $record(barely_watched_count),"
+    puts "   \"scheduled_duration\": $record(scheduled_duration),"
+    puts "   \"record_duration\": $record(record_duration),"
+    puts "   \"watch_duration\": $record(watch_duration)"
+    puts -nonewline "  }"
+
+  }
+
+  puts ""
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg]\" }"
+  }
+} else {
+  main
+}

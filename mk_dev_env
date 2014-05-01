@@ -7,6 +7,7 @@ LDIR=/mod/dev/tvdiary/sbin.jim
 ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
 ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
 ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
+ln -s $TDIR/tvdiary_aggregate $LDIR/tvdiary_aggregate.jim
 ln -s $TDIR/tvdiary_migrate $LDIR/tvdiary_migrate.jim
 
 mkdir /mod/dev/tvdiary/live
@@ -20,6 +21,8 @@ ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish
 #ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
 #ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
 #ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
+ln -s $TDIR/tvdiary_aggregate $LDIR/tvdiary_aggregate
+ln -s $TDIR/tvdiary_migrate $LDIR/tvdiary_migrate
 ln -s $TDIR/tvdiary_monitor_on $LDIR/tvdiary_monitor_on
 ln -s $TDIR/tvdiary_monitor_off $LDIR/tvdiary_monitor_off
 
@@ -38,6 +41,7 @@ ln -s $TDIR/deleted_unwatched.png $LDIR/deleted_unwatched.png
 ln -s $TDIR/index.jim $LDIR/index.jim
 ln -s $TDIR/inventory_json.jim $LDIR/inventory_json.jim
 ln -s $TDIR/jslog.jim $LDIR/jslog.jim
+ln -s $TDIR/monthly_json.jim $LDIR/monthly_json.jim
 ln -s $TDIR/script.js $LDIR/script.js
 ln -s $TDIR/style.css $LDIR/style.css
 ln -s $TDIR/tvdiary_db.jim $LDIR/tvdiary_db.jim
@@ -58,7 +62,6 @@ ln -s $TDIR/update.jim $LDIR/update.jim
 mkdir /mod/dev/tvdiary/live/etc
 TDIR=/mod/etc
 LDIR=/mod/dev/tvdiary/live/etc
-ln -s $TDIR/tvdiary.conf $LDIR/tvdiary.conf
 ln -s $TDIR/tvdiary.db $LDIR/tvdiary.db
 
 mkdir /mod/dev/tvdiary/live/tmp

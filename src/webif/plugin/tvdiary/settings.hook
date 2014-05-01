@@ -1,17 +1,30 @@
 #!/mod/bin/jimsh
+source /mod/webif/html/tvdiary/tvdiary_db.jim
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+
+set DB_FILEPATH "/mod/etc/tvdiary.db"
 
 set day_start "00:00"
 try {
-  set settings_fd [open "/mod/etc/tvdiary.conf" r]
-  foreach line [split [read $settings_fd] "\n"] {
-    lassign $line settings_key settings_val
-    switch $settings_key {
-      "day_start" { set day_start $settings_val }
-    }
+  #
+  # Get a lock for the database.
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw "Cannot acquire exclusive lock for tvdiary.tb."
   }
-  $settings_fd close
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+  set settings_val [get_setting $tvdiarydb "day_start"]
+  if { $settings_val ne "" } {
+    set ::day_start $settings_val
+  }
+  $tvdiarydb close
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
 } on error { msg } {
-  # Use the default if no file.
+  # Retain the default.
+  set day_start "00:00"
 }
 
 try {
@@ -39,7 +52,7 @@ puts "
     <td><select id=\"tvdiary_day_start\" name=\"tvdiary_day_start\" class=\"ui-widget-content ui-corner-all\">
 "
 foreach time_option {"00:00" "01:00" "02:00" "03:00" "04:00" "05:00" "06:00" "07:00" "08:00"} {
-  if { $time_option == $day_start } { set f "selected" } else { set f "" }
+  if { $time_option eq $day_start } { set f "selected" } else { set f "" }
   puts "<option value=\"$time_option\" $f>$time_option</option>"
 }
 puts "

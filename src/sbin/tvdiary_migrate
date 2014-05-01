@@ -18,13 +18,14 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 set logging 1
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
+set CONF_FILEPATH "/mod/etc/tvdiary.conf"
 
 set current_time [clock seconds]
 set log_date_fmt "%d/%m/%Y-%H:%M:%S"
 set logging_time [clock format $current_time -format $log_date_fmt]
-if { $::logging } {
-  puts "\n$logging_time: tvdiary_migrate.jim"
-}
+#if { $::logging } {
+#  puts "\n$logging_time: tvdiary_migrate.jim"
+#}
 
 # --------------------------------------------------------------
 # Declare procedures
@@ -55,6 +56,8 @@ proc main {} {
 
     create_migrate_tables $tvdiarydb
 
+    migrate_conf $tvdiarydb
+    
     $tvdiarydb close
 
     #
@@ -247,5 +250,30 @@ proc create_migrate_tables { tvdiarydb } {
   }
 }
 
+#
+# Migrate the configuration file to the DB settings table.
+#
+proc migrate_conf { tvdiarydb } {
+  if { [file exists $::CONF_FILEPATH] } {
+    set day_start "00:00"
+    try {
+      set settings_fd [open $::CONF_FILEPATH r]
+      foreach line [split [read $settings_fd] "\n"] {
+        lassign $line settings_key settings_val
+        switch $settings_key {
+          "day_start" {
+            set day_start $settings_val
+            break
+          }
+        }
+      }
+      $settings_fd close
+    } on error { msg } {
+      # Use the default if no file.
+    }
+    file delete $::CONF_FILEPATH
+    set_setting $tvdiarydb "day_start" $day_start
+  }
+}
 
 main

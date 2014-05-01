@@ -2,78 +2,137 @@
 
 source /mod/webif/lib/setup
 
-jqplugin easing ui.totop iphone-style-checkboxes iajax
+jqplugin easing ui.totop iajax
 jscss calendar_params.jim style.css
+jscss jquery.tablesorter.min.js
 jscss script.js
 
 header
 
 puts {
 
-<div id="slideset1">
-<h1>TV Diary<span id="title_date"></span></h1>
-
-<div class="table_wrapper">
-  <div id="controls_panel">
-    <div id="datepicker"></div>
-    <table id="next_prev_table"><tr>
-      <td><button id="prev_day">Prev</button></td>
-      <td><button id="today">Today</button></td>
-      <td><button id="next_day">Next</button></td>
-    </tr></table>
+<div id="tvd_tabs">
+  <ul>
+    <li><a href="#daily_tab">Daily TV Diary</a></li>
+    <li><a href="#monthly_tab">Monthly Summaries</a></li>
+    <li><a href="#trends_tab">Trends</a></li>
+    <li><a href="#inventory_tab">Video Inventory</a></li>
+  </ul>
+  <div id="daily_tab">
   </div>
-</div>
+  <div id="monthly_tab">
+  </div>
+  <div id="trends_tab">
+  </div>
+  <div id="inventory_tab">
+  </div>
+</div>  
 
-<div class="table_wrapper">
-  <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
-    <div id="recorded_caption" class="outer_hdr ui-widget-header ui-corner-all">
-      Recorded
-    </div>
-    <div>
-      <div id="recorded_inner"></div>
-      <div id="recorded_spinner">
-        <img src="/img/loading.gif" alt="Processing request...">
-        Processing request...
+<div class="tvd_panels_wrapper">
+
+  <div id="daily_panel">
+    <div id="title_date"></div>
+
+    <div class="table_wrapper">
+      <div class="controls_panel">
+        <div id="daily_datepicker"></div>
+        <table id="next_prev_table"><tr>
+          <td><button id="prev_day">Prev</button></td>
+          <td><button id="today">Today</button></td>
+          <td><button id="next_day">Next</button></td>
+        </tr></table>
       </div>
     </div>
-  </div>
-  <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
-    <div id="watched_caption" class="outer_hdr ui-widget-header ui-corner-all">
-      Watched
-    </div>
-    <div>
-      <div id="watched_inner"></div>
-      <div id="watched_spinner">
-        <img src="/img/loading.gif" alt="Processing request...">
-        Processing request...
-      </div>
-    </div>
-  </div>
-</div>
-</div>
 
-<div id="slideset2">
-  <h1>TV Diary - Video Inventory</h1>
-  <div class="table_wrapper">
-    <div id="inventory_return" class="">
-      Return
-    </div>
-  </div>
-  <div class="table_wrapper">
-    <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
-      <div id="inventory_caption" class="outer_hdr ui-widget-header ui-corner-all">
-        [HDD] My Video
+    <div class="table_wrapper">
+      <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
+        <div id="recorded_caption" class="outer_hdr ui-widget-header ui-corner-all">
+          Recorded
+        </div>
+        <div>
+          <div id="recorded_inner"></div>
+          <div id="recorded_spinner">
+            <img src="/img/loading.gif" alt="Processing request...">
+            Processing request...
+          </div>
+        </div>
       </div>
-      <div>
-        <div id="inventory_inner"></div>
-        <div id="inventory_spinner">
-          <img src="/img/loading.gif" alt="Processing request...">
-          Processing request...
+      <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
+        <div id="watched_caption" class="outer_hdr ui-widget-header ui-corner-all">
+          Watched
+        </div>
+        <div>
+          <div id="watched_inner"></div>
+          <div id="watched_spinner">
+            <img src="/img/loading.gif" alt="Processing request...">
+            Processing request...
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="monthly_panel">
+
+    <div class="table_wrapper">
+      <div class="controls_panel">
+        <div id="monthly_datepicker"></div>
+      </div>
+    </div>
+
+    <div class="table_wrapper">
+      <div id="programs_outer" class="ui-widget ui-widget-content ui-corner-all">
+        <div id="programs_caption" class="outer_hdr ui-widget-header ui-corner-all">
+          Programmes
+        </div>
+        <div>
+          <div id="programs_inner"></div>
+          <div id="programs_spinner">
+            <img src="/img/loading.gif" alt="Processing request...">
+            Processing request...
+          </div>
+        </div>
+      </div>
+      <div id="channels_outer" class="ui-widget ui-widget-content ui-corner-all">
+        <div id="channels_caption" class="outer_hdr ui-widget-header ui-corner-all">
+          Channels
+        </div>
+        <div>
+          <div id="channels_inner"></div>
+          <div id="channels_spinner">
+            <img src="/img/loading.gif" alt="Processing request...">
+            Processing request...
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="trends_panel">
+    <p>TV Diary - Trends</p>
+  </div>
+
+  <div id="inventory_panel">
+    <div class="table_wrapper">
+      <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
+        <div id="inventory_caption" class="outer_hdr ui-widget-header ui-corner-all">
+          [HDD] My Video
+        </div>
+        <div>
+          <div id="inventory_inner"></div>
+          <div id="inventory_spinner">
+            <img src="/img/loading.gif" alt="Processing request...">
+            Processing request...
+          </div>
         </div>
       </div>
     </div>
   </div>
+
 </div>
+
 
 <div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
   <img src="/img/loading.gif" alt="loading">
@@ -81,4 +140,3 @@ puts {
 }
 
 footer
-
