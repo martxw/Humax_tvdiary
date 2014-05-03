@@ -20,8 +20,22 @@
 }
 
 /* Size tables, and keep them apart in different orientations */
-#recorded_outer, #watched_outer, #programs_outer, #channels_outer, #inventory_outer {
+#recorded_outer, #watched_outer, #inventory_outer {
   width: 53em;
+  float: left;
+  margin: 0 1em 1em 0;
+}
+
+/* Size tables, and keep them apart in different orientations */
+#programs_outer {
+  xxwidth: 70em;
+  float: left;
+  margin: 0 1em 1em 0;
+}
+
+/* Size tables, and keep them apart in different orientations */
+#channels_outer {
+  xxwidth: 40em;
   float: left;
   margin: 0 1em 1em 0;
 }
@@ -139,7 +153,7 @@ tr.record_event + tr.future_event td {
 }
 
 /* Progress indicators centred */
-#recorded_spinner, #watched_spinner, #inventory_spinner {
+#recorded_spinner, #watched_spinner, #programs_spinner, #channels_spinner, #inventory_spinner {
   text-align: center;
 }
 
@@ -275,32 +289,31 @@ td.inventory_dir {
 
 /* Minimal tabs */
 #tvd_tabs { 
-    background: transparent; 
-    border: none;
-  top: -1em;
+  background: transparent; 
+  border: none;
   padding: 0 0 0 0;
 } 
 #tvd_tabs .ui-widget-header { 
-    background: transparent; 
-    border: none; 
-    border-bottom: 1px solid #c0c0c0; 
-    -moz-border-radius: 0px; 
-    -webkit-border-radius: 0px; 
-    border-radius: 0px; 
+  background: transparent; 
+  border: none; 
+  border-bottom: 1px solid #c0c0c0; 
+  -moz-border-radius: 0px; 
+  -webkit-border-radius: 0px; 
+  border-radius: 0px; 
 } 
 #tvd_tabs .ui-tabs-nav .ui-state-default { 
-    background: transparent; 
-    border: none; 
+  background: transparent; 
+  border: none; 
 } 
 #tvd_tabs .ui-tabs-nav .ui-state-active { 
-    background: transparent url(uiTabsArrow.png) no-repeat bottom center; 
-    border: none; 
+  background: transparent url(uiTabsArrow.png) no-repeat bottom center; 
+  border: none; 
 } 
 #tvd_tabs .ui-tabs-nav .ui-state-default a { 
-    color: #c0c0c0; 
+  color: #c0c0c0; 
 } 
 #tvd_tabs .ui-tabs-nav .ui-state-active a { 
-    color: #000000; 
+  color: #000000; 
 }
 #tvd_tabs .ui-tabs-panel {
   padding: 0 0 0 0;
@@ -313,20 +326,24 @@ td.inventory_dir {
 }
 */
 
+/* Months dropdown selector */
+#monthly_month_selector {
+  font-size: 150%;
+  border-radius: 5px;
+  background: transparent;
+  margin: 0.3em 0 0.2em 0;
+}
 
-/* tables */
+/* Sorted tables */
 table.tablesorter {
-  font-family:arial;
-  background-color: #CDCDCD;
-  margin:10px 0pt 15px;
-  font-size: 8pt;
+  font-size: small;
   width: 100%;
   text-align: left;
 }
 table.tablesorter thead tr th, table.tablesorter tfoot tr th {
-  background-color: #e6EEEE;
+  background-color: #FFF3A9;
   border: 1px solid #FFF;
-  font-size: 8pt;
+  font-size: small;
   padding: 4px;
 }
 table.tablesorter thead tr .header {
@@ -338,11 +355,7 @@ table.tablesorter thead tr .header {
 table.tablesorter tbody td {
   color: #3D3D3D;
   padding: 4px;
-  background-color: #FFF;
   vertical-align: top;
-}
-table.tablesorter tbody tr.odd td {
-  background-color:#F0F0F6;
 }
 table.tablesorter thead tr .headerSortUp {
   background-image: url(asc.gif);
@@ -351,5 +364,24 @@ table.tablesorter thead tr .headerSortDown {
   background-image: url(desc.gif);
 }
 table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp {
-background-color: #8dbdd8;
+  background-color: #fece2f;
+}
+
+/* Auto number the first column in rows */
+table#programs_table, table#channels_table {
+  counter-reset: rowNumber;
+}
+table#programs_table tbody tr, table#channels_table tbody tr {
+  counter-increment: rowNumber;
+}
+table#programs_table tr td:first-child::before, table#channels_table tr td:first-child::before {
+  content: counter(rowNumber);
+}
+
+table.tablesorter tbody tr:nth-child(2n+1) td {
+  background-color:#cf9;
+}
+
+table.tablesorter th.header {
+  padding: 0 1.5em 0 0.2em;
 }

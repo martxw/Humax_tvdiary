@@ -24,6 +24,7 @@ var daily_start_time;
 // Year and month selectors for the monthly summary.
 var monthly_year;
 var monthly_month;
+var monthly_initialized = false;
 
 // While awaiting Ajax responses.
 var isBusyR = false;
@@ -34,7 +35,7 @@ var isBusyM = false;
 // Logging wrapper.
 //////
 function log_stuff(x) {
-  console.log(x);
+  /* console.log(x); */
   /*$.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));*/
 }
 
@@ -88,7 +89,11 @@ $(document).ready(function() {
 
         case 1:
           $("#monthly_panel").show("fade");
-          update_monthly(2014, 4);
+          if (!monthly_initialized) {
+            monthly_initialized = true;
+            $('#monthly_month_selector').val( monthly_year * 100 + monthly_month );
+            update_monthly(monthly_year, monthly_month);
+          }
           break;
 
         case 2:
@@ -154,31 +159,82 @@ $(document).ready(function() {
     });
 
   ///////////////
-  // Initialize the monthy summary panel.
+  // Initialize the monthly summary panel.
   ///////////////
-  
-  // Initialize the daily datepicker.
-  $('#monthly_datepicker').datepicker({
-    firstDay: 1,
-    dateFormat: '@',  //@=ms since 01/01/1970.
-    minDate: new Date(min_time * 1000),
-    maxDate: new Date(today_start * 1000),
-    defaultDate: new Date(today_start * 1000),
-    beforeShowDay : function(date) {
-      return [false, "", "Only the month is significant here"];
-    },
-    onChangeMonthYear: function(year, month, inst) {
-      log_stuff("Selected month " + year + " " + month + ".");
-      if (isBusyM) {
-        log_stuff("UI is busy - not changing the date to " + year + " " + month + " - restoring " + monthly_year + " " + monthly_month + ".");
-        $('#monthly_datepicker').datepicker("setDate", new new Date(year, month - 1, 1, 0, 0, 0, 0));
-      } else {
-        update_monthly(year, month);
+
+  // Initialize the months selector
+  {
+    var monthNames = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
+    var minDate =  new Date(min_time * 1000);
+    var maxDate = new Date(today_start * 1000);
+    var y = minDate.getFullYear();
+    var m = minDate.getMonth();
+    var maxY = maxDate.getFullYear();
+    var maxM = maxDate.getMonth();
+    var optionsHtml = "";
+    while (y <= maxY) {
+      while (m < 12) {
+        var val = y * 100 + m + 1;
+        optionsHtml += "<option value=\"" + val + "\">" + monthNames[m] + " " + y + "</option>";
+        m += 1;
+        if (y == maxY && m > maxM) {
+          break;
+        }
       }
+      y += 1;
+      m = 0;
     }
+    $('#monthly_month_selector').html(optionsHtml);
+    monthly_year = maxY;
+    monthly_month = maxM + 1;
+    $('#monthly_month_selector').on('change', function() {
+      var y = (($(this).val() / 100) | 0);
+      var m = (($(this).val() % 100) | 0);
+      log_stuff("Selected month " + y + " " + m + ".");
+      if (isBusyM) {
+        log_stuff("UI is busy - not changing the date. Disabling the field must have failed.");
+      } else {
+        update_monthly(y, m);
+      }
+    });
+  }
+
+  //
+  // For durations, sort on the raw number of minutes set in the "sval" attribute.
+  // TODO: Write filter instead to parse the value text itself.
+  //
+  var myTextExtraction = function(node) 
+  {
+    var sval = node.getAttribute("sval");
+    if (sval != null) {
+      return sval;
+    } else {
+      return node.innerText;
+    }
+  }
+
+  $("#programs_table").tablesorter({
+    textExtraction: myTextExtraction,
+    headers: {
+      0: {
+        sorter: false 
+      }
+    },
+    sortInitialOrder: "desc"
+  });
+  $("#channels_table").tablesorter({
+    textExtraction: myTextExtraction,
+    headers: {
+      0: {
+        sorter: false 
+      }
+    },
+    sortInitialOrder: "desc"
   });
 
+  ///////////////
   // Prepare reusable dialogue.
+  ///////////////
   var $dejavu_dialog = $('#dejavu_dialog').dialog({
     title: "D\xe9j\xe0 vu? You might have seen this show before...",
     modal: true, autoOpen: false,
@@ -930,19 +986,6 @@ $(document).ready(function() {
     });
   }
 
-  //
-  // For durations sort on the raw number of minutes.
-  //
-  var myTextExtraction = function(node) 
-  {
-    var sval = node.getAttribute("sval");
-    if (sval != null) {
-      return sval;
-    } else {
-      return node.innerText;
-    }
-  }
-
   //////
   // When the date is changed for monthly summaries.
   //////
@@ -951,22 +994,16 @@ $(document).ready(function() {
     monthly_month = month;
     log_stuff("update_month year=" + year + ", month=" + month);
 
-    // Blank the tables and show progress indicators.
-    $('#programs_inner').html("");
+    // Blank the tables and the message footer, and show progress indicators.
+    $('#programs_table tbody').html("");
+    $('#programs_table').trigger("update"); 
+    $('#programs_footer').html("");
     $('#programs_spinner').show('fast');
-    $('#channels_inner').html("");
-    $('#channels_spinner').show('fast');
 
-    // Temporary table headings.
-    //if (daily_start_time < today_start) {
-    //  $('#recorded_caption').html( "Recorded" );
-    //} else if (daily_start_time > today_start) {
-    //  $('#recorded_caption').html( "To be recorded" );
-    //} else {
-    //  $('#recorded_caption').html( "Recorded / To be recorded" );
-    //}
-    //$('#watched_caption').html( "Watched" );
-    //log_stuff("Temp caption now=" + new Date() + ", update_daily(" + new Date(chosen * 1000) + ") daily_start_time=" + new Date(daily_start_time * 1000) + ", today_start=" + new Date(today_start * 1000) + ", set caption to=" + $('#recorded_caption').html());
+    $('#channels_table tbody').html("");
+    $('#channels_table').trigger("update"); 
+    $('#channels_footer').html("");
+    $('#channels_spinner').show('fast');
 
     var m_url;
     if (typeof shapshot_time == "undefined") {
@@ -977,39 +1014,53 @@ $(document).ready(function() {
     
     // Asynchronously request the summary tables' data.
     isBusyM = true;
+    $('#monthly_month_selector').attr("disabled", "disabled");
     $.ajax({
       type: "GET",
       dataType: "json",
       url: m_url,
       success: function(data) {
         if (data.status == "OK" ) {
-          $('#programs_inner').html(monthly_json_to_programs_html(data));
-          $('#channels_inner').html(monthly_json_to_channels_html(data));
-          $("#programs_table").tablesorter({
-            textExtraction: myTextExtraction,
-            sortList: [[0,0],[1,0]]
-          });
-          $("#channels_table").tablesorter({
-            textExtraction: myTextExtraction,
-            sortList: [[0,0]]
-          });
+          if (data.programs.length > 0) {
+            $('#programs_table tbody').html(monthly_json_to_programs_html(data));
+            $("#programs_table").trigger("update");
+            // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
+            setTimeout(function(){
+              var sorting = [[1,0],[2,0]];
+              $("#programs_table").trigger("sorton",[sorting]); 
+            }, 2);
+          } else {
+            $('#programs_footer').html("<span class=\"nothing\">No data available</span>");
+          }
+
+          if (data.channels.length > 0) {
+            $('#channels_table tbody').html(monthly_json_to_channels_html(data));
+            $("#channels_table").trigger("update"); 
+            // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
+            setTimeout(function(){
+              var sorting = [[1,0]]; 
+              $("#channels_table").trigger("sorton",[sorting]); 
+            }, 2);
+          } else {
+            $('#channels_footer').html("<span class=\"nothing\">No data available</span>");
+          }
         } else {
-          $('#programs_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
-          $('#channels_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          $('#programs_footer').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          $('#channels_footer').html("<span class=\"nothing\">Error: " + data.status + "</span>");
         }
-        //apply_altrow($('#programs_inner'));
-        //apply_altrow($('#channels_inner'));
         $('#programs_spinner').hide('slow');
         $('#channels_spinner').hide('slow');
         isBusyM = false;
+        $('#monthly_month_selector').removeAttr("disabled");
       },
       error: function(_, _, e) {
         log_stuff("ajax error " + e);
-        $('#programs_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#programs_footer').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#programs_spinner').hide('slow');
-        $('#channels_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#channels_footer').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#channels_spinner').hide('slow');
         isBusyM = false;
+        $('#monthly_month_selector').removeAttr("disabled");
       }
     });
   }
@@ -1020,29 +1071,22 @@ $(document).ready(function() {
   function monthly_json_to_programs_html(data) {
     var html = "";
     var len = data.programs.length;
-    if (len < 1) {
-      html += "<span class=\"nothing\">Nothing</span>";
-    } else {
-      html += "<table id=\"programs_table\" class=\"tablesorter events_table\">";
-      //html += "<thead><tr><th>Title</th><th>Channel</th><th># Rec</th><th># Watch</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
-      html += "<thead><tr><th>Title</th><th>Channel</th><th># Recorded</th><th># Watched</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
-      html += "<tbody>";
+    for (var i = 0; i < len; i++) {
+      var program = data.programs[i];
 
-      for (var i = 0; i < len; i++) {
-        var program = data.programs[i];
-
-        html += "<tr>";
-        html += "<td>" + escapeHtml(program.title) + "</td>";
-        html += "<td>" + escapeHtml(program.channel_name) + "</td>";
-        html += "<td>" + program.record_count + "</td>";
-        html += "<td>" + program.watch_count + "</td>";
-        //html += "<td>" + program.barely_watched_count + "</td>";
-        html += "<td sval=\"" + program.scheduled_duration + "\">" + format_duration(program.scheduled_duration) + "</td>";
-        html += "<td sval=\"" + program.record_duration +"\">" + format_duration(program.record_duration) + "</td>";
-        html += "<td sval=\"" + program.watch_duration + "\">" + format_duration(program.watch_duration) + "</td>";
-        html += "</tr>";
-      }
-      html += "</tbody></table>";
+      html += "<tr>";
+      html += "<td></td>";
+      html += "<td>" + escapeHtml(program.title) + "</td>";
+      html += "<td>" + escapeHtml(program.channel_name) + "</td>";
+      html += "<td>" + program.recorded_count + "</td>";
+      html += "<td>" + program.played_count + "</td>";
+      html += "<td>" + program.live_count + "</td>";
+      html += "<td>" + program.barely_watched_count + "</td>";
+      html += "<td sval=\"" + program.scheduled_duration + "\">" + format_duration(program.scheduled_duration) + "</td>";
+      html += "<td sval=\"" + program.recorded_duration +"\">" + format_duration(program.recorded_duration) + "</td>";
+      html += "<td sval=\"" + program.played_duration + "\">" + format_duration(program.played_duration) + "</td>";
+      html += "<td sval=\"" + program.live_duration + "\">" + format_duration(program.live_duration) + "</td>";
+      html += "</tr>";
     }
     return $(html);
   }
@@ -1053,28 +1097,19 @@ $(document).ready(function() {
   function monthly_json_to_channels_html(data) {
     var html = "";
     var len = data.channels.length;
-    if (len < 1) {
-      html += "<span class=\"nothing\">Nothing</span>";
-    } else {
-      html += "<table id=\"channels_table\" class=\"tablesorter events_table\">";
-      //html += "<thead><tr><th>Channel</th><th># Recorded</th><th># Watched</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
-      html += "<thead><tr><th>Channel</th><th># Recorded</th><th># Watched</th><th>Scheduled</th><th>Recorded</th><th>Watched</th></tr></thead>";
-      html += "<tbody>";
+    for (var i = 0; i < len; i++) {
+      var channel = data.channels[i];
 
-      for (var i = 0; i < len; i++) {
-        var channel = data.channels[i];
-
-        html += "<tr>";
-        html += "<td>" + escapeHtml(channel.channel_name) + "</td>";
-        html += "<td>" + channel.record_count + "</td>";
-        html += "<td>" + channel.watch_count + "</td>";
-        //html += "<td>" + channel.barely_watched_count + "</td>";
-        html += "<td sval=\"" + channel.scheduled_duration + "\">" + format_duration(channel.scheduled_duration) + "</td>";
-        html += "<td sval=\"" + channel.record_duration + "\">" + format_duration(channel.record_duration) + "</td>";
-        html += "<td sval=\"" + channel.watch_duration + "\">" + format_duration(channel.watch_duration) + "</td>";
-        html += "</tr>";
-      }
-      html += "</tbody></table>";
+      html += "<tr>";
+      html += "<td></td>";
+      html += "<td>" + escapeHtml(channel.channel_name) + "</td>";
+      html += "<td>" + channel.recorded_count + "</td>";
+      html += "<td>" + channel.played_count + "</td>";
+      html += "<td>" + channel.live_count + "</td>";
+      html += "<td sval=\"" + channel.recorded_duration + "\">" + format_duration(channel.recorded_duration) + "</td>";
+      html += "<td sval=\"" + channel.played_duration + "\">" + format_duration(channel.played_duration) + "</td>";
+      html += "<td sval=\"" + channel.live_duration + "\">" + format_duration(channel.live_duration) + "</td>";
+      html += "</tr>";
     }
     return $(html);
   }

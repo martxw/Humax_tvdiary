@@ -75,11 +75,10 @@ puts {
 
   <div id="monthly_panel">
 
-    <div class="table_wrapper">
-      <div class="controls_panel">
-        <div id="monthly_datepicker"></div>
-      </div>
-    </div>
+    <select id="monthly_month_selector">
+    </select>
+    
+    <div class="clear"></div>
 
     <div class="table_wrapper">
       <div id="programs_outer" class="ui-widget ui-widget-content ui-corner-all">
@@ -87,7 +86,16 @@ puts {
           Programmes
         </div>
         <div>
-          <div id="programs_inner"></div>
+          <table id="programs_table" class="tablesorter events_table">
+            <thead>
+              <tr><th>#</th><th>Title</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
+            </thead>
+            <tbody>
+            </tbody>
+            <tfoot>
+            </tfoot>
+          </table>
+          <div id="programs_footer"></div>
           <div id="programs_spinner">
             <img src="/img/loading.gif" alt="Processing request...">
             Processing request...
@@ -99,7 +107,16 @@ puts {
           Channels
         </div>
         <div>
-          <div id="channels_inner"></div>
+          <table id="channels_table" class="tablesorter events_table">
+            <thead>
+              <tr><th>#</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
+            </thead>
+            <tbody>
+            </tbody>
+            <tfoot>
+            </tfoot>
+          </table>
+          <div id="channels_footer"></div>
           <div id="channels_spinner">
             <img src="/img/loading.gif" alt="Processing request...">
             Processing request...

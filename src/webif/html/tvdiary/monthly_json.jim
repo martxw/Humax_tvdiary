@@ -123,12 +123,12 @@ proc main {} {
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
   set program_records [$tvdiarydb query "
-    SELECT program_facts.fact_id, program_facts.title_id, titles.title, program_facts.channel_id, channels.channel_name, program_facts.record_count, program_facts.watch_count, program_facts.barely_watched_count, program_facts.scheduled_duration, program_facts.record_duration, program_facts.watch_duration FROM program_facts, titles, channels
+    SELECT program_facts.fact_id, program_facts.title_id, titles.title, program_facts.channel_id, channels.channel_name, program_facts.recorded_count, program_facts.played_count, program_facts.live_count, program_facts.barely_watched_count, program_facts.scheduled_duration, program_facts.recorded_duration, program_facts.played_duration, program_facts.live_duration FROM program_facts, titles, channels
     WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.title_id = titles.title_id AND program_facts.channel_id = channels.channel_id
-    ORDER BY program_facts.record_duration DESC;" $::year_selector $::month_selector]
+    ORDER BY program_facts.recorded_duration DESC;" $::year_selector $::month_selector]
 
   set channel_records [$tvdiarydb query "
-    SELECT program_facts.channel_id, channels.channel_name, SUM(program_facts.record_count) AS record_count, SUM(program_facts.watch_count) AS watch_count, SUM(program_facts.barely_watched_count) AS barely_watched_count, SUM(program_facts.scheduled_duration) AS scheduled_duration, SUM(program_facts.record_duration) AS record_duration, SUM(program_facts.watch_duration) AS watch_duration FROM program_facts, channels
+    SELECT program_facts.channel_id, channels.channel_name, SUM(program_facts.recorded_count) AS recorded_count, SUM(program_facts.played_count) AS played_count, SUM(program_facts.live_count) AS live_count, SUM(program_facts.barely_watched_count) AS barely_watched_count, SUM(program_facts.scheduled_duration) AS scheduled_duration, SUM(program_facts.recorded_duration) AS recorded_duration, SUM(program_facts.played_duration) AS played_duration, SUM(program_facts.live_duration) AS live_duration FROM program_facts, channels
     WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.channel_id = channels.channel_id
     GROUP BY program_facts.channel_id
     ORDER BY channels.channel_name;" $::year_selector $::month_selector]
@@ -178,12 +178,14 @@ proc output_records { records type } {
     }
     puts "   \"channel_id\": $record(channel_id),"
     puts "   \"channel_name\": \"[escape_json_string $record(channel_name)]\","
-    puts "   \"record_count\": $record(record_count),"
-    puts "   \"watch_count\": $record(watch_count),"
+    puts "   \"recorded_count\": $record(recorded_count),"
+    puts "   \"played_count\": $record(played_count),"
+    puts "   \"live_count\": $record(live_count),"
     puts "   \"barely_watched_count\": $record(barely_watched_count),"
     puts "   \"scheduled_duration\": $record(scheduled_duration),"
-    puts "   \"record_duration\": $record(record_duration),"
-    puts "   \"watch_duration\": $record(watch_duration)"
+    puts "   \"recorded_duration\": $record(recorded_duration),"
+    puts "   \"played_duration\": $record(played_duration),"
+    puts "   \"live_duration\": $record(live_duration)"
     puts -nonewline "  }"
 
   }
