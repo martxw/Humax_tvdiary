@@ -31,6 +31,17 @@ var isBusyR = false;
 var isBusyW = false;
 var isBusyM = false;
 
+// Monthly summary table sorting order.
+var programs_sorting = [[1,0],[2,0]];
+var channels_sorting = [[1,0]];
+
+// Program details table.
+var dv_sorting = [[2, 0]];
+var history_sorting = [[4, 0]];
+
+// Inventory modification time for optimization.
+var inventory_modified = 0;
+
 //////
 // Logging wrapper.
 //////
@@ -46,7 +57,6 @@ $(document).ready(function() {
   if (typeof shapshot_time == "undefined") {
     today_start = get_tv_day_start(new Date().getTime() / 1000, false);
   } else {
-  //  today_start = Math.floor((shapshot_time - day_start) / 86400) * 86400 + day_start;
     today_start = get_tv_day_start(shapshot_time, false);
   }
 
@@ -70,12 +80,11 @@ $(document).ready(function() {
           break;
 
         case 2:
-          $("#trends_panel").hide();
+          $("#details_panel").hide();
           break;
 
         case 3:
           $("#inventory_panel").hide();
-          $('#inventory_inner').html("");
           $('#inventory_spinner').show();
           break;
 
@@ -97,7 +106,7 @@ $(document).ready(function() {
           break;
 
         case 2:
-          $("#trends_panel").show("fade");
+          $("#details_panel").show("fade");
           break;
 
         case 3:
@@ -112,12 +121,12 @@ $(document).ready(function() {
   });
   $("#daily_panel").show();
   $("#monthly_panel").hide();
-  $("#trends_panel").hide();
+  $("#details_panel").hide();
   $("#inventory_panel").hide();
 
-  ///////////////
+  //////
   // Initialize the daily panel.
-  ///////////////
+  //////
 
   // Initialize the daily datepicker.
   $('#daily_datepicker').datepicker({
@@ -158,9 +167,9 @@ $(document).ready(function() {
       updateDate(+1);
     });
 
-  ///////////////
+  //////
   // Initialize the monthly summary panel.
-  ///////////////
+  //////
 
   // Initialize the months selector
   {
@@ -201,9 +210,8 @@ $(document).ready(function() {
 
   //
   // For durations, sort on the raw number of minutes set in the "sval" attribute.
-  // TODO: Write filter instead to parse the value text itself.
   //
-  var myTextExtraction = function(node) 
+  var sortValueTextExtraction = function(node) 
   {
     var sval = node.getAttribute("sval");
     if (sval != null) {
@@ -214,41 +222,47 @@ $(document).ready(function() {
   }
 
   $("#programs_table").tablesorter({
-    textExtraction: myTextExtraction,
+    textExtraction: sortValueTextExtraction,
     headers: {
       0: {
         sorter: false 
       }
     },
     sortInitialOrder: "desc"
+  }).bind("sortEnd",function() {
+      programs_sorting = this.config.sortList;
   });
   $("#channels_table").tablesorter({
-    textExtraction: myTextExtraction,
+    textExtraction: sortValueTextExtraction,
     headers: {
       0: {
         sorter: false 
       }
     },
     sortInitialOrder: "desc"
+  }).bind("sortEnd",function() { 
+      channels_sorting = this.config.sortList;
   });
 
+  $('#prev_month').button()
+    .click(function() {
+      updateMonth(-1);
+    });
+  $('#latest_month').button()
+    .click(function() {
+      updateMonth(0);
+    });
+  $('#next_month').button()
+    .click(function() {
+      updateMonth(+1);
+    });
+
   ///////////////
-  // Prepare reusable dialogue.
+  // Initialize the details panel.
   ///////////////
-  var $dejavu_dialog = $('#dejavu_dialog').dialog({
-    title: "D\xe9j\xe0 vu? You might have seen this show before...",
-    modal: true, autoOpen: false,
-    height: 500, width: 600,
-    show: 'scale', hide: 'fade',
-    draggable: false, resizable: false,
-    buttons: { "Close" : function() {
-      $(this).dialog('close');
-    } },
-    close: function(e,u) {
-      $('#dejavu_dialog').empty().html('<img src="/img/loading.gif" alt="loading">');
-    }
-  });
-  
+  $('#details_spinner').hide();
+
+
   //////
   // Round the given time to the start of the TV day. The input andoutput times are UTC epoch values.
   // Since the start of TV day is in the local time, convert from UTC first, and restore to UTC after rounding.
@@ -290,6 +304,25 @@ $(document).ready(function() {
         log_stuff("Simulated datepicker.onSelect(" + new Date(newTime) + ")");
         var chosen = get_tv_day_start(newTime / 1000, true);
         update_daily(chosen);
+      }
+    }
+  }
+  
+  //////
+  // Process the buttons in monthly summary.
+  //////
+  function updateMonth(direction) {
+    if (!isBusyM) {
+      var selIndex = $('#monthly_month_selector').prop("selectedIndex");
+      var maxIndex = $('#monthly_month_selector option').size() - 1;
+      var newIndex;
+      if (direction == 0) {
+        newIndex = maxIndex;
+      } else {
+        newIndex = selIndex + direction;
+      }
+      if (newIndex >= 0 && newIndex <= maxIndex && newIndex != selIndex) {
+        $('#monthly_month_selector').prop("selectedIndex", newIndex).change();
       }
     }
   }
@@ -456,9 +489,9 @@ $(document).ready(function() {
 
       var prog_id = $(this).attr('prog_id');
       if (typeof shapshot_time == "undefined") {
-        var url = '/tvdiary/dejavu_json.jim?program_id=' + prog_id;
+        var url = '/tvdiary/history_json.jim?program_id=' + prog_id;
       } else {
-        var url = '/tvdiary/dejavu_dummy.json?nocache';
+        var url = '/tvdiary/history_dummy.json?nocache';
       }
       $.ajax({
         type: "GET",
@@ -466,33 +499,65 @@ $(document).ready(function() {
         url: url,
         success: function(data) {
           if (data.status == "OK" ) {
-            $dejavu_dialog.html(dejavu_json_to_html(data));
+            $('#details_inner').html(history_json_to_html(data, false));
           } else {
-            $dejavu_dialog.html("<span class=\"nothing\">Error: " + data.status + "</span>");
+            $('#details_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
           }
+          $('#details_spinner').hide('slow');
+          
+          
+          var myTextExtraction = function(node) 
+          {
+            var sval = node.getAttribute("sval");
+            if (sval != null) {
+              return sval;
+            } else {
+              return node.innerText;
+            }
+          }
+
+          $("#dv_table").tablesorter({
+            textExtraction: sortValueTextExtraction,
+            sortInitialOrder: "desc"
+          }).bind("sortEnd",function() {
+              dv_sorting = this.config.sortList;
+          });
+          $("#dv_table").trigger("sorton",[dv_sorting]); 
+          
         },
         error: function(_, _, e) {
           log_stuff("ajax error " + e);
-          $dejavu_dialog.html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+          $('#details_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+          $('#details_spinner').hide('slow');
         }
       });
 
-      $dejavu_dialog.dialog('open');
+      $("#tvd_tabs").tabs( "option", "active", 2 );
     });
   }
 
   //////
-  // Render dialog HTML from JSON.
+  // Render history HTML from JSON.
   //////
-  function dejavu_json_to_html(data) {
+  function history_json_to_html(data, wide) {
     var html = "";
+    html += "<div id=\"dv_outer\">";
+    html += "<div class=\"dv_description\">You may have seen this programme before. Its title and synopsis appear " + data.events.length + " times in your TV diary.</div>";
     html += "<div class=\"dv_heading\">";
     html += "<span class=\"tvtitle\">" + escapeHtml(data.title) + "</span>";
-    if (data.synopsis != "") {
+    if (!wide) {
       html += "<span class=\"tvsynopsis\">" + escapeHtml(data.synopsis) + "</span>";
     }
     html += "</div>";
-    html += "<table class=\"dv_table\">";
+    html += "<table id=\"dv_table\" class=\"tablesorter events_table\">";
+    html += "<thead>";
+    if (wide) {
+      html += "<tr><th>Channel</th><th>Action</th><th>Date & Time</th><th>Title</th><th>Synopsis</th><th>Duration</th></tr>";
+    } else {
+      html += "<tr><th>Channel</th><th>Action</th><th>Date & Time</th><th>Duration</th></tr>";
+    }
+    html += "</thead>";
+    html += "<tbody>";
     for (var i = 0, len = data.events.length; i < len; i++) {
       var event = data.events[i];
       var type_icon;
@@ -513,25 +578,38 @@ $(document).ready(function() {
 
       html += "<tr class=\"dv_row\">";
 
-      html += "<td class=\"dv_type\">";
+      html += "<td class=\"dv_channel\">";
+      html += "<div>" + escapeHtml(event.channel_name) + "</div>";
+      html += "</td>";
+
+      html += "<td class=\"dv_type\" sval=\"" + event.type + "\">";
       html += "<img src=\"" + type_icon + "\" width=22 height=22 alt=\"" + event.type + "\" title=\"" + event.type + "\"/>";
       html += "</td>";
 
-      html += "<td class=\"dv_date\">";
-      html += formatDateTime(event.start);
+      html += "<td class=\"dv_datetime\" sval=\"" + event.start + "\">";
+      html += "<span class=\"dv_date\">" + formatDate(event.start) + "</span><span class=\"dv_time\">" + formatTime(event.start) + "</span>";
       html += "</td>";
+      
+      if (wide) {
+        html += "<td class=\"dv_title\">";
+        html += "<div>" + escapeHtml(event.title) + "</div>";
+        html += "</td>";
+        html += "<td class=\"dv_synopsis\">";
+        html += "<div>" + escapeHtml(event.synopsis) + "</div>";
+        html += "</td>";
+      }
 
       html += "<td class=\"dv_duration\">";
       html += duration + (duration == 1 ? " min" : " mins");
       html += "</td>";
 
-      html += "<td class=\"dv_channel\">";
-      html += "<div>" + escapeHtml(event.channel_name) + "</div>";
-      html += "</td>";
-
       html += "</tr>";
     }
+    html += "</tbody>";
+    html += "<tfoot>";
+    html += "</tfoot>";
     html += "</table>";
+    html += "</div>";
     return $(html);
   }
   
@@ -551,7 +629,7 @@ $(document).ready(function() {
   //////
   function update_inventory() {
     if (typeof shapshot_time == "undefined") {
-      var url = '/tvdiary/inventory_json.jim';
+      var url = '/tvdiary/inventory_json.jim?modified=' + inventory_modified;
     } else {
       var url = '/tvdiary/inventory_dummy.json?nocache';
     }
@@ -563,6 +641,9 @@ $(document).ready(function() {
         if (data.status == "OK" ) {
           $('#inventory_inner').html(inventory_json_to_html(data));
           bind_dejavu($('#inventory_inner'));
+          inventory_modified = data.modified;
+        } else if (data.status == "UNMODIFIED") {
+          // NOP - the latest data is already visible.
         } else if (data.status == "EMPTY" || data.events.length == 0) {
           $('#inventory_inner').html("<span class=\"nothing\">Nothing</span>");
         } else {
@@ -684,6 +765,24 @@ $(document).ready(function() {
   }
 
   //////
+  // Format the date like "Sat 7 Dec 2013"
+  //////
+  function formatDate(t) {
+    var d = new Date(t * 1000);
+    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
+    return $.datepicker.formatDate("D d M yy", d);
+  }
+  
+  //////
+  // Format the time like "2:04"
+  //////
+  function formatTime(t) {
+    var d = new Date(t * 1000);
+    t = (d.getTime() - d.getTimezoneOffset() * 60000) / 1000;
+    return format_duration(Math.floor((t % 86400) / 60));
+  }
+  
+  //////
   // Format the date and time like "Sat 7 Dec 2013 2:04"
   //////
   function formatDateTime(t) {
@@ -699,15 +798,6 @@ $(document).ready(function() {
     var d = new Date(t * 1000);
     d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
     return $.datepicker.formatDate("dd/mm ", d);
-  }
-  
-  //////
-  // Format the time like "2:04"
-  //////
-  function formatTime(t) {
-    var d = new Date(t * 1000);
-    t = (d.getTime() - d.getTimezoneOffset() * 60000) / 1000;
-    return format_duration(Math.floor((t % 86400) / 60));
   }
   
   //////
@@ -1023,11 +1113,11 @@ $(document).ready(function() {
         if (data.status == "OK" ) {
           if (data.programs.length > 0) {
             $('#programs_table tbody').html(monthly_json_to_programs_html(data));
+            bind_program_history($('#programs_table'));
             $("#programs_table").trigger("update");
             // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
             setTimeout(function(){
-              var sorting = [[1,0],[2,0]];
-              $("#programs_table").trigger("sorton",[sorting]); 
+              $("#programs_table").trigger("sorton",[programs_sorting]); 
             }, 2);
           } else {
             $('#programs_footer').html("<span class=\"nothing\">No data available</span>");
@@ -1038,8 +1128,7 @@ $(document).ready(function() {
             $("#channels_table").trigger("update"); 
             // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
             setTimeout(function(){
-              var sorting = [[1,0]]; 
-              $("#channels_table").trigger("sorton",[sorting]); 
+              $("#channels_table").trigger("sorton",[channels_sorting]); 
             }, 2);
           } else {
             $('#channels_footer').html("<span class=\"nothing\">No data available</span>");
@@ -1066,6 +1155,63 @@ $(document).ready(function() {
   }
 
   //////
+  // Bind click handler to all program history links.
+  //////
+  function bind_program_history(el) {
+    $('a.history_link', el).click(function(e) {
+      e.preventDefault();
+
+      var title_id = $(this).attr('title_id');
+      var channel_id = $(this).attr('channel_id');
+      if (typeof shapshot_time == "undefined") {
+        var url = '/tvdiary/history_json.jim?title_id=' + title_id + '&channel_id=' + channel_id;
+      } else {
+        var url = '/tvdiary/history_dummy.json?nocache';
+      }
+      $.ajax({
+        type: "GET",
+        dataType: "json",
+        url: url,
+        success: function(data) {
+          if (data.status == "OK" ) {
+            $('#details_inner').html(history_json_to_html(data, true));
+          } else {
+            $('#details_inner').html("<span class=\"nothing\">Error: " + data.status + "</span>");
+          }
+          $('#details_spinner').hide('slow');
+          
+          
+          var myTextExtraction = function(node) 
+          {
+            var sval = node.getAttribute("sval");
+            if (sval != null) {
+              return sval;
+            } else {
+              return node.innerText;
+            }
+          }
+
+          $("#dv_table").tablesorter({
+            textExtraction: sortValueTextExtraction,
+            sortInitialOrder: "desc"
+          }).bind("sortEnd",function() {
+              dv_sorting = this.config.sortList;
+          });
+          $("#dv_table").trigger("sorton",[dv_sorting]); 
+          
+        },
+        error: function(_, _, e) {
+          log_stuff("ajax error " + e);
+          $('#details_inner').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+          $('#details_spinner').hide('slow');
+        }
+      });
+
+      $("#tvd_tabs").tabs( "option", "active", 2 );
+    });
+  }
+
+  //////
   // Render monthly programs table HTML from JSON.
   //////
   function monthly_json_to_programs_html(data) {
@@ -1076,7 +1222,7 @@ $(document).ready(function() {
 
       html += "<tr>";
       html += "<td></td>";
-      html += "<td>" + escapeHtml(program.title) + "</td>";
+      html += "<td><a class=\"history_link\" title_id=\"" + program.title_id + "\" channel_id=\"" + program.channel_id + "\" href=\"#\">" + escapeHtml(program.title) + "</a></td>";
       html += "<td>" + escapeHtml(program.channel_name) + "</td>";
       html += "<td>" + program.recorded_count + "</td>";
       html += "<td>" + program.played_count + "</td>";
@@ -1149,3 +1295,4 @@ $(document).ready(function() {
   // Last thing to do when the page loads: show today's details.
   update_daily(today_start);
 });
+// End of $(document).ready(function() {})

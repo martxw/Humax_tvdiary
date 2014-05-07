@@ -31,15 +31,6 @@ if { $::logging } {
 # --------------------------------------------------------------
 
 #
-# Create or open the database file.
-#
-proc openDB {} {
-  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-
-  return $tvdiarydb;
-}
-
-#
 # Main
 #
 proc main {} {
@@ -51,18 +42,30 @@ proc main {} {
       throw "Cannot acquire exclusive lock for tvdiary.tb."
     }
 
-    set tvdiarydb [openDB]
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
     set settings_val [get_setting $tvdiarydb "day_start"]
     if { $settings_val eq "" } {
+      set ::day_start_hour 0
+      set ::day_start_min 0
       set ::day_start 0
     } else {
       set parts [split $settings_val ":"]
-      set ::day_start [expr ([lindex $parts 0] * 60 + [lindex $parts 1]) * 60]
+      set ::day_start_hour [lindex $parts 0]
+      set ::day_start_min [lindex $parts 1]
+      set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
     }
-    puts "day_start set to $::day_start"
 
-    aggregate $tvdiarydb
+    set settings_val [get_setting $tvdiarydb "completed_aggregate_year_month"]
+    if { $settings_val eq "" } {
+      set start_year_month 201301
+    } else {
+      set start_year_month settings_val
+    }
+
+    test_date_converter
+
+    aggregate $tvdiarydb $start_year_month
 
     $tvdiarydb close
 
@@ -82,24 +85,31 @@ proc main {} {
 #
 # Calculate the aggregated summary statistics.
 #
-proc aggregate { tvdiarydb } {
+proc aggregate { tvdiarydb start_year_month} {
 
   # TODO: Move table creation to migration code. Only here for development.
-  # Program fact table. The year and month are dimensions, as are the title and channel IDs.
+  # Program fact table. The year and month dimensions are combined into a single integer (eg 201312) for ease of comparison. The title and channel IDs are also dimensions.
   $tvdiarydb query "DROP TABLE IF EXISTS program_facts;"
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS program_facts(fact_id INTEGER PRIMARY KEY, year INTEGER, month INTEGER, title_id INTEGER, channel_id INTEGER, recorded_count INTEGER, played_count INTEGER, live_count INTEGER, scheduled_duration INTEGER, recorded_duration INTEGER, played_duration INTEGER, live_duration INTEGER, barely_watched_count INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_year ON program_facts (year);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_month ON program_facts (month);"
+  $tvdiarydb query "CREATE TABLE IF NOT EXISTS program_facts(fact_id INTEGER PRIMARY KEY, year_month INTEGER, title_id INTEGER, channel_id INTEGER, recorded_count INTEGER, played_count INTEGER, live_count INTEGER, scheduled_duration INTEGER, recorded_duration INTEGER, played_duration INTEGER, live_duration INTEGER, barely_watched_count INTEGER);"
+  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_year_month ON program_facts (year_month);"
   $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_title_id ON program_facts (title_id);"
   $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
 
+  # Purge aggregated facts from previously incomplete months.
+  $tvdiarydb query "DELETE FROM program_facts WHERE year_month > %s;" $start_year_month
+  set changes [$tvdiarydb changes]
+  puts "Purged $changes program_facts rows."
+
+  # The activities use seconds from UTC epoc, so convert from local start of TV day year_month.
+  set query_start_time [get_tv_month_time $start_year_month]
+  
   # Get complete set of records, sorted so activities for a single program are adjacent in type and time order.
   set records [$tvdiarydb query "
     SELECT programs.program_id, programs.title_id, programs.channel_id, activities.type, activities.start, activities.end, programs.duration AS scheduled_duration
     FROM programs, activities
-    WHERE programs.program_id = activities.program_id
+    WHERE programs.program_id = activities.program_id AND activities.start > %s
     ORDER BY programs.program_id, activities.start
-  "]
+  " $query_start_time]
 
   # Accumulate the details to be inserted into the facts table. Ajacent activities for the same program on the same day have their durations combined.
   # This ensures a single program recording split in two get counted as one. The type field in the accumlated record is useless.
@@ -107,8 +117,6 @@ proc aggregate { tvdiarydb } {
   set ::accumulated_record {}
 
   foreach record $records {
-    puts "record:$record"
-
     # Calculate the durations & count for this activity.
     if { $record(type) eq "R" } {
       set record(recorded_duration) [expr ($record(end) - $record(start)) / 60]
@@ -135,10 +143,7 @@ proc aggregate { tvdiarydb } {
 
     # Get the date for the record.
     set date_parts [get_tv_date $record(start)]
-    puts "Converted date=$date_parts"
-    set record(year) [lindex $date_parts 0]
-    set record(month) [lindex $date_parts 1]
-    set record(day) [lindex $date_parts 2]
+    set record(year_month) [expr ([lindex $date_parts 0] * 100) + [lindex $date_parts 1]]
 
     if { [llength $::accumulated_record] } {
       if { [is_extension $record] } {
@@ -170,8 +175,7 @@ proc aggregate { tvdiarydb } {
 #
 proc is_extension { record } {
   if { $::accumulated_record(program_id) == $record(program_id)
-    && $::accumulated_record(year) == $record(year)
-    && $::accumulated_record(month) == $record(month) } {
+    && $::accumulated_record(year_month) == $record(year_month) } {
     return 1
   } else {
     return 0
@@ -195,21 +199,16 @@ proc combine_accumulated { record } {
 # Add the accumulated record to the database.
 #
 proc save_accumulated { tvdiarydb } {
-  puts "::accumulated_record:$::accumulated_record"
   if { $::accumulated_record(played_duration) + $::accumulated_record(live_duration) < ($::accumulated_record(scheduled_duration) / 2) } {
-puts "Barely watched $::accumulated_record(played_duration) + $::accumulated_record(live_duration) < $::accumulated_record(scheduled_duration) / 2"
     set barely_watched_count 1
   } else {
-puts "NOT barely watched"
     set barely_watched_count 0
   }
 
   # Fetch any existing record having the same dimensions - ie same program in same time period - and combine with the accumulated record.
-  set _facts [$tvdiarydb query "SELECT fact_id, recorded_count, played_count, live_count, scheduled_duration, recorded_duration, played_duration, live_duration, barely_watched_count FROM program_facts WHERE year = $::accumulated_record(year) AND month = $::accumulated_record(month) AND title_id = $::accumulated_record(title_id) AND channel_id = $::accumulated_record(channel_id)"]
-puts "Length of returned _facts: [llength $_facts]"
+  set _facts [$tvdiarydb query "SELECT fact_id, recorded_count, played_count, live_count, scheduled_duration, recorded_duration, played_duration, live_duration, barely_watched_count FROM program_facts WHERE year_month = $::accumulated_record(year_month) AND title_id = $::accumulated_record(title_id) AND channel_id = $::accumulated_record(channel_id)"]
   if { [llength $_facts] eq 1 } {
     set facts [lindex $_facts 0]
-puts "Returned facts=$facts"
     set recorded_count [expr $::accumulated_record(recorded_count) + $facts(recorded_count)]
     set played_count [expr $::accumulated_record(played_count) + $facts(played_count)]
     set live_count [expr $::accumulated_record(live_count) + $facts(live_count)]
@@ -223,9 +222,9 @@ puts "Returned facts=$facts"
       " $recorded_count $played_count $live_count $scheduled_duration $recorded_duration $played_duration $live_duration $barely_watched_count $facts(fact_id)
   } else {
     $tvdiarydb query "
-      INSERT INTO program_facts (year, month, title_id, channel_id, recorded_count, played_count, live_count, scheduled_duration, recorded_duration, played_duration, live_duration, barely_watched_count)
-      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-      " $::accumulated_record(year) $::accumulated_record(month) $::accumulated_record(title_id) $::accumulated_record(channel_id) $::accumulated_record(recorded_count) $::accumulated_record(played_count) $::accumulated_record(live_count) $::accumulated_record(scheduled_duration) $::accumulated_record(recorded_duration) $::accumulated_record(played_duration) $::accumulated_record(live_duration) $barely_watched_count
+      INSERT INTO program_facts (year_month, title_id, channel_id, recorded_count, played_count, live_count, scheduled_duration, recorded_duration, played_duration, live_duration, barely_watched_count)
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+      " $::accumulated_record(year_month) $::accumulated_record(title_id) $::accumulated_record(channel_id) $::accumulated_record(recorded_count) $::accumulated_record(played_count) $::accumulated_record(live_count) $::accumulated_record(scheduled_duration) $::accumulated_record(recorded_duration) $::accumulated_record(played_duration) $::accumulated_record(live_duration) $barely_watched_count
   }
 }
 
@@ -240,8 +239,32 @@ proc get_tv_date { t } {
   set day_time [expr ([lindex $locparts 3] * 60 + [lindex $locparts 4]) * 60]
   if { $day_time < $::day_start } {
     set locparts [split [clock format [expr $t - $::day_start] -format "%Y,%m,%d,%H,%M"] ","]
+    puts "Adjusted day time for DST $locparts"
   }
   return [list [lindex $locparts 0] [lindex $locparts 1] [lindex $locparts 2] ]
+}
+
+#
+# Convert
+#
+proc get_tv_month_time { year_month } {
+  set year [expr int( $year_month / 100)]
+  set month [expr int( $year_month % 100)]
+  set date_str "$year $month 1 $::day_start_hour $::day_start_min 0"
+  puts "get_tv_month_time { $year_month } => $date_str"
+  set result [clock scan $date_str -format "%Y %m %d %H %M %S"]
+  puts "get_tv_month_time { $year_month } => $date_str => $result = [clock format $result]"
+  return $result
+}
+
+proc test_date_converter {} {
+  for {set y 2013} {$y < 2015} {incr y} {
+    for {set m 1} {$m <= 12} {incr m} {
+      set ym [expr $y * 100 + $m]
+      puts "Test month $y $m, $ym"
+      set r [get_tv_month_time $ym]
+    }
+  }
 }
 
 main

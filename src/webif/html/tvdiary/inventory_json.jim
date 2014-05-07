@@ -4,12 +4,14 @@
 # Render the details of the .ts video files under the My Video directory.
 # Called over CGI to update a page, or as a CLI for hosting on a different server.
 # After successfully rendering the data, the value "status" is set to "OK".
-# If there is an error, "status" is set to "<error message>".
+# If the modified parameter is supplied and the inventory is no newer, status will
+# be set to "UNMODIFIED". If there is an error, "status" is set to "<error message>".
 # Clients should therefore check "status" first. If there is a serious server error part way
 # through rendering, the JSON may be malformed and not parsable.
 #
-# CGI usage: /tvdiary/inventory_json.jim
+# CGI usage: /tvdiary/inventory_json.jim[?modified=<time>]
 # CLI usage: inventory_json.jim
+#   <time> = optional timestamp of current inventory results held by the client.
 #
 # Author: Martin Wink, 2014.
 #
@@ -41,6 +43,7 @@ if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
 case $runmode {
   cgi {
     cgi_input
+    set clients_modified [cgi_get modified]
     httpheader "application/json"
   }
   cli {
@@ -136,9 +139,7 @@ proc output_record { record } {
 proc main {} {
   # begin_debug
   #  puts "/* Parameters:
-  #  time_start=$::time_start=[clock format $::time_start]
-  #  time_end=$::time_end=[clock format $::time_end]
-  #  type=$::type */"
+  #  clients_modified=$::clients_modified */"
   # end_debug
 
   #
@@ -163,19 +164,36 @@ proc main {} {
   #
   update_inventory $tvdiarydb [system mediaroot] [system dustbin]
 
+  set last_modified [get_setting $tvdiarydb "inventory_modified"]
+
   #
-  # Query the inventory for generating JSON.
-  #
-  set records [$tvdiarydb query "
-    SELECT i.inventory_id, i.flag, i.directory, i.filename, i.size, c.channel_name, t.title, s.synopsis, i.event_start, i.event_end, i.scheduled_start, i.scheduled_duration,
-    (SELECT COUNT(*) FROM activities, programs
-      WHERE programs.start = i.scheduled_start AND programs.channel_id = i.channel_id
-        AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
-    (SELECT program_id FROM programs WHERE programs.title_id = i.title_id AND programs.synopsis_id = i.synopsis_id AND programs.start != i.scheduled_start) AS repeat_id
-    FROM inventory i, channels c, titles t, synopses s
-    WHERE c.channel_id = i.channel_id AND t.title_id = i.title_id AND s.synopsis_id  = i.synopsis_id
-    ORDER BY directory, event_start DESC, title"]
-  
+  # Check whether to short-circuit the full results if the client already has the data.
+  set short_circuit 0
+  if { $::clients_modified } {
+    if { $::clients_modified == $last_modified } {
+      set short_circuit 1
+      puts "{"
+      puts " \"modified\": $last_modified,"
+      puts " \"status\": \"UNMODIFIED\""
+      puts "}"
+    }
+  }
+
+  if { !$short_circuit } {
+    #
+    # Query the inventory for generating JSON.
+    #
+    set records [$tvdiarydb query "
+      SELECT i.inventory_id, i.flag, i.directory, i.filename, i.size, c.channel_name, t.title, s.synopsis, i.event_start, i.event_end, i.scheduled_start, i.scheduled_duration,
+      (SELECT COUNT(*) FROM activities, programs
+        WHERE programs.start = i.scheduled_start AND programs.channel_id = i.channel_id
+          AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
+      (SELECT program_id FROM programs WHERE programs.title_id = i.title_id AND programs.synopsis_id = i.synopsis_id AND programs.start != i.scheduled_start) AS repeat_id
+      FROM inventory i, channels c, titles t, synopses s
+      WHERE c.channel_id = i.channel_id AND t.title_id = i.title_id AND s.synopsis_id  = i.synopsis_id
+      ORDER BY directory, event_start DESC, title"]
+  }
+
   # Finished with the DB.
   $tvdiarydb close
 
@@ -184,23 +202,26 @@ proc main {} {
   #
   release_lock tvdiary_db
   
-  puts "{"
-  puts -nonewline " \"events\": \["
-  set comma 0
-  foreach record $records {
-    if { $comma } {
-      puts ","
-    } else {
-      puts ""
-      set comma 1
+  if { !$short_circuit } {
+    puts "{"
+    puts -nonewline " \"events\": \["
+    set comma 0
+    foreach record $records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+      output_record $record
     }
-    output_record $record
-  }
-  puts ""
-  puts " \],"
+    puts ""
+    puts " \],"
 
-  puts " \"status\": \"OK\""
-  puts "}"
+    puts " \"modified\": $last_modified,"
+    puts " \"status\": \"OK\""
+    puts "}"
+  }
 }
 
 if { $runmode == "cgi" } {

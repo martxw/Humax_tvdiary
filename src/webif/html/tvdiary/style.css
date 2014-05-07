@@ -20,7 +20,7 @@
 }
 
 /* Size tables, and keep them apart in different orientations */
-#recorded_outer, #watched_outer, #inventory_outer {
+#recorded_outer, #watched_outer, #dv_outer, #inventory_outer {
   width: 53em;
   float: left;
   margin: 0 1em 1em 0;
@@ -28,14 +28,12 @@
 
 /* Size tables, and keep them apart in different orientations */
 #programs_outer {
-  xxwidth: 70em;
   float: left;
   margin: 0 1em 1em 0;
 }
 
 /* Size tables, and keep them apart in different orientations */
 #channels_outer {
-  xxwidth: 40em;
   float: left;
   margin: 0 1em 1em 0;
 }
@@ -243,11 +241,6 @@ td.event_flags {
   right: 0;
 }
 
-#dejavu_dialog {
-  font-size: small;
-  line-height: 1.3em;
-}
-
 div.dv_heading {
 }
 
@@ -319,12 +312,10 @@ td.inventory_dir {
   padding: 0 0 0 0;
 }
 
-/* Date picker for monthy summary 
-#monthly_datepicker .ui-datepicker table
-{
-  display:none;
+/* Month dropdown and buttons */
+monthly_next_prev_table {
+  margin: 0 1em 0.3em 0;
 }
-*/
 
 /* Months dropdown selector */
 #monthly_month_selector {
@@ -384,4 +375,12 @@ table.tablesorter tbody tr:nth-child(2n+1) td {
 
 table.tablesorter th.header {
   padding: 0 1.5em 0 0.2em;
+}
+
+#dv_table {
+  width: auto;
+}
+
+.dv_date, .dv_time {
+  display: block;
 }

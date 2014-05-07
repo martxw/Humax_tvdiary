@@ -15,14 +15,14 @@ puts {
   <ul>
     <li><a href="#daily_tab">Daily TV Diary</a></li>
     <li><a href="#monthly_tab">Monthly Summaries</a></li>
-    <li><a href="#trends_tab">Trends</a></li>
+    <li><a href="#details_tab">Programme Details</a></li>
     <li><a href="#inventory_tab">Video Inventory</a></li>
   </ul>
   <div id="daily_tab">
   </div>
   <div id="monthly_tab">
   </div>
-  <div id="trends_tab">
+  <div id="details_tab">
   </div>
   <div id="inventory_tab">
   </div>
@@ -75,8 +75,18 @@ puts {
 
   <div id="monthly_panel">
 
-    <select id="monthly_month_selector">
-    </select>
+    <table id="monthly_next_prev_table">
+      <tr>
+        <td colspan=3>
+          <select id="monthly_month_selector"></select>
+        </td>
+      </tr>
+      <tr>
+        <td><button id="prev_month">Prev</button></td>
+        <td><button id="latest_month">Latest</button></td>
+        <td><button id="next_month">Next</button></td>
+      </tr>
+    </table>
     
     <div class="clear"></div>
 
@@ -127,11 +137,20 @@ puts {
 
   </div>
 
-  <div id="trends_panel">
-    <p>TV Diary - Trends</p>
+  <div id="details_panel">
+    <div>
+      <div id="details_inner">
+        <p>Nothing selected yet. (TODO)</p>
+      </div>
+      <div id="details_spinner">
+        <img src="/img/loading.gif" alt="Processing request...">
+        Processing request...
+      </div>
+    </div>
   </div>
 
   <div id="inventory_panel">
+    <p>The following videos are available. Deleted videos aren't included.</p>
     <div class="table_wrapper">
       <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
         <div id="inventory_caption" class="outer_hdr ui-widget-header ui-corner-all">
@@ -150,10 +169,6 @@ puts {
 
 </div>
 
-
-<div id="dejavu_dialog" title="D&eacute;j&agrave; vu?">
-  <img src="/img/loading.gif" alt="loading">
-</div>
 }
 
 footer

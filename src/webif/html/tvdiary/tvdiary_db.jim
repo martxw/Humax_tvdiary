@@ -115,9 +115,11 @@ proc check_entry { tvdiarydb directory filename size } {
 
 #
 # Update the cache recursively, starting at this directory.
+# Returns 1 if any modifications were made, otherwise 0.
 #
 proc update_inventory_dir { tvdiarydb directory dustbin } {
 #  puts "//[clock seconds]: update_inventory_dir $tvdiarydb $directory $dustbin"
+  set modified 0
   set files [glob -nocomplain -directory $directory *]
   foreach filename $files {
     set filepath "$directory/$filename"
@@ -126,18 +128,23 @@ proc update_inventory_dir { tvdiarydb directory dustbin } {
       set id [check_entry $tvdiarydb $directory $filename [file size $filepath]]
       if { $id != -1} {
         $tvdiarydb query "UPDATE inventory SET flag = 1 WHERE inventory_id = %s" $id
+        # Found existing entry, so not modified.
 #        puts "//[clock seconds]: Set inventory flag for: $id"
       } else {
+        set modified 1
         add_to_cache $tvdiarydb $directory $filename
       }
     } elseif { [file isdirectory $filepath] } {
         if {$filepath ne $dustbin} {
-          update_inventory_dir $tvdiarydb $filepath $dustbin
+          if { [update_inventory_dir $tvdiarydb $filepath $dustbin] } {
+            set modified 1
+          }
         }
     } else {
       #puts "//[clock seconds]: Ignoring file $filepath"
     }
   }
+  return $modified
 }
 
 proc get_setting { tvdiarydb name } {
@@ -205,11 +212,10 @@ proc get_synopsis_id { tvdiarydb synopsis } {
 #
 proc update_inventory { tvdiarydb directory dustbin} {
 #  puts "//[clock seconds]: update_inventory started."
+  set modified 0
 
   # Check for recent update
   set last_update [get_setting $tvdiarydb "inventory_update"]
-#  if {$last_update eq "" } {set last_update 0}
-#  puts "//[clock seconds]: last_update=$last_update and (\[clock seconds\] - \$last_update)=[expr [clock seconds] - $last_update]."
   if {$last_update eq "" || ([clock seconds] - $last_update) > 60} {
     # Clear the flags before scanning the disk.
     $tvdiarydb query "UPDATE inventory SET flag = 0;"
@@ -217,13 +223,21 @@ proc update_inventory { tvdiarydb directory dustbin} {
 #    puts "//[clock seconds]: Cleared $changes inventory flags."
   
     # Recursive directory search, setting the flag if present, or adding rows if not present.
-    update_inventory_dir $tvdiarydb $directory $dustbin
+    if { [update_inventory_dir $tvdiarydb $directory $dustbin] } {
+      set modified 1
+    }
 
     # Purge obsolete cache entries.
     $tvdiarydb query "DELETE FROM inventory WHERE flag = 0;"
     set changes [$tvdiarydb changes]
+    if { $changes > 0 } {
+      set modified 1
+    }
 #    puts "//[clock seconds]: Deleted $changes obsolete inventory entries."
     set_setting $tvdiarydb "inventory_update" [clock seconds]
+    if { $modified } {
+      set_setting $tvdiarydb "inventory_modified" [clock seconds]
+    }
   }
 #  puts "//[clock seconds]: update_inventory finished."
 }

@@ -268,8 +268,8 @@ proc add_future_event { tvdiarydb event } {
   # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
   if { [$event get ersvtype] == 3 } {
     set ucRecKind [$event get ucRecKind]
-    # 1 == one-off, 4 == series.
-    if { $ucRecKind == 1 || $ucRecKind == 4 } {
+    # 1 == one-off, 2 == split, 4 == series.
+    if { $ucRecKind == 1 || $ucRecKind == 2 || $ucRecKind == 4 } {
 
       # We have to check the entry's own time AND the times from its series link list.
       set elist [$event aul]

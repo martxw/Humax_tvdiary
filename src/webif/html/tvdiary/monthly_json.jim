@@ -60,6 +60,7 @@ case $runmode {
     set month_selector [lindex $argv 1]
   }
 }
+set year_month_selector [expr $year_selector * 100 + $month_selector]
 
 # In case of error - break glass!
 #puts "/* "
@@ -103,6 +104,7 @@ proc main {} {
   #  puts "/* Parameters:
   #  year_selector=$::year_selector
   #  month_selector=$::month_selector
+  #  year_month_selector=$::year_month_selector
   # end_debug
 
   #
@@ -124,14 +126,14 @@ proc main {} {
 
   set program_records [$tvdiarydb query "
     SELECT program_facts.fact_id, program_facts.title_id, titles.title, program_facts.channel_id, channels.channel_name, program_facts.recorded_count, program_facts.played_count, program_facts.live_count, program_facts.barely_watched_count, program_facts.scheduled_duration, program_facts.recorded_duration, program_facts.played_duration, program_facts.live_duration FROM program_facts, titles, channels
-    WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.title_id = titles.title_id AND program_facts.channel_id = channels.channel_id
-    ORDER BY program_facts.recorded_duration DESC;" $::year_selector $::month_selector]
+    WHERE program_facts.year_month=%s AND program_facts.title_id = titles.title_id AND program_facts.channel_id = channels.channel_id
+    ORDER BY program_facts.recorded_duration DESC;" $::year_month_selector]
 
   set channel_records [$tvdiarydb query "
     SELECT program_facts.channel_id, channels.channel_name, SUM(program_facts.recorded_count) AS recorded_count, SUM(program_facts.played_count) AS played_count, SUM(program_facts.live_count) AS live_count, SUM(program_facts.barely_watched_count) AS barely_watched_count, SUM(program_facts.scheduled_duration) AS scheduled_duration, SUM(program_facts.recorded_duration) AS recorded_duration, SUM(program_facts.played_duration) AS played_duration, SUM(program_facts.live_duration) AS live_duration FROM program_facts, channels
-    WHERE program_facts.year=%s AND program_facts.month=%s AND program_facts.channel_id = channels.channel_id
+    WHERE program_facts.year_month=%s AND program_facts.channel_id = channels.channel_id
     GROUP BY program_facts.channel_id
-    ORDER BY channels.channel_name;" $::year_selector $::month_selector]
+    ORDER BY channels.channel_name;" $::year_month_selector]
 
   # Finished with the DB.
   $tvdiarydb close
