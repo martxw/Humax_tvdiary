@@ -1,174 +1,300 @@
 #!/mod/bin/jimsh
+#
+# Render the main TV Diary web page.
+# Fetch parameters from DB first, and alternative placeholder if the DB is locked.
+# Author: Martin Wink, 2013-2014.
+#
 
 source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_db.jim
+if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
+#
+# Render HTML header and includes.
+#
 jqplugin easing ui.totop iajax
-jscss calendar_params.jim style.css
 jscss jquery.tablesorter.min.js
-jscss script.js
-
+jscss script.js style.css
 header
 
-puts {
 
-<div id="tvd_tabs">
-  <ul>
-    <li><a href="#daily_tab">Daily TV Diary</a></li>
-    <li><a href="#monthly_tab">Monthly Summaries</a></li>
-    <li><a href="#details_tab">Programme Details</a></li>
-    <li><a href="#inventory_tab">Video Inventory</a></li>
-  </ul>
-  <div id="daily_tab">
-  </div>
-  <div id="monthly_tab">
-  </div>
-  <div id="details_tab">
-  </div>
-  <div id="inventory_tab">
-  </div>
-</div>  
+set DB_FILEPATH "/mod/etc/tvdiary.db"
 
-<div class="tvd_panels_wrapper">
+#
+# Open the database file just to get the min and max times for the calendar.
+# Round them to the start & end of the day.
+# Can't use ceil() & floor() as they aren't currently compiled into Jim.
+#
+if { ![file exists $DB_FILEPATH] } {
 
-  <div id="daily_panel">
-    <div id="title_date"></div>
+  puts "<div>The database file $DB_FILEPATH is missing.</div><div>TV Diary may not have been installed correctly. Running tvdiary_migrate will create a new blank database.</div>"
 
-    <div class="table_wrapper">
-      <div class="controls_panel">
-        <div id="daily_datepicker"></div>
-        <table id="next_prev_table"><tr>
-          <td><button id="prev_day">Prev</button></td>
-          <td><button id="today">Today</button></td>
-          <td><button id="next_day">Next</button></td>
-        </tr></table>
+} else {
+  #
+  # Get a lock for the database. Max wait 2 seconds here.
+  #
+  if { ![acquire_lock tvdiary_db 2] } {
+
+    puts "<div>Unable to aquire an exclusive lock on the TV Diary database.</div><div>Wait a few moments and try refreshing this page.</div>"
+
+  } else {
+
+    set tvdiarydb [sqlite3.open $DB_FILEPATH]
+
+    set min_time 0
+    set _minstart [$tvdiarydb query "SELECT MIN(start) FROM activities"]
+    if { [llength $_minstart] == 1 } {
+      # + 0 is for when table is empty.
+      set min_time [expr int(([lindex [lindex $_minstart 0] 1] + 0) / 86400) * 86400]
+    }
+
+    # Get the configured start time of the TV day just once here, rather than on every time we get a day's data.
+    set settings_val [get_setting $tvdiarydb "day_start" "00:00"]
+    set parts [split $settings_val ":"]
+    set day_start [expr ([lindex $parts 0] * 60 + [lindex $parts 1]) * 60]
+
+    # Get the functionality flags.
+    set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" 0]
+    set inventory_enabled [get_setting $tvdiarydb "inventory_enabled" 0]
+
+
+    #
+    # Close DB and release the lock.
+    #
+    $tvdiarydb close
+    release_lock tvdiary_db
+
+    # The extra 43200 is 1/2 a day, to provide a safe margin for the Next button code, as 26 hours is added to
+    # account for DST start/end days.
+    set max_time [expr (int([clock seconds] / 86400) + 7) * 86400 + 43200]
+
+    #
+    # Render the actual page.
+    #
+    puts "<script type=\"text/javascript\">"
+    puts "var min_time=$min_time;"
+    puts "var max_time=$max_time;"
+    puts "var day_start=$day_start;"
+    puts "var monthly_summary_enabled=$monthly_summary_enabled;"
+    puts "var inventory_enabled=$inventory_enabled;"
+    puts "</script>"
+
+    puts {
+
+    <div id="tvd_tabs">
+      <ul>
+        <li><a href="#daily_tab">Daily TV Diary</a></li>
+        <li><a href="#monthly_tab">Monthly Summaries</a></li>
+        <li><a href="#history_tab">Programme Search</a></li>
+        <li><a href="#inventory_tab">Video Inventory</a></li>
+      </ul>
+      <div id="daily_tab">
       </div>
-    </div>
+      <div id="monthly_tab">
+      </div>
+      <div id="history_tab">
+      </div>
+      <div id="inventory_tab">
+      </div>
+    </div>  
 
-    <div class="table_wrapper">
-      <div id="recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
-        <div id="recorded_caption" class="outer_hdr ui-widget-header ui-corner-all">
-          Recorded
-        </div>
-        <div>
-          <div id="recorded_inner"></div>
-          <div id="recorded_spinner">
-            <img src="/img/loading.gif" alt="Processing request...">
-            Processing request...
+    <div class="tabbed_panels_wrapper">
+
+      <div id="daily_panel">
+
+        <div id="daily_title_date"></div>
+
+        <div class="table_wrapper">
+          <div class="controls_panel">
+            <div id="daily_datepicker"></div>
+            <table id="daily_next_prev_table"><tr>
+              <td><button id="daily_prev_day">Prev</button></td>
+              <td><button id="daily_today">Today</button></td>
+              <td><button id="daily_next_day">Next</button></td>
+            </tr></table>
           </div>
         </div>
-      </div>
-      <div id="watched_outer" class="ui-widget ui-widget-content ui-corner-all">
-        <div id="watched_caption" class="outer_hdr ui-widget-header ui-corner-all">
-          Watched
-        </div>
-        <div>
-          <div id="watched_inner"></div>
-          <div id="watched_spinner">
-            <img src="/img/loading.gif" alt="Processing request...">
-            Processing request...
+
+        <div class="table_wrapper">
+          <div id="daily_recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="daily_recorded_caption" class="table_caption ui-widget-header ui-corner-all">
+              Recorded
+            </div>
+            <div>
+              <div id="daily_recorded_inner"></div>
+              <div id="daily_recorded_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
+          </div>
+          <div id="daily_watched_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="daily_watched_caption" class="table_caption ui-widget-header ui-corner-all">
+              Watched
+            </div>
+            <div>
+              <div id="daily_watched_inner"></div>
+              <div id="daily_watched_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
-    </div>
 
-  </div>
+      <div id="monthly_panel">
 
-  <div id="monthly_panel">
+        <table id="monthly_next_prev_table">
+          <tr>
+            <td colspan=3>
+              <select id="monthly_month_selector"></select>
+            </td>
+          </tr>
+          <tr>
+            <td><button id="monthly_prev">Prev</button></td>
+            <td><button id="monthly_latest">Latest</button></td>
+            <td><button id="monthly_next">Next</button></td>
+          </tr>
+        </table>
 
-    <table id="monthly_next_prev_table">
-      <tr>
-        <td colspan=3>
-          <select id="monthly_month_selector"></select>
-        </td>
-      </tr>
-      <tr>
-        <td><button id="prev_month">Prev</button></td>
-        <td><button id="latest_month">Latest</button></td>
-        <td><button id="next_month">Next</button></td>
-      </tr>
-    </table>
-    
-    <div class="clear"></div>
+        <div class="clear"></div>
 
-    <div class="table_wrapper">
-      <div id="programs_outer" class="ui-widget ui-widget-content ui-corner-all">
-        <div id="programs_caption" class="outer_hdr ui-widget-header ui-corner-all">
-          Programmes
-        </div>
-        <div>
-          <table id="programs_table" class="tablesorter events_table">
-            <thead>
-              <tr><th>#</th><th>Title</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
-            </thead>
-            <tbody>
-            </tbody>
-            <tfoot>
-            </tfoot>
-          </table>
-          <div id="programs_footer"></div>
-          <div id="programs_spinner">
-            <img src="/img/loading.gif" alt="Processing request...">
-            Processing request...
+        <div class="table_wrapper">
+          <div id="monthly_programs_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="monthly_programs_caption" class="table_caption ui-widget-header ui-corner-all">
+              Programmes
+            </div>
+            <div>
+              <table id="monthly_programs_table" class="tablesorter events_table">
+                <thead>
+                  <tr><th>#</th><th>Title</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th># Barely</th><th>Scheduled</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+              <div id="monthly_programs_footer"></div>
+              <div id="monthly_programs_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
+          </div>
+          <div id="monthly_channels_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="monthly_channels_caption" class="table_caption ui-widget-header ui-corner-all">
+              Channels
+            </div>
+            <div>
+              <table id="monthly_channels_table" class="tablesorter events_table">
+                <thead>
+                  <tr><th>#</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+              <div id="monthly_channels_footer"></div>
+              <div id="monthly_channels_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
-      <div id="channels_outer" class="ui-widget ui-widget-content ui-corner-all">
-        <div id="channels_caption" class="outer_hdr ui-widget-header ui-corner-all">
-          Channels
-        </div>
-        <div>
-          <table id="channels_table" class="tablesorter events_table">
-            <thead>
-              <tr><th>#</th><th>Channel</th><th># Recorded</th><th># Played</th><th># Live</th><th>Recorded</th><th>Played</th><th>Live</th></tr>
-            </thead>
-            <tbody>
-            </tbody>
-            <tfoot>
-            </tfoot>
-          </table>
-          <div id="channels_footer"></div>
-          <div id="channels_spinner">
-            <img src="/img/loading.gif" alt="Processing request...">
-            Processing request...
+
+      <div id="history_panel">
+
+        <div id="history_prompt">Enter all or part of the title, synopsis or channel name, and search for events for that programme.</div>
+
+        <table id="history_search_table">
+          <tr>
+            <th>Title</th>
+            <td>
+              <select id="history_search_op_title"></select>
+            </td>
+            <td>
+              <input id="history_search_title" length="40" maxlength="40">
+            </td>
+          </tr>
+          <tr>
+            <th>Synopsis</th>
+            <td>
+              <select id="history_search_op_synopsis"></select>
+            </td>
+            <td>
+              <input id="history_search_synopsis" length="80" maxlength="256">
+            </td>
+          </tr>
+          <tr>
+            <th>Channel</th>
+            <td>
+              <select id="history_search_op_channel"></select>
+            </td>
+            <td>
+              <input id="history_search_channel" length="240" maxlength="40">
+            </td>
+          </tr>
+          <tr>
+            <td><button id="history_search_button">Search</button></td>
+          </tr>
+        </table>
+
+        <div class="clear"></div>
+
+        <div class="table_wrapper">
+          <div id="history_results_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="history_results_caption" class="table_caption ui-widget-header ui-corner-all">
+              Programme events
+            </div>
+            <div>
+              <table id="history_results_table" class="tablesorter events_table">
+                <thead>
+                  <tr><th></th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th></tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+              <div id="history_results_footer"></div>
+              <div id="history_results_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
 
-  </div>
-
-  <div id="details_panel">
-    <div>
-      <div id="details_inner">
-        <p>Nothing selected yet. (TODO)</p>
       </div>
-      <div id="details_spinner">
-        <img src="/img/loading.gif" alt="Processing request...">
-        Processing request...
-      </div>
-    </div>
-  </div>
 
-  <div id="inventory_panel">
-    <p>The following videos are available. Deleted videos aren't included.</p>
-    <div class="table_wrapper">
-      <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
-        <div id="inventory_caption" class="outer_hdr ui-widget-header ui-corner-all">
-          [HDD] My Video
-        </div>
-        <div>
-          <div id="inventory_inner"></div>
-          <div id="inventory_spinner">
-            <img src="/img/loading.gif" alt="Processing request...">
-            Processing request...
+      <div id="inventory_panel">
+
+        <div>The following videos are available. Deleted videos aren't included.</div>
+
+        <div class="table_wrapper">
+          <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="inventory_caption" class="table_caption ui-widget-header ui-corner-all">
+              [HDD] My Video
+            </div>
+            <div>
+              <div id="inventory_inner"></div>
+              <div id="inventory_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
+
     </div>
-  </div>
 
-</div>
-
+    }
+  }
 }
 
+#
+# Render the page footer.
+#
 footer

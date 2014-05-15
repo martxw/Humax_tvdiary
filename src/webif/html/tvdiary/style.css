@@ -3,8 +3,91 @@
  * Author: Martin Wink, 2013-2014.
  */
 
+/* Override as default blocks too much */
+#toTop {
+  bottom: 0px;
+  margin-left: 0px;
+  right: 0;
+}
+
+
+/* Sorted tables */
+table.tablesorter {
+  font-size: small;
+  width: 100%;
+  text-align: left;
+}
+table.tablesorter thead tr th, table.tablesorter tfoot tr th {
+  background-color: #FFF3A9;
+  border: 1px solid #FFF;
+  font-size: small;
+  padding: 4px;
+}
+table.tablesorter thead tr .header {
+  background-image: url(bg.gif);
+  background-repeat: no-repeat;
+  background-position: center right;
+  cursor: pointer;
+}
+table.tablesorter tbody td {
+  color: #3D3D3D;
+  padding: 4px;
+  vertical-align: top;
+}
+table.tablesorter thead tr .headerSortUp {
+  background-image: url(asc.gif);
+}
+table.tablesorter thead tr .headerSortDown {
+  background-image: url(desc.gif);
+}
+table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp {
+  background-color: #fece2f;
+}
+
+table.tablesorter tbody tr:nth-child(2n+1) td {
+  background-color:#cf9;
+}
+
+table.tablesorter th.header {
+  padding: 0 1.5em 0 0.2em;
+}
+
+
+/* Minimal tabs */
+#tvd_tabs { 
+  background: transparent; 
+  border: none;
+  padding: 0 0 0 0;
+} 
+#tvd_tabs .ui-widget-header { 
+  background: transparent; 
+  border: none; 
+  border-bottom: 1px solid #c0c0c0; 
+  -moz-border-radius: 0px; 
+  -webkit-border-radius: 0px; 
+  border-radius: 0px; 
+} 
+#tvd_tabs .ui-tabs-nav .ui-state-default { 
+  background: transparent; 
+  border: none; 
+} 
+#tvd_tabs .ui-tabs-nav .ui-state-active { 
+  background: transparent url(uiTabsArrow.png) no-repeat bottom center; 
+  border: none; 
+} 
+#tvd_tabs .ui-tabs-nav .ui-state-default a { 
+  color: #c0c0c0; 
+} 
+#tvd_tabs .ui-tabs-nav .ui-state-active a { 
+  color: #000000; 
+}
+#tvd_tabs .ui-tabs-panel {
+  padding: 0 0 0 0;
+}
+
+
 /* Wrap around tabbed panels */
-.tvd_panels_wrapper {
+.tabbed_panels_wrapper {
   margin: 0 1.5em 0 1.5em;
 }
 
@@ -13,29 +96,26 @@
   float: left;
 }
 
-/* Date shown in diary */
-#title_date {
-  font-size: 150%;
-  line-height: 150%;
-}
-
 /* Size tables, and keep them apart in different orientations */
-#recorded_outer, #watched_outer, #dv_outer, #inventory_outer {
+#daily_recorded_outer, #daily_watched_outer, #history_outer, #inventory_outer {
   width: 53em;
   float: left;
   margin: 0 1em 1em 0;
 }
-
-/* Size tables, and keep them apart in different orientations */
-#programs_outer {
+#monthly_programs_outer {
+  float: left;
+  margin: 0 1em 1em 0;
+}
+#monthly_channels_outer {
   float: left;
   margin: 0 1em 1em 0;
 }
 
-/* Size tables, and keep them apart in different orientations */
-#channels_outer {
-  float: left;
-  margin: 0 1em 1em 0;
+
+/* Date shown in diary */
+#daily_title_date {
+  font-size: 150%;
+  line-height: 150%;
 }
 
 /* The controls */
@@ -49,25 +129,17 @@
 }
 
 /* The prev/today/next buttons and their table */
-#next_prev_table {
+#daily_next_prev_table {
   width:100%;
   margin: 0 1em 0.3em 0;
 }
-#prev_day, #today, #next_day {
+#daily_prev_day, #daily_today, #daily_next_day {
   width:100%;
 }
 
-/* Prompt - as th.key but no background */
-td.prompt
-{
-  font-weight: bold;
-  text-align: right;
-  color: black;
-  padding: 0.5em;
-}
 
 /* The header above the tables, sized to match the datepicker */
-.outer_hdr {
+.table_caption {
   display: block;
   margin: .2em .2em .2em .2em;
   padding: .2em .2em .2em .2em;
@@ -75,9 +147,22 @@ td.prompt
   text-align: center;
 }
 
-/* Space all text in the whole table */
+/* Spacing for all tables */
 .events_table {
   line-height: 1.1em;
+  border-spacing: 2px 0;
+  margin: 0 0 2px 0;
+}
+
+/* Live TV count is clickable */
+span.live_count {
+  cursor: pointer;
+}
+
+/* Live TV count - when not shown. */
+span.live_count_hidden {
+  color: #5e5e5e;
+  text-decoration: line-through;
 }
 
 /* Don't wrap any of the times */
@@ -150,18 +235,6 @@ tr.record_event + tr.future_event td {
   border-top: thin dashed #000000;
 }
 
-/* Progress indicators centred */
-#recorded_spinner, #watched_spinner, #programs_spinner, #channels_spinner, #inventory_spinner {
-  text-align: center;
-}
-
-/* When no results to be shown */
-.nothing {
-  display: block;
-  font-style:italic;
-  text-align: center;
-}
-
 /* Show when recording is active. As future_event except the in_progress elements. */
 tr.record_event.active_event div.event_duration {
   border-left: thin dashed #000000;
@@ -212,17 +285,6 @@ tr.hidden_event {
   display: none;
 }
 
-/* Live TV count is clickable */
-span.live_count {
-  cursor: pointer;
-}
-
-/* Live TV count - when not shown. */
-span.live_count_hidden {
-  color: #5e5e5e;
-  text-decoration: line-through;
-}
-
 /* Live broadcast icon. */
 tr.live_event td.event_time:before {
   content: url('tvmast.png');
@@ -234,27 +296,60 @@ td.event_flags {
   vertical-align: bottom;
 }
 
-/* Override as default blocks too much */
-#toTop {
-  bottom: 0px;
-  margin-left: 0px;
-  right: 0;
-}
 
-div.dv_heading {
-}
-
-table.dv_table {
-  margin-left: 5em;
-}
-
-td.dv_type {
+/* Progress indicators centred */
+#daily_recorded_spinner, #daily_watched_spinner, #monthly_programs_spinner, #monthly_channels_spinner, #history_results_spinner, #inventory_spinner {
   text-align: center;
 }
 
-#slideset1, #slideset2 {
-  float: left;
+/* When no results to be shown */
+.nothing {
+  display: block;
+  font-style:italic;
+  text-align: center;
 }
+
+
+/* Months dropdown selector */
+#monthly_month_selector {
+  font-size: 150%;
+  border-radius: 5px;
+  background: transparent;
+  margin: 0.3em 0 0.2em 0;
+}
+
+/* Month dropdown and buttons */
+monthly_next_prev_table {
+  margin: 0 1em 0.3em 0;
+}
+
+/* Auto number the first column in rows */
+table#monthly_programs_table, table#monthly_channels_table {
+  counter-reset: rowNumber;
+}
+table#monthly_programs_table tbody tr, table#monthly_channels_table tbody tr {
+  counter-increment: rowNumber;
+}
+table#monthly_programs_table tr td:first-child::before, table#monthly_channels_table tr td:first-child::before {
+  content: counter(rowNumber);
+}
+
+
+#history_results_table {
+  width: auto;
+}
+
+.history_date, .history_time {
+  display: block;
+}
+table.history_table {
+  margin-left: 5em;
+}
+
+td.history_type {
+  text-align: center;
+}
+
 
 td.inventory_dir {
   vertical-align: middle;
@@ -267,120 +362,3 @@ td.inventory_dir {
   padding-left: 50px;
 }
 
-#inventory_return {
-  background: url("/plugin/tvdiary/icon.png") no-repeat;
-  background-position-y: -30px;
-/*  margin: 0 1em 1em 0;*/
-  margin: 0 77px 1em 77px;
-  width: 96px;
-  height: 50px;
-  padding-top: 50px;
-  cursor: pointer;
-  font-weight: bold;
-  text-align: center;
-}
-
-/* Minimal tabs */
-#tvd_tabs { 
-  background: transparent; 
-  border: none;
-  padding: 0 0 0 0;
-} 
-#tvd_tabs .ui-widget-header { 
-  background: transparent; 
-  border: none; 
-  border-bottom: 1px solid #c0c0c0; 
-  -moz-border-radius: 0px; 
-  -webkit-border-radius: 0px; 
-  border-radius: 0px; 
-} 
-#tvd_tabs .ui-tabs-nav .ui-state-default { 
-  background: transparent; 
-  border: none; 
-} 
-#tvd_tabs .ui-tabs-nav .ui-state-active { 
-  background: transparent url(uiTabsArrow.png) no-repeat bottom center; 
-  border: none; 
-} 
-#tvd_tabs .ui-tabs-nav .ui-state-default a { 
-  color: #c0c0c0; 
-} 
-#tvd_tabs .ui-tabs-nav .ui-state-active a { 
-  color: #000000; 
-}
-#tvd_tabs .ui-tabs-panel {
-  padding: 0 0 0 0;
-}
-
-/* Month dropdown and buttons */
-monthly_next_prev_table {
-  margin: 0 1em 0.3em 0;
-}
-
-/* Months dropdown selector */
-#monthly_month_selector {
-  font-size: 150%;
-  border-radius: 5px;
-  background: transparent;
-  margin: 0.3em 0 0.2em 0;
-}
-
-/* Sorted tables */
-table.tablesorter {
-  font-size: small;
-  width: 100%;
-  text-align: left;
-}
-table.tablesorter thead tr th, table.tablesorter tfoot tr th {
-  background-color: #FFF3A9;
-  border: 1px solid #FFF;
-  font-size: small;
-  padding: 4px;
-}
-table.tablesorter thead tr .header {
-  background-image: url(bg.gif);
-  background-repeat: no-repeat;
-  background-position: center right;
-  cursor: pointer;
-}
-table.tablesorter tbody td {
-  color: #3D3D3D;
-  padding: 4px;
-  vertical-align: top;
-}
-table.tablesorter thead tr .headerSortUp {
-  background-image: url(asc.gif);
-}
-table.tablesorter thead tr .headerSortDown {
-  background-image: url(desc.gif);
-}
-table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp {
-  background-color: #fece2f;
-}
-
-/* Auto number the first column in rows */
-table#programs_table, table#channels_table {
-  counter-reset: rowNumber;
-}
-table#programs_table tbody tr, table#channels_table tbody tr {
-  counter-increment: rowNumber;
-}
-table#programs_table tr td:first-child::before, table#channels_table tr td:first-child::before {
-  content: counter(rowNumber);
-}
-
-table.tablesorter tbody tr:nth-child(2n+1) td {
-  background-color:#cf9;
-}
-
-table.tablesorter th.header {
-  padding: 0 1.5em 0 0.2em;
-}
-
-#dv_table {
-  width: auto;
-}
-
-.dv_date, .dv_time {
-  display: block;
-}

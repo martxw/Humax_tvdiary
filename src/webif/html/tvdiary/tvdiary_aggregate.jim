@@ -1,104 +1,61 @@
 #!/mod/bin/jimsh
 #
 # Aggregate statistics in the tvdiary database.
+# To be "source" included in tvdiary_status. Not standalone.
 # Author: Martin Wink, 2014.
 #
-
-# In case of error - break glass!
-#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
-#puts "auto_path=$auto_path"
-
-#source /mod/webif/lib/setup
-source /mod/webif/html/tvdiary/tvdiary_db.jim
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
-
-# --------------------------------------------------------------
-# Declare globals
-# --------------------------------------------------------------
-set logging 1
-
-set DB_FILEPATH "/mod/etc/tvdiary.db"
-
-set current_time [clock seconds]
-set log_date_fmt "%d/%m/%Y-%H:%M:%S"
-set logging_time [clock format $current_time -format $log_date_fmt]
-if { $::logging } {
-  puts "\n$logging_time: tvdiary_aggregate.jim"
-}
 
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------
 
 #
-# Main
+# Main entry point. Returns 1 on success, 0 on failure.
 #
-proc main {} {
+proc do_aggregate { tvdiarydb current_time } {
   try {
-    #
-    # Get a lock for the database.
-    #
-    if {![acquire_lock tvdiary_db]} {
-      throw "Cannot acquire exclusive lock for tvdiary.tb."
-    }
 
-    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+    set settings_val [get_setting $tvdiarydb "day_start" "00:00"]
+    set parts [split $settings_val ":"]
+    set ::day_start_hour [lindex $parts 0]
+    set ::day_start_min [lindex $parts 1]
+    set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
 
-    set settings_val [get_setting $tvdiarydb "day_start"]
-    if { $settings_val eq "" } {
-      set ::day_start_hour 0
-      set ::day_start_min 0
-      set ::day_start 0
-    } else {
-      set parts [split $settings_val ":"]
-      set ::day_start_hour [lindex $parts 0]
-      set ::day_start_min [lindex $parts 1]
-      set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
-    }
-
-    set settings_val [get_setting $tvdiarydb "completed_aggregate_year_month"]
-    if { $settings_val eq "" } {
-      set start_year_month 201301
-    } else {
-      set start_year_month settings_val
-    }
-
-    test_date_converter
+    set start_year_month [get_setting $tvdiarydb "start_aggregated_year_month" 201301]
+    puts "Existing start_aggregated_year_month=$start_year_month"
 
     aggregate $tvdiarydb $start_year_month
 
-    $tvdiarydb close
+    set date_parts [get_tv_date $current_time]
+    set start_year_month [expr ([lindex $date_parts 0] * 100) + [lindex $date_parts 1]]
+    puts "Setting start_aggregated_year_month=$start_year_month"
+    set_setting $tvdiarydb "start_aggregated_year_month" $start_year_month
 
-    #
-    # Closed the DB so release the lock.
-    #
-    release_lock tvdiary_db
+    set_setting $tvdiarydb "time_for_aggregation" [get_tv_day_start [expr $current_time + 86400]]
+    puts "Time for the next aggregation: [clock format [get_tv_day_start [expr $current_time + 86400]]]"
 
-    puts "$::logging_time: Aggregation completed successfully."
+    puts "Aggregation completed successfully."
+    return 1
   } on error { msg } {
-    puts "$::logging_time: Aggregation failed. \[$msg\]"
+    puts "Aggregation failed. \[$msg\]"
     puts [info stacktrace]
-    exit
+    return 0
   }
 }
 
 #
 # Calculate the aggregated summary statistics.
+# Return the year_month of the start of the next month to aggregate.
 #
 proc aggregate { tvdiarydb start_year_month} {
-
-  # TODO: Move table creation to migration code. Only here for development.
-  # Program fact table. The year and month dimensions are combined into a single integer (eg 201312) for ease of comparison. The title and channel IDs are also dimensions.
-  $tvdiarydb query "DROP TABLE IF EXISTS program_facts;"
-  $tvdiarydb query "CREATE TABLE IF NOT EXISTS program_facts(fact_id INTEGER PRIMARY KEY, year_month INTEGER, title_id INTEGER, channel_id INTEGER, recorded_count INTEGER, played_count INTEGER, live_count INTEGER, scheduled_duration INTEGER, recorded_duration INTEGER, played_duration INTEGER, live_duration INTEGER, barely_watched_count INTEGER);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_year_month ON program_facts (year_month);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_title_id ON program_facts (title_id);"
-  $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
-
+  report_facts_count $tvdiarydb "Before purge, facts count"
+  
   # Purge aggregated facts from previously incomplete months.
-  $tvdiarydb query "DELETE FROM program_facts WHERE year_month > %s;" $start_year_month
+  $tvdiarydb query "DELETE FROM program_facts WHERE year_month >= %s;" $start_year_month
   set changes [$tvdiarydb changes]
   puts "Purged $changes program_facts rows."
+
+  report_facts_count $tvdiarydb "After purge, facts count"
 
   # The activities use seconds from UTC epoc, so convert from local start of TV day year_month.
   set query_start_time [get_tv_month_time $start_year_month]
@@ -166,6 +123,7 @@ proc aggregate { tvdiarydb start_year_month} {
     set ::accumulated_record {}
   }
 
+  report_facts_count $tvdiarydb "After aggregation, facts count"
   #$tvdiarydb query "VACUUM;"
 }
 
@@ -229,6 +187,17 @@ proc save_accumulated { tvdiarydb } {
 }
 
 #
+# Convert time of day to time of the start of that TV day.
+# NB The TZ offset in Tcl is opposite sign to JavaScript.
+#
+proc get_tv_day_start { t } {
+  set z [clock format $t -format "%z"]
+  set tz_offset [expr int($z / 100) * 3600 + int($z % 100) * 60]
+  set day_t [expr int( ($t + $tz_offset - $::day_start) / 86400 ) * 86400 - $tz_offset + $::day_start]
+  return $day_t
+}
+
+#
 # Convert the given time to the TV date it belongs to. The input time is a UTC epoch value.
 # Since the start of TV day is in the local time, convert from UTC to local first, check which side
 # of the TV day start it is. If it's before, adjust the time back and re-calculate the local time.
@@ -239,32 +208,58 @@ proc get_tv_date { t } {
   set day_time [expr ([lindex $locparts 3] * 60 + [lindex $locparts 4]) * 60]
   if { $day_time < $::day_start } {
     set locparts [split [clock format [expr $t - $::day_start] -format "%Y,%m,%d,%H,%M"] ","]
-    puts "Adjusted day time for DST $locparts"
   }
   return [list [lindex $locparts 0] [lindex $locparts 1] [lindex $locparts 2] ]
 }
 
 #
-# Convert
+# Convert year_month to a UTC time for querying activities.
 #
 proc get_tv_month_time { year_month } {
   set year [expr int( $year_month / 100)]
   set month [expr int( $year_month % 100)]
   set date_str "$year $month 1 $::day_start_hour $::day_start_min 0"
-  puts "get_tv_month_time { $year_month } => $date_str"
   set result [clock scan $date_str -format "%Y %m %d %H %M %S"]
-  puts "get_tv_month_time { $year_month } => $date_str => $result = [clock format $result]"
   return $result
 }
 
+proc report_facts_count { tvdiarydb label } {
+  set res [$tvdiarydb query "SELECT COUNT(*) FROM program_facts"]
+  set count [lindex [lindex $res end] end]
+  puts "$label: $count"
+}
+
+
+
+
+# Experiment - this is slower 
+proc get_tv_date2 { t } {
+  set day_t [get_tv_day_start $t]
+  set locparts [split [clock format $day_t -format "%Y,%m,%d,%H,%M"] ","]
+  return [list [lindex $locparts 0] [lindex $locparts 1] [lindex $locparts 2] ]
+}
 proc test_date_converter {} {
+  set parts [split "04:00" ":"]
+  set ::day_start_hour [lindex $parts 0]
+  set ::day_start_min [lindex $parts 1]
+  set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
+
   for {set y 2013} {$y < 2015} {incr y} {
     for {set m 1} {$m <= 12} {incr m} {
       set ym [expr $y * 100 + $m]
       puts "Test month $y $m, $ym"
       set r [get_tv_month_time $ym]
+      puts "Start time for month $ym = [clock format $r]"
     }
   }
-}
+  return
 
-main
+  set t_start [clock scan "2014,3,28,0,5" -format "%Y,%m,%d,%H,%M"]
+  set t_end [clock scan "2014,4,1,0,0" -format "%Y,%m,%d,%H,%M"]
+  for {set t $t_start} {$t < $t_end} {incr t 3600} {
+    puts "$t=[clock format $t], get_tv_day_start=[get_tv_day_start $t], get_tv_date2=[get_tv_date2 $t], get_tv_date=[get_tv_date $t]"
+  }
+  puts [time {get_tv_date2 $t} 1000]
+  puts [time {get_tv_date $t} 1000]
+}
+#test_date_converter

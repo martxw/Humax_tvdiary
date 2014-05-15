@@ -5,6 +5,8 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 
 set day_start "00:00"
+set monthly_summary_enabled 0
+set inventory_enabled 0
 try {
   #
   # Get a lock for the database.
@@ -13,10 +15,15 @@ try {
     throw "Cannot acquire exclusive lock for tvdiary.tb."
   }
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-  set settings_val [get_setting $tvdiarydb "day_start"]
+
+  set settings_val [get_setting $tvdiarydb "day_start" ""]
   if { $settings_val ne "" } {
     set ::day_start $settings_val
   }
+
+  set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" $monthly_summary_enabled]
+  set inventory_enabled [get_setting $tvdiarydb "inventory_enabled" $inventory_enabled]
+  
   $tvdiarydb close
   #
   # Closed the DB so release the lock.
@@ -33,7 +40,9 @@ try {
   set monitoring 0
 }
 
-if { $monitoring } { set f "checked" } else { set f "" }
+if { $monitoring } { set c1 "checked" } else { set c1 "" }
+if { $monthly_summary_enabled } { set c2 "checked" } else { set c2 "" }
+if { $inventory_enabled } { set c3 "checked" } else { set c3 "" }
 puts "
   <fieldset style=\"display: inline\">
   <legend>
@@ -44,7 +53,7 @@ puts "
   <tr>
     <th class=\"key\">Monitor usage:</th>
     <td>
-      <input id=\"tvdiary_monitoring\" name=\"tvdiary_monitoring\" type=\"checkbox\" value=\"1\" $f>
+      <input id=\"tvdiary_monitoring\" name=\"tvdiary_monitoring\" type=\"checkbox\" value=\"1\" $c1>
     </td>
   </tr>
   <tr>
@@ -57,6 +66,18 @@ foreach time_option {"00:00" "01:00" "02:00" "03:00" "04:00" "05:00" "06:00" "07
 }
 puts "
     </select></td>
+  </tr>
+  <tr>
+    <th class=\"key\">Enable monthly summary:</th>
+    <td>
+      <input id=\"tvdiary_monthly\" name=\"tvdiary_monthly\" type=\"checkbox\" value=\"1\" $c2>
+    </td>
+  </tr>
+  <tr>
+    <th class=\"key\">Enable inventory:</th>
+    <td>
+      <input id=\"tvdiary_inventory\" name=\"tvdiary_inventory\" type=\"checkbox\" value=\"1\" $c3>
+    </td>
   </tr>
 "
 

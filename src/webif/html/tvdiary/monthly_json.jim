@@ -30,6 +30,8 @@ set date_time_fmt "%a %d %b %Y $time_fmt"
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
 
 # --------------------------------------------------------------
 # CGI or command line parameters
@@ -180,6 +182,17 @@ proc output_records { records type } {
     }
     puts "   \"channel_id\": $record(channel_id),"
     puts "   \"channel_name\": \"[escape_json_string $record(channel_name)]\","
+
+    set channel_icon_path "$::channel_icons_url/Unknown.png"
+    if { $record(channel_name) != "" } {
+      if { [file exists "$::channel_icons_path/$record(channel_name).png"] } {
+        set channel_icon_path "$::channel_icons_url/[cgi_quote_url $record(channel_name)].png"
+      } else {
+        set channel_icon_path "$::channel_icons_url/Unknown.png"
+      }
+    }
+    puts "   \"channel_icon_path\": \"$channel_icon_path\","
+
     puts "   \"recorded_count\": $record(recorded_count),"
     puts "   \"played_count\": $record(played_count),"
     puts "   \"live_count\": $record(live_count),"

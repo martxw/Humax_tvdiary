@@ -6,7 +6,7 @@ require ts.class
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 ######
-# Locking based in webif/lib/lock with retry loop added.
+# Locking based on webif/lib/lock with retry loop added.
 ######
 if { [dict exists $env "REQUEST_METHOD"] } {
   set log_locking 0
@@ -28,13 +28,13 @@ proc _lock_to_port {id} {
 
 proc _lock_dummy {newsock addr port} { }
 
-proc acquire_lock {id} {
+proc acquire_lock {id {wait_time 15}} {
   global _locks
 
   set port [_lock_to_port $id]
 
-  # Max 15 seconds timeout.
-  set timeout 15
+  # Max # seconds timeout.
+  set timeout $wait_time
 
   # 'socket already in use' error will be our lock detection mechanism
   incr timeout [clock seconds]
@@ -147,12 +147,12 @@ proc update_inventory_dir { tvdiarydb directory dustbin } {
   return $modified
 }
 
-proc get_setting { tvdiarydb name } {
+proc get_setting { tvdiarydb name { def 0 } } {
   set res [$tvdiarydb query "SELECT value FROM settings WHERE name = '$name'"]
   if {$res ne ""} {
     return [lindex [lindex $res end] end]
   }
-  return ""
+  return $def
 }
 
 proc set_setting { tvdiarydb name value } {
@@ -212,6 +212,11 @@ proc get_synopsis_id { tvdiarydb synopsis } {
 #
 proc update_inventory { tvdiarydb directory dustbin} {
 #  puts "//[clock seconds]: update_inventory started."
+  set inventory_enabled [get_setting $tvdiarydb "inventory_enabled"]
+  if { $inventory_enabled != 1 } {
+    return
+  }
+
   set modified 0
 
   # Check for recent update

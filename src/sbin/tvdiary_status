@@ -31,7 +31,6 @@ set RECORDING_THRESHOLD 10
 
 set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
-# TODO: Maybe add a configuration setting for this.
 set include_live_tv 1
 
 #
@@ -270,6 +269,24 @@ proc get_data { pid } {
 }
 
 #
+# Check whether any daily tasks need to be chained now.
+#
+proc daily_tasks { tvdiarydb } {
+  set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" 0]
+  if { $monthly_summary_enabled } {
+    set time_for_aggregation [get_setting $tvdiarydb "time_for_aggregation" 0]
+    if { $::current_time > $time_for_aggregation } {
+      source /mod/webif/html/tvdiary/tvdiary_aggregate.jim
+      if { [do_aggregate $tvdiarydb $::current_time] } {
+        puts "Succeeded aggregation"
+      } else {
+        puts "Failed aggregation"
+      }
+    }
+  }
+}    
+
+#
 # Main
 #
 proc main {} {
@@ -413,6 +430,10 @@ proc main {} {
 
     # Update any activities that are now finished.
     update_finished_activities $tvdiarydb finished_activities
+    
+    # Check whether to carry on to perform daily tasks.
+    daily_tasks $tvdiarydb
+
     $tvdiarydb close
   } else {
     # For the cases where there is no activity after a recording finishes, need to mark everything as finished.
@@ -426,12 +447,17 @@ proc main {} {
     }
 
     set tvdiarydb [openDB]
+
     set finished_activities [load_unfinished_activities $tvdiarydb]
     if { [llength $finished_activities] > 0 } {
       puts "$::logging_time: Inactivity cleanup of [llength $finished_activities] finished activities."
       # Update any activities that are now finished.
       update_finished_activities $tvdiarydb finished_activities
     }
+
+    # Check whether to carry on to perform daily tasks.
+    daily_tasks $tvdiarydb
+
     $tvdiarydb close
   }
 

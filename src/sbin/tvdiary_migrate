@@ -117,6 +117,13 @@ proc create_migrate_tables { tvdiarydb } {
 
     $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
     $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+
+    # Program facts table. The year and month dimensions are combined into a single integer (eg 201312) for ease of comparison. The title and channel IDs are also dimensions.
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS program_facts(fact_id INTEGER PRIMARY KEY, year_month INTEGER, title_id INTEGER, channel_id INTEGER, recorded_count INTEGER, played_count INTEGER, live_count INTEGER, scheduled_duration INTEGER, recorded_duration INTEGER, played_duration INTEGER, live_duration INTEGER, barely_watched_count INTEGER);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_year_month ON program_facts (year_month);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_title_id ON program_facts (title_id);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
+
   } else {
     # There is an existing DB, so migration is necessary.
     # Originally there was no version number & no settings or inventory table.
@@ -169,6 +176,11 @@ proc create_migrate_tables { tvdiarydb } {
 
       $tvdiarydb query "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
       $tvdiarydb query "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
+
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS program_facts(fact_id INTEGER PRIMARY KEY, year_month INTEGER, title_id INTEGER, channel_id INTEGER, recorded_count INTEGER, played_count INTEGER, live_count INTEGER, scheduled_duration INTEGER, recorded_duration INTEGER, played_duration INTEGER, live_duration INTEGER, barely_watched_count INTEGER);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_year_month ON program_facts (year_month);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_title_id ON program_facts (title_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
 
       # For activities, the table's unchanged so just add indexes.
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"

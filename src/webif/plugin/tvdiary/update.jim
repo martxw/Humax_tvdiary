@@ -12,8 +12,9 @@ puts ""
 
 set monitoring [cgi_get tvdiary_monitoring]
 set day_start [cgi_get tvdiary_day_start]
-
-puts "Parameters: $monitoring, $day_start<br>"
+set monthly_summary_enabled [cgi_get tvdiary_monthly]
+set inventory_enabled [cgi_get tvdiary_inventory]
+puts "Parameters: $monitoring, $day_start, $monthly_summary_enabled, $inventory_enabled<br>"
 
 try {
   #
@@ -24,6 +25,28 @@ try {
   }
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
   set_setting $tvdiarydb "day_start" $day_start
+  set_setting $tvdiarydb "monthly_summary_enabled" $monthly_summary_enabled
+  set_setting $tvdiarydb "inventory_enabled" $inventory_enabled
+  
+  set changes 0
+  if { !$monthly_summary_enabled } {
+    $tvdiarydb query "DELETE FROM program_facts;"
+    incr changes [$tvdiarydb changes]
+    $tvdiarydb query "DELETE FROM settings WHERE name='start_aggregated_year_month';"
+    $tvdiarydb query "DELETE FROM settings WHERE name='time_for_aggregation';"
+  }
+  if { !$inventory_enabled } {
+    $tvdiarydb query "DELETE FROM inventory;"
+    incr changes [$tvdiarydb changes]
+    $tvdiarydb query "DELETE FROM settings WHERE name='inventory_modified';"
+    $tvdiarydb query "DELETE FROM settings WHERE name='inventory_update';"
+  }
+
+  if { $changes > 0 } {
+    puts "VACUUM"
+    $tvdiarydb query "VACUUM;"
+  }
+
   $tvdiarydb close
   #
   # Closed the DB so release the lock.

@@ -37,7 +37,7 @@ set DB_FILEPATH "/mod/etc/tvdiary.db"
 set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
 
-# Accumulte a map from "<time>:<channel-name>" to {service_id start_time end_time}.
+# Accumulte a map from "<time>:<channel-name>" to a dictionary of values describing the event.
 set future_events {}
 
 # --------------------------------------------------------------
@@ -77,7 +77,6 @@ case $runmode {
 }
 set time_end [expr $time_start + 86400]
 
-# TODO: Possibly add CGI and cli parameters to exclude the future events if not needed.
 set include_future_events 1
 
 # In case of error - break glass!
@@ -324,7 +323,7 @@ proc main {} {
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
     #
-    # Experimental - update the cached inventory.
+    # Update the cached inventory.
     #
     update_inventory $tvdiarydb [system mediaroot] [system dustbin]
     
@@ -363,7 +362,10 @@ proc main {} {
       # So, took the policy decision that the diary predicts what will be recorded
       # if you don't restart the machine.
 
-      # Initially the $::future_events has just 
+      # THIS WILL CHANGE - By splitting the szEventToRecord value to get the event CRID, and using
+      # the usevtid, I should be able to query the EPG to get the details. Possible use the same
+      # mechanism for the existing scheduled events too, for consistency and hopefully speed it up.
+
     }
 
     # Finished with the DB.
@@ -414,15 +416,12 @@ proc main {} {
       set keys [lsort [dict keys $::future_events]]
       foreach key $keys {
         set vals [dict get $::future_events $key]
-        #lassign $vals service_id start_time end_time
-        #lassign [split $key ":"] x channel_name
         if { $comma } {
           puts ","
         } else {
           puts ""
           set comma 1
         }
-        #output_future_event $service_id $channel_name $start_time $end_time
         output_future_record $vals
       }
       puts ""
