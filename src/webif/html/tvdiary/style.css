@@ -334,18 +334,25 @@ table#monthly_programs_table tr td:first-child::before, table#monthly_channels_t
   content: counter(rowNumber);
 }
 
-
-#history_results_table {
-  width: auto;
+table#monthly_programs_table td, table#monthly_channels_table td, table#history_results_table td {
+  vertical-align: middle;
+}
+table#monthly_programs_table td img, table#monthly_channels_table td img, table#history_results_table td img {
+  vertical-align: text-bottom;
+  margin: 0 0.3em 0 0;
+}
+table#monthly_programs_table td div, table#monthly_channels_table td div {
+  white-space: nowrap;
+}
+table#monthly_programs_table th, table#monthly_channels_table th, table#history_results_table th {
+  white-space: nowrap;
 }
 
-.history_date, .history_time {
-  display: block;
-}
-table.history_table {
-  margin-left: 5em;
-}
 
+
+.history_title, .history_channel, .history_datetime, .history_duration {
+  white-space: nowrap;
+}
 td.history_type {
   text-align: center;
 }
@@ -361,4 +368,3 @@ td.inventory_dir {
   background: url("/images/711_1_09_Media_Folder.png") no-repeat white;
   padding-left: 50px;
 }
-

@@ -251,7 +251,7 @@ if { ![file exists $DB_FILEPATH] } {
             <div>
               <table id="history_results_table" class="tablesorter events_table">
                 <thead>
-                  <tr><th></th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th></tr>
+                  <tr><th>&nbsp;</th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th></tr>
                 </thead>
                 <tbody>
                 </tbody>

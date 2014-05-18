@@ -49,7 +49,7 @@ var inventory_modified = 0;
 //////
 function log_stuff(x) {
   /* console.log(x); */
-  /*$.get("/tvdiary/jslog.jim?msg=" + encodeURI(x));*/
+  /*$.get("/tvdiary/jslog.jim?msg=" + encodeURIComponent(x));*/
 }
 
 //////
@@ -337,7 +337,6 @@ $(document).ready(function() {
   //////
   function formatDate(t) {
     var d = new Date(t * 1000);
-    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
     return $.datepicker.formatDate("D d M yy", d);
   }
   
@@ -346,8 +345,7 @@ $(document).ready(function() {
   //////
   function formatTime(t) {
     var d = new Date(t * 1000);
-    t = (d.getTime() - d.getTimezoneOffset() * 60000) / 1000;
-    return format_duration(Math.floor((t % 86400) / 60));
+    return d.getHours() + ":" + two_digits(d.getMinutes());
   }
   
   //////
@@ -355,8 +353,7 @@ $(document).ready(function() {
   //////
   function formatDateTime(t) {
     var d = new Date(t * 1000);
-    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
-    return $.datepicker.formatDate("D d M yy ", d) + formatTime(t);
+    return $.datepicker.formatDate("D d M yy ", d) + d.getHours() + ":" + two_digits(d.getMinutes());
   }
   
   //////
@@ -364,7 +361,6 @@ $(document).ready(function() {
   //////
   function formatVShortDate(t) {
     var d = new Date(t * 1000);
-    d.setTime(d.getTime() - d.getTimezoneOffset() * 60000);
     return $.datepicker.formatDate("dd/mm ", d);
   }
   
@@ -1027,8 +1023,10 @@ $(document).ready(function() {
       html += "<td><a class=\"history_link\" title_id=\"" + program.title_id + "\" channel_id=\"" + program.channel_id + "\" href=\"#\">" + escapeHtml(program.title) + "</a></td>";
       html += "<td>";
       if (program.channel_name != "") {
+        html += "<div>";
         html += "<img src=\"" + program.channel_icon_path + "\" width=20 height=20 alt=\"" + escapeHtml(program.channel_name) + "\"/>";
         html += "<span>" + escapeHtml(program.channel_name) + "</span>";
+        html += "</div>";
       }
       html += "</td>";
       html += "<td>" + program.recorded_count + "</td>";
@@ -1091,8 +1089,10 @@ $(document).ready(function() {
       html += "<td></td>";
       html += "<td>";
       if (channel.channel_name != "") {
+        html += "<div>";
         html += "<img src=\"" + channel.channel_icon_path + "\" width=20 height=20 alt=\"" + escapeHtml(channel.channel_name) + "\"/>";
         html += "<span>" + escapeHtml(channel.channel_name) + "</span>";
+        html += "</div>";
       }
       html += "</td>";
       html += "<td>" + channel.recorded_count + "</td>";
@@ -1170,7 +1170,7 @@ $(document).ready(function() {
     var channel_op = $('#history_search_op_channel').val();
 
     if (typeof shapshot_time == "undefined") {
-      var url = '/tvdiary/history_json.jim?title=' + encodeURI(title) + '&channel=' + encodeURI(channel) + '&synopsis=' + encodeURI(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
+      var url = '/tvdiary/history_json.jim?title=' + encodeURIComponent(title) + '&channel=' + encodeURIComponent(channel) + '&synopsis=' + encodeURIComponent(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
     } else {
       var url = '/tvdiary/history_dummy.json?nocache';
     }
@@ -1268,8 +1268,10 @@ $(document).ready(function() {
 
       html += "<td class=\"history_channel\">";
       if (event.channel_name != "") {
+        html += "<div>";
         html += "<img src=\"" + event.channel_icon_path + "\" width=20 height=20 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
         html += "<span>" + escapeHtml(event.channel_name) + "</span>";
+        html += "</div>";
       }
       html += "</td>";
 
@@ -1282,7 +1284,7 @@ $(document).ready(function() {
       html += "</td>";
 
       html += "<td class=\"history_datetime\" sval=\"" + event.start + "\">";
-      html += "<span class=\"history_date\">" + formatDate(event.start) + "</span><span class=\"history_time\">" + formatTime(event.start) + "</span>";
+      html += formatDateTime(event.start);
       html += "</td>";
       
       html += "<td class=\"history_duration\" sval=\"" + duration + "\">";
@@ -1417,9 +1419,9 @@ $(document).ready(function() {
       html += "<td class=\"tvchannel\">";
       if (event.has_thumbnail) {
         if (typeof shapshot_time == "undefined") {
-          html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURI(event.directory + "/" + event.filename) + "\">";
+          html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURIComponent(event.directory + "/" + event.filename) + "\">";
         } else {
-          html += "<img class=\"bmp\" src=\"" + encodeURI(event.filename) + ".png\">";
+          html += "<img class=\"bmp\" src=\"" + encodeURIComponent(event.filename) + ".png\">";
         }
       }
       html += "</td>";
