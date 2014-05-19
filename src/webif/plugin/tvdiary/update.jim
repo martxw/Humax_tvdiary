@@ -27,23 +27,28 @@ try {
   set_setting $tvdiarydb "day_start" $day_start
   set_setting $tvdiarydb "monthly_summary_enabled" $monthly_summary_enabled
   set_setting $tvdiarydb "inventory_enabled" $inventory_enabled
-  
-  set changes 0
+
+  set num_program_facts 0
   if { !$monthly_summary_enabled } {
     $tvdiarydb query "DELETE FROM program_facts;"
-    incr changes [$tvdiarydb changes]
+    set num_program_facts [$tvdiarydb changes]
     $tvdiarydb query "DELETE FROM settings WHERE name='start_aggregated_year_month';"
     $tvdiarydb query "DELETE FROM settings WHERE name='time_for_aggregation';"
   }
+  set num_inventory 0
   if { !$inventory_enabled } {
     $tvdiarydb query "DELETE FROM inventory;"
-    incr changes [$tvdiarydb changes]
+    set num_inventory [$tvdiarydb changes]
     $tvdiarydb query "DELETE FROM settings WHERE name='inventory_modified';"
     $tvdiarydb query "DELETE FROM settings WHERE name='inventory_update';"
   }
 
-  if { $changes > 0 } {
-    puts "VACUUM"
+  if { $num_program_facts > 0 || $num_inventory > 0 } {
+    set num_programs [purge_orphaned_programs $tvdiarydb]
+    set num_channels [purge_orphaned_channels $tvdiarydb] 
+    set num_titles [purge_orphaned_titles $tvdiarydb] 
+    set num_synopses [purge_orphaned_synopses $tvdiarydb]
+    puts "Deleted $num_program_facts summary rows, $num_inventory inventory rows, $num_programs programmes, $num_channels channel names, $num_titles titles, and $num_synopses synopses."
     $tvdiarydb query "VACUUM;"
   }
 

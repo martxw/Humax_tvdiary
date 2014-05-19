@@ -246,3 +246,63 @@ proc update_inventory { tvdiarydb directory dustbin} {
   }
 #  puts "//[clock seconds]: update_inventory finished."
 }
+
+proc purge_orphaned_programs { tvdiarydb } {
+  $tvdiarydb query "
+    DELETE FROM programs
+    WHERE NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.program_id = programs.program_id)"
+  return [$tvdiarydb changes]
+}
+
+proc purge_orphaned_channels { tvdiarydb } {
+  $tvdiarydb query "
+    DELETE FROM channels
+    WHERE NOT EXISTS
+      (SELECT channel_id
+       FROM   programs
+       WHERE  programs.channel_id = channels.channel_id)
+      AND NOT EXISTS
+      (SELECT channel_id
+       FROM   inventory
+       WHERE  inventory.channel_id = channels.channel_id)
+      AND NOT EXISTS
+      (SELECT channel_id
+       FROM   program_facts
+       WHERE  program_facts.channel_id = channels.channel_id)"
+  return [$tvdiarydb changes]
+}
+
+proc purge_orphaned_titles { tvdiarydb } {
+  $tvdiarydb query "
+    DELETE FROM titles
+    WHERE NOT EXISTS
+      (SELECT title_id
+       FROM   programs
+       WHERE  programs.title_id = titles.title_id)
+      AND NOT EXISTS
+      (SELECT title_id
+       FROM   inventory
+       WHERE  inventory.title_id = titles.title_id)
+      AND NOT EXISTS
+      (SELECT title_id
+       FROM   program_facts
+       WHERE  program_facts.title_id = titles.title_id)"
+  return [$tvdiarydb changes]
+}
+
+proc purge_orphaned_synopses { tvdiarydb } {
+  $tvdiarydb query "
+    DELETE FROM synopses
+    WHERE NOT EXISTS
+      (SELECT synopsis_id
+       FROM   programs
+       WHERE  programs.synopsis_id = synopses.synopsis_id)
+      AND NOT EXISTS
+      (SELECT synopsis_id
+       FROM   inventory
+       WHERE  inventory.synopsis_id = synopses.synopsis_id)"
+  return [$tvdiarydb changes]
+}

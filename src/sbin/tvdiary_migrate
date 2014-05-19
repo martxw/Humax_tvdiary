@@ -129,12 +129,8 @@ proc create_migrate_tables { tvdiarydb } {
     # Originally there was no version number & no settings or inventory table.
     set db_ver 1
     if { $inventory_exists != 0 } {
-      set last_db_ver [get_setting $tvdiarydb "db_ver"]
-      if { $last_db_ver != "" } {
-        set db_ver $last_db_ver
-      } else {
-        set db_ver 2
-      }
+      set last_db_ver [get_setting $tvdiarydb "db_ver" 2]
+      set db_ver $last_db_ver
     }
 
     puts "Migrating database from schema v$db_ver in $::DB_FILEPATH."

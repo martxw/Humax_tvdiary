@@ -158,11 +158,17 @@ table.tablesorter th.header {
 span.live_count {
   cursor: pointer;
 }
+span.live_count:hover {
+  text-decoration: underline;
+}
 
 /* Live TV count - when not shown. */
 span.live_count_hidden {
   color: #5e5e5e;
   text-decoration: line-through;
+}
+span.live_count_hidden:hover {
+  text-decoration: underline line-through;
 }
 
 /* Don't wrap any of the times */
@@ -323,6 +329,25 @@ monthly_next_prev_table {
   margin: 0 1em 0.3em 0;
 }
 
+table#history_search_table td:nth-child(1), table#history_search_table td:nth-child(2) {
+    width:1%;
+    white-space:nowrap;
+}
+
+#history_search_table tbody {
+  vertical-align: top;
+}
+#history_search_table th div {
+  margin-top: 2px;
+}
+
+#history_search_title, #history_search_channel {
+  resize: horizontal;
+}
+#history_search_synopsis {
+  resize: both;
+}
+
 /* Auto number the first column in rows */
 table#monthly_programs_table, table#monthly_channels_table {
   counter-reset: rowNumber;
@@ -349,12 +374,14 @@ table#monthly_programs_table th, table#monthly_channels_table th, table#history_
 }
 
 
-
 .history_title, .history_channel, .history_datetime, .history_duration {
   white-space: nowrap;
 }
 td.history_type {
   text-align: center;
+}
+a.history_link:hover {
+  text-decoration: underline;
 }
 
 

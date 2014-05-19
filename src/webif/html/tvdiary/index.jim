@@ -210,30 +210,30 @@ if { ![file exists $DB_FILEPATH] } {
 
         <table id="history_search_table">
           <tr>
-            <th>Title</th>
+            <th><div>Title</div></th>
             <td>
               <select id="history_search_op_title"></select>
             </td>
             <td>
-              <input id="history_search_title" length="40" maxlength="40">
+              <textarea rows="1" cols="40" id="history_search_title" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
-            <th>Synopsis</th>
+            <th><div>Synopsis</div></th>
             <td>
               <select id="history_search_op_synopsis"></select>
             </td>
             <td>
-              <input id="history_search_synopsis" length="80" maxlength="256">
+              <textarea rows="3" cols="80" id="history_search_synopsis" maxlength="200" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
-            <th>Channel</th>
+            <th><div>Channel</div></th>
             <td>
               <select id="history_search_op_channel"></select>
             </td>
             <td>
-              <input id="history_search_channel" length="240" maxlength="40">
+              <textarea rows="1" cols="40" id="history_search_channel" length="40" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>

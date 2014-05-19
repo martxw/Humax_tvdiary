@@ -56,6 +56,8 @@ function log_stuff(x) {
 // Page loaded - start work.
 //////
 $(document).ready(function() {
+  loadCookies();
+
   if (typeof shapshot_time == "undefined") {
     today_start = get_tv_day_start(new Date().getTime() / 1000, false);
   } else {
@@ -158,11 +160,6 @@ $(document).ready(function() {
   });
   log_stuff("Initialized the default datepicker time to " + new Date(today_start * 1000));
 
-  // Load the cookie. Convert the string to boolean, but default to true if it's missing.
-  // Set the initial checked state before initializing the iphoneStyle checkbox.
-  including_live = getCookie("tvdiary_live_tv");
-  including_live = (including_live != "false");
-
   $('#daily_prev_day').button()
     .click(function() {
       updateDate(-1);
@@ -240,6 +237,7 @@ $(document).ready(function() {
     sortInitialOrder: "desc"
   }).bind("sortEnd",function() {
       programs_sorting = this.config.sortList;
+      saveCookies();
   });
   $("#monthly_channels_table").tablesorter({
     textExtraction: sortValueTextExtraction,
@@ -251,6 +249,7 @@ $(document).ready(function() {
     sortInitialOrder: "desc"
   }).bind("sortEnd",function() { 
       channels_sorting = this.config.sortList;
+      saveCookies();
   });
 
   $('#monthly_prev').button()
@@ -293,6 +292,7 @@ $(document).ready(function() {
     sortInitialOrder: "desc"
   }).bind("sortEnd",function() {
       history_sorting = this.config.sortList;
+      saveCookies();
   });
 
   $('#history_search_button').button().click(function() {
@@ -379,6 +379,62 @@ $(document).ready(function() {
     return String(string).replace(/[&<>"'\/]/g, function (s) {
       return entityMap[s];
     });
+  }
+
+  //////
+  // Load cookie values en mass.
+  //////
+  function loadCookies() {
+    // Load the cookie.
+    var cookie = getCookie("tvdiary_ui");
+    if (cookie) {
+      var parts = cookie.split("|");
+      // Convert the string to boolean, but default to true if it's missing.
+      if (parts.length >= 1) {
+        including_live = (parts[0] != "false");
+      }
+      if (parts.length >= 2) {
+        programs_sorting = parse2x(parts[1]);
+      }
+      if (parts.length >= 3) {
+        channels_sorting = parse2x(parts[2]);
+      }
+      if (parts.length >= 4) {
+        history_sorting = parse2x(parts[3]);
+      }
+    }
+  }
+  function parse2x(valStr) {
+    var vals = valStr.split(",");
+    var len = vals.length / 2;
+    var result = new Array();
+    for (var i = 0; i < len; i++) {
+      result[i] = new Array();
+      result[i][0] = parseInt(vals[i * 2]);
+      result[i][1] = parseInt(vals[i * 2 + 1]);
+    }
+    return result;
+  }
+
+  //////
+  // Save the cookie values en mass.
+  //////
+  function saveCookies() {
+    var cookie = including_live + "|";
+    cookie += fmt2x(programs_sorting) + "|"; // [[1,0],[2,0]];
+    cookie += fmt2x(channels_sorting) + "|"; // [[1,0]];
+    cookie += fmt2x(history_sorting); // [[4, 1]];
+    setCookie("tvdiary_ui", cookie);
+  }
+  function fmt2x(a) {
+    var result = "";
+    for (var i = 0; i < a.length; i++) {
+      if (i > 0) {
+        result += ",";
+      }
+      result += a[i][0] + "," + a[i][1];
+    }
+    return result;
   }
 
   //////
@@ -571,7 +627,7 @@ $(document).ready(function() {
       $(".live_count").addClass('live_count_hidden');
     }
     // Persist the setting.
-    setCookie("tvdiary_live_tv", including_live);
+    saveCookies()
   }
   
   //////
