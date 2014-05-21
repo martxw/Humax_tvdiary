@@ -10,8 +10,10 @@
 # through rendering, the JSON may be malformed and not parsable.
 #
 # CGI usage: /tvdiary/inventory_json.jim[?modified=<time>]
-# CLI usage: inventory_json.jim
+# CLI usage: inventory_json.jim [<icons_path> <icons_url>]
 #   <time> = optional timestamp of current inventory results held by the client.
+#   icons_path = disk path to the TV channel icons.
+#   icons_url = URL path to the TV channel icons.
 #
 # Author: Martin Wink, 2014.
 #
@@ -34,6 +36,8 @@ set DB_FILEPATH "/mod/etc/tvdiary.db"
 set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
 
+set clients_modified 0
+
 # --------------------------------------------------------------
 # CGI or command line parameters
 # --------------------------------------------------------------
@@ -47,6 +51,19 @@ case $runmode {
     httpheader "application/json"
   }
   cli {
+    if { $argc != 0 && $argc != 2 } {
+      puts "Usage: $argv0 \[<icons_path> <icons_url>\]"
+      puts " icons_path = disk path to the TV channel icons"
+      puts " icons_url = URL path to the TV channel icons"
+      puts ""
+      puts "Eg: $argv0"
+      puts "Eg: $argv0 $channel_icons_path $channel_icons_url"
+      exit -1
+    }
+    if { $argc == 2 } {
+      set channel_icons_path [lindex $argv 0]
+      set channel_icons_url [lindex $argv 1]
+    }
   }
 }
 

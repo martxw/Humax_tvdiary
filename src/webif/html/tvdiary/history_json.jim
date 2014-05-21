@@ -45,6 +45,10 @@ set DB_FILEPATH "/mod/etc/tvdiary.db"
 set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
 
+set program_id_specified 0
+set title_id_specified 0
+set channel_id_specified 0
+
 # --------------------------------------------------------------
 # CGI parameters
 # --------------------------------------------------------------
@@ -54,6 +58,10 @@ if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
 case $runmode {
   cgi {
     cgi_input
+    set program_id_specified [cgi_exists program_id]
+    set title_id_specified [cgi_exists title_id]
+    set channel_id_specified [cgi_exists channel_id]
+
     set program_id [cgi_get program_id]
 
     set title_id [cgi_get title_id]
@@ -69,8 +77,41 @@ case $runmode {
     httpheader "application/json"
   }
   cli {
-    puts "Usage: $argv0 only runs as CGI."
-    exit -1
+    set program_id ""
+    set title_id ""
+    set channel_id ""
+    set title ""
+    set synopsis ""
+    set channel ""
+    set title_op ""
+    set synopsis_op ""
+    set channel_op ""
+    if { $argc > 1 } {
+      set type [lindex $argv 0]
+
+      if { $type eq "P" } {
+        set program_id [lindex $argv 1]
+        set channel_icons_path [lindex $argv 2]
+        set channel_icons_url [lindex $argv 3]
+        set program_id_specified 1
+      } elseif { $type eq "TC" } {
+        set title_id [lindex $argv 1]
+        set channel_id [lindex $argv 2]
+        set channel_icons_path [lindex $argv 3]
+        set channel_icons_url [lindex $argv 4]
+        set title_id_specified 1
+        set channel_id_specified 1
+      } elseif { $type eq "S" } {
+        set title_op [lindex $argv 1]
+        set title [lindex $argv 2]
+        set synopsis_op [lindex $argv 3]
+        set synopsis [lindex $argv 4]
+        set channel_op [lindex $argv 5]
+        set channel [lindex $argv 6]
+        set channel_icons_path [lindex $argv 7]
+        set channel_icons_url [lindex $argv 8]
+      }
+    }
   }
 }
 
@@ -169,7 +210,7 @@ proc main {} {
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
   # Separate queries to populate the records depending on parameters.
-  if { [cgi_exists program_id] } {
+  if { $::program_id_specified } {
     # If the program ID is supplied, find the title_id and synopsis_id to search on, and their text to return in the JSON.
     set records [$tvdiarydb query "
       SELECT programs.title_id, programs.synopsis_id, titles.title, synopses.synopsis
@@ -188,13 +229,13 @@ proc main {} {
       FROM activities, programs, channels
       WHERE programs.title_id = %s AND programs.synopsis_id = %s AND activities.program_id = programs.program_id AND programs.channel_id = channels.channel_id
       ORDER BY activities.start" $::title_id $::synopsis_id]
-  } elseif { [cgi_exists title_id] } {
+  } elseif { $::title_id_specified } {
     # If the title_id supplied, then exact match, with the channel_id if it's supplied.
     set records [$tvdiarydb query "SELECT titles.title FROM titles WHERE titles.title_id = %s LIMIT 1" $::title_id]
     set record [lindex $records 0]
     set ::title $record(title)
 
-    if { [cgi_exists channel_id] } {
+    if { $::channel_id_specified } {
       set records [$tvdiarydb query "SELECT channels.channel_name FROM channels WHERE channels.channel_id = %s LIMIT 1" $::channel_id]
       set record [lindex $records 0]
       set ::channel_name $record(channel_name)
@@ -240,14 +281,14 @@ proc main {} {
   release_lock tvdiary_db
 
   puts "{"
-  if { [cgi_exists program_id] } {
+  if { $::program_id_specified } {
     puts " \"program_id\": $::program_id,"
     puts " \"title\": \"[escape_json_string $::title]\","
     puts " \"synopsis\": \"[escape_json_string $::synopsis]\","
-  } elseif { [cgi_exists title_id] } {
+  } elseif { $::title_id_specified } {
     puts " \"title_id\": $::title_id,"
     puts " \"title\": \"[escape_json_string $::title]\","
-    if { [cgi_exists channel_id] } {
+    if { $::channel_id_specified } {
       puts " \"channel_id\": $::channel_id,"
       puts " \"channel_name\": \"[escape_json_string $::channel_name]\","
     }
@@ -290,7 +331,7 @@ proc main {} {
       puts " \"program_id\": $record(program_id),"
       puts " \"start\": $record(start),"
       puts " \"end\": $record(end),"
-      if { [cgi_exists program_id] } {
+      if { $::program_id_specified } {
         puts " \"title\": \"[escape_json_string $::title]\","
         puts " \"synopsis\": \"[escape_json_string $::synopsis]\","
       } else {

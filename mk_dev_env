@@ -6,8 +6,6 @@ TDIR=/mod/dev/tvdiary/src/sbin
 LDIR=/mod/dev/tvdiary/sbin.jim
 ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
 ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
-ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
-ln -s $TDIR/tvdiary_aggregate $LDIR/tvdiary_aggregate.jim
 ln -s $TDIR/tvdiary_migrate $LDIR/tvdiary_migrate.jim
 
 mkdir /mod/dev/tvdiary/live
@@ -17,10 +15,6 @@ TDIR=/mod/sbin
 LDIR=/mod/dev/tvdiary/live/sbin
 ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status
 ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge
-ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish
-#ln -s $TDIR/tvdiary_status $LDIR/tvdiary_status.jim
-#ln -s $TDIR/tvdiary_purge $LDIR/tvdiary_purge.jim
-#ln -s $TDIR/tvdiary_publish $LDIR/tvdiary_publish.jim
 ln -s $TDIR/tvdiary_migrate $LDIR/tvdiary_migrate
 ln -s $TDIR/tvdiary_monitor_on $LDIR/tvdiary_monitor_on
 ln -s $TDIR/tvdiary_monitor_off $LDIR/tvdiary_monitor_off
@@ -31,28 +25,22 @@ mkdir /mod/dev/tvdiary/live/webif/html/tvdiary
 
 TDIR=/mod/webif/html/tvdiary
 LDIR=/mod/dev/tvdiary/live/webif/html/tvdiary
-ln -s $TDIR/available.png $LDIR/available.png
 ln -s $TDIR/day_json.jim $LDIR/day_json.jim
-ln -s $TDIR/dejavu.png $LDIR/dejavu.png
 ln -s $TDIR/history_json.jim $LDIR/history_json.jim
-ln -s $TDIR/deleted_unwatched.png $LDIR/deleted_unwatched.png
 ln -s $TDIR/index.jim $LDIR/index.jim
 ln -s $TDIR/inventory_json.jim $LDIR/inventory_json.jim
 ln -s $TDIR/jslog.jim $LDIR/jslog.jim
 ln -s $TDIR/monthly_json.jim $LDIR/monthly_json.jim
 ln -s $TDIR/script.js $LDIR/script.js
 ln -s $TDIR/style.css $LDIR/style.css
-ln -s $TDIR/tvdiary_db.jim $LDIR/tvdiary_db.jim
 ln -s $TDIR/tvdiary_aggregate.jim $LDIR/tvdiary_aggregate.jim
-ln -s $TDIR/tvmast.png $LDIR/tvmast.png
-ln -s $TDIR/unwatched.png $LDIR/unwatched.png
+ln -s $TDIR/tvdiary_db.jim $LDIR/tvdiary_db.jim
 
 mkdir /mod/dev/tvdiary/live/webif/plugin
 mkdir /mod/dev/tvdiary/live/webif/plugin/tvdiary
 
 TDIR=/mod/webif/plugin/tvdiary
 LDIR=/mod/dev/tvdiary/live/webif/plugin/tvdiary
-ln -s $TDIR/icon.png $LDIR/icon.png
 ln -s $TDIR/menu.hook $LDIR/menu.hook
 ln -s $TDIR/settings.hook $LDIR/settings.hook
 ln -s $TDIR/toolbar.hook $LDIR/toolbar.hook

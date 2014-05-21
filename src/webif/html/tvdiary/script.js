@@ -58,10 +58,10 @@ function log_stuff(x) {
 $(document).ready(function() {
   loadCookies();
 
-  if (typeof shapshot_time == "undefined") {
+  if (typeof snapshot_time == "undefined") {
     today_start = get_tv_day_start(new Date().getTime() / 1000, false);
   } else {
-    today_start = get_tv_day_start(shapshot_time, false);
+    today_start = get_tv_day_start(snapshot_time, false);
   }
 
   // Initialize the to-top scroller.
@@ -534,15 +534,15 @@ $(document).ready(function() {
 
     var r_url;
     var w_url;
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       // Pass the browser's time to the web server - helps when clocks aren't synced.
       var now_time = Math.round(new Date().getTime() / 1000);
       r_url = "/tvdiary/day_json.jim?start=" + daily_start_time + "&current_time=" + now_time + "&type=R";
       w_url = "/tvdiary/day_json.jim?start=" + daily_start_time + "&current_time=" + now_time + "&type=W";
     } else {
       var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(daily_start_time * 1000));
-      r_url = "/tvdiary/" + date_filename + "_R.json?nocache";
-      w_url = "/tvdiary/" + date_filename + "_W.json?nocache";
+      r_url = "/tvdiary/json/" + date_filename + "_R.json?nocache";
+      w_url = "/tvdiary/json/" + date_filename + "_W.json?nocache";
     }
     
     // Asynchronously request the watched table data. First, so it may get the DB lock first because it's quicker.
@@ -710,17 +710,17 @@ $(document).ready(function() {
       if (inventory_enabled) {
         if (event.type == "record" && !event.watched) {
           if (!event.available) {
-            html += "<img src=\"deleted_unwatched.png\" width=16 height=16 title=\"deleted unwatched\">";
+            html += "<img src=\"images/deleted_unwatched.png\" width=16 height=16 title=\"deleted unwatched\">";
           } else {
-            html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
+            html += "<img src=\"images/unwatched.png\" width=16 height=16 title=\"unwatched\">";
           }
         }
         if (event.available) {
-          html += "<a class=\"inventory\" href=\"#\"><img src=\"available.png\" width=16 height=16 title=\"available\"></a>";
+          html += "<a class=\"inventory\" href=\"#\"><img src=\"images/available.png\" width=16 height=16 title=\"available\"></a>";
         }
       }
       if (event.repeat_id != -1) {
-        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
 
@@ -1004,10 +1004,10 @@ $(document).ready(function() {
     $('#monthly_channels_spinner').show('fast');
 
     var m_url;
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       m_url = "/tvdiary/monthly_json.jim?year=" + year + "&month=" + month;
     } else {
-      m_url = "/tvdiary/" + year + "_" + month + "_M.json?nocache";
+      m_url = "/tvdiary/json/" + year + "_" + month + "_M.json?nocache";
     }
 
     // Asynchronously request the summary tables' data.
@@ -1190,10 +1190,10 @@ $(document).ready(function() {
   function update_history_program(prog_id) {
     $('#history_prompt').html("You may have seen this programme already in the past. Searching for activities with the same title and synopsis.");
 
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?program_id=' + prog_id;
     } else {
-      var url = '/tvdiary/history_dummy.json?nocache';
+      var url = '/tvdiary/json/history_' + prog_id + '.json?nocache';
     }
     update_history(url, true);
   }
@@ -1204,10 +1204,10 @@ $(document).ready(function() {
   function update_history_title_channel(title_id, channel_id) {
     $('#history_prompt').html("Searching for activities with the same title on the same channel.");
 
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?title_id=' + title_id + '&channel_id=' + channel_id;
     } else {
-      var url = '/tvdiary/history_dummy.json?nocache';
+      var url = '/tvdiary/json/history_' + title_id + '_' + channel_id + '.json?nocache';
     }
     update_history(url, true);
   }
@@ -1225,10 +1225,10 @@ $(document).ready(function() {
     var synopsis_op = $('#history_search_op_synopsis').val();
     var channel_op = $('#history_search_op_channel').val();
 
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?title=' + encodeURIComponent(title) + '&channel=' + encodeURIComponent(channel) + '&synopsis=' + encodeURIComponent(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
     } else {
-      var url = '/tvdiary/history_dummy.json?nocache';
+      var url = '/tvdiary/json/history_search.json?nocache';
     }
     update_history(url, false);
   }
@@ -1265,6 +1265,9 @@ $(document).ready(function() {
           $('#history_search_title').val(data.title ? data.title : "");
           $('#history_search_synopsis').val(data.synopsis ? data.synopsis : "");
           $('#history_search_channel').val(data.channel_name ? data.channel_name : "");
+          $('#history_search_op_title').val(data.title_op ? data.title_op : "E");
+          $('#history_search_op_synopsis').val(data.synopsis_op ? data.synopsis_op : "E");
+          $('#history_search_op_channel').val(data.channel_name_op ? data.channel_name_op : "E");
           if (data.events.length > 0) {
             $('#history_results_table tbody').html(history_json_to_html(data));
             $('#history_results_caption').html(history_json_to_caption(data));
@@ -1304,14 +1307,14 @@ $(document).ready(function() {
       switch (event.type) {
         case "future":
         case "record":
-          type_icon = "/images/745_1_11_Video_1REC.png";
+          type_icon = "images/745_1_11_Video_1REC.png";
           break;
         case "live":
-          type_icon = "/tvdiary/tvmast.png";
+          type_icon = "images/tvmast.png";
           break;
         case "play":
         default:
-          type_icon = "/images/745_1_10_Video_2Live.png";
+          type_icon = "images/745_1_10_Video_2Live.png";
           break;
       }
       var duration = Math.round((event.end - event.start + 30) / 60);
@@ -1404,10 +1407,10 @@ $(document).ready(function() {
   // Update the contents of the inventory panel.
   //////
   function update_inventory() {
-    if (typeof shapshot_time == "undefined") {
+    if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/inventory_json.jim?modified=' + inventory_modified;
     } else {
-      var url = '/tvdiary/inventory_dummy.json?nocache';
+      var url = '/tvdiary/json/inventory.json?nocache';
     }
     $.ajax({
       type: "GET",
@@ -1474,10 +1477,10 @@ $(document).ready(function() {
       // Column 2 - the thumbnail.
       html += "<td class=\"tvchannel\">";
       if (event.has_thumbnail) {
-        if (typeof shapshot_time == "undefined") {
+        if (typeof snapshot_time == "undefined") {
           html += "<img class=\"bmp\" src=\"/browse/bmp.jim?file=" + encodeURIComponent(event.directory + "/" + event.filename) + "\">";
         } else {
-          html += "<img class=\"bmp\" src=\"" + encodeURIComponent(event.filename) + ".png\">";
+          html += "<img class=\"bmp\" src=\"thumbs/" + encodeURIComponent(event.filename) + ".png\">";
         }
       }
       html += "</td>";
@@ -1500,10 +1503,10 @@ $(document).ready(function() {
       //
       html += "<td class=\"event_flags\">";
       if (!event.watched) {
-        html += "<img src=\"unwatched.png\" width=16 height=16 title=\"unwatched\">";
+        html += "<img src=\"images/unwatched.png\" width=16 height=16 title=\"unwatched\">";
       }
       if (event.repeat_id != -1) {
-        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
       html += "</td>"
 

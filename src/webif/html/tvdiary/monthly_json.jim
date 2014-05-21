@@ -8,9 +8,11 @@
 # through rendering, the JSON may be malformed and not parsable.
 #
 # CGI usage: /tvdiary/monthly_json.jim?year=<year selector>&month=<month selector>
-# CLI usage: monthly_json.jim <year selector> <month selector>
+# CLI usage: monthly_json.jim <year selector> <month selector> [<icons_path> <icons_url>]
 #   year selector = the year to display (eg 2014)
 #   month selector = the month within the year to display (eg 12)
+#   icons_path = disk path to the TV channel icons.
+#   icons_url = URL path to the TV channel icons.
 #
 # Author: Martin Wink, 2014.
 #
@@ -47,19 +49,23 @@ case $runmode {
     httpheader "application/json"
   }
   cli {
-    if { $argc != 2 } {
-# CLI usage: monthly_json.jim <year selector> <month selector>
-#   year selector = the year to display (eg 2014)
-#   month selector = the month within the year to display (eg 12)
-      puts "Usage: $argv0 <year selector> <month selector>"
+    if { $argc != 2 && $argc != 4 } {
+      puts "Usage: $argv0 <year selector> <month selector> \[<icons_path> <icons_url>\]"
       puts " year selector = the year to display (eg 2014)"
       puts " month selector = the month within the year to display (eg 12)"
+      puts " icons_path = disk path to the TV channel icons"
+      puts " icons_url = URL path to the TV channel icons"
       puts ""
       puts "Eg: $argv0 2014 4"
+      puts "Eg: $argv0 2014 4 $channel_icons_path $channel_icons_url"
       exit -1
     }
     set year_selector [lindex $argv 0]
     set month_selector [lindex $argv 1]
+    if { $argc == 4 } {
+      set channel_icons_path [lindex $argv 2]
+      set channel_icons_url [lindex $argv 3]
+    }
   }
 }
 set year_month_selector [expr $year_selector * 100 + $month_selector]
