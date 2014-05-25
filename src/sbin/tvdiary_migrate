@@ -17,7 +17,6 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 set logging 1
 
-set DB_FILEPATH "/mod/etc/tvdiary.db"
 set CONF_FILEPATH "/mod/etc/tvdiary.conf"
 
 set current_time [clock seconds]
@@ -57,7 +56,7 @@ proc main {} {
     create_migrate_tables $tvdiarydb
 
     migrate_conf $tvdiarydb
-    
+
     $tvdiarydb close
 
     #
@@ -81,9 +80,11 @@ proc create_migrate_tables { tvdiarydb } {
 
   set programs_exists [table_exists $tvdiarydb "programs"]
   set inventory_exists [table_exists $tvdiarydb "inventory"]
+  set program_facts_exists [table_exists $tvdiarydb "program_facts"]
 
   puts "programs_exists=$programs_exists"
   puts "inventory_exists=$inventory_exists"
+  puts "program_facts_exists=$program_facts_exists"
 
   if { $programs_exists == 0 } {
     puts "Creating fresh empty database in $::DB_FILEPATH."
@@ -98,11 +99,12 @@ proc create_migrate_tables { tvdiarydb } {
     $tvdiarydb query "CREATE TABLE IF NOT EXISTS synopses(synopsis_id INTEGER PRIMARY KEY, synopsis TEXT);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS is_synopsis ON synopses (synopsis);"
 
-    $tvdiarydb query "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER);"
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER, crid TEXT);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_id ON programs (channel_id);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title_id ON programs (title_id);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis_id ON programs (synopsis_id);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_start ON programs (start);"
+    $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_crid ON programs (crid);"
 
     $tvdiarydb query "CREATE TABLE IF NOT EXISTS activities(activity_id INTEGER PRIMARY KEY, program_id INTEGER, type TEXT, start INTEGER, end INTEGER, unfinished INTEGER);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ia_program_id ON activities (program_id);"
@@ -124,12 +126,18 @@ proc create_migrate_tables { tvdiarydb } {
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_title_id ON program_facts (title_id);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
 
+    set_setting $tvdiarydb "db_ver" 4
+
   } else {
     # There is an existing DB, so migration is necessary.
     # Originally there was no version number & no settings or inventory table.
     set db_ver 1
     if { $inventory_exists != 0 } {
       set last_db_ver [get_setting $tvdiarydb "db_ver" 2]
+      if { $program_facts_exists != 0 && $last_db_ver == 2 } {
+        # An oversight of v3-0 was the db_ver setting was missed off. So if the program_facts table exists it's v3.
+        set last_db_ver 3
+      }
       set db_ver $last_db_ver
     }
 
@@ -156,11 +164,12 @@ proc create_migrate_tables { tvdiarydb } {
     # "CREATE INDEX IF NOT EXISTS ii_scheduled_start ON inventory (scheduled_start);"
     # "CREATE TABLE IF NOT EXISTS settings(name TEXT, value TEXT);"
     # "CREATE UNIQUE INDEX IF NOT EXISTS is_name ON settings (name);"
-  
-    # 3) Explicit db_ver in settings & separate tables for strings. 
+
+    # 3) Explicit db_ver in settings & separate tables for strings.
+    # ** Except, db_ver only in settings for upgrades. Fresh installs left with no db_ver.
 
     if { $db_ver == 1 || $db_ver == 2 } {
-      # Create the missing tables if they're not present.    
+      # Create the missing tables if they're not present.
       $tvdiarydb query "CREATE TABLE IF NOT EXISTS channels(channel_id INTEGER PRIMARY KEY, channel_name TEXT);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ic_channel_name ON channels (channel_name);"
 
@@ -185,10 +194,11 @@ proc create_migrate_tables { tvdiarydb } {
 
       # For programs, rename the table first, create a new table & indexes, then migrate the data, and finally delete the old table.
       $tvdiarydb query "ALTER TABLE programs RENAME TO old_programs;"
-      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER);"
+      $tvdiarydb query "CREATE TABLE programs(program_id INTEGER PRIMARY KEY, channel_id INTEGER, title_id INTEGER, synopsis_id INTEGER, start INTEGER, duration INTEGER, crid TEXT);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_channel_id ON programs (channel_id);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_title_id ON programs (title_id);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_synopsis_id ON programs (synopsis_id);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_crid ON programs (crid);"
 
       puts "Normalizing programme information."
 
@@ -205,7 +215,7 @@ proc create_migrate_tables { tvdiarydb } {
         set synopsis $record(synopsis)
         set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
         #puts "$synopsis -> $synopsis_id"
-     
+
         $tvdiarydb query "INSERT INTO programs (program_id, channel_id, title_id, synopsis_id, start, duration) VALUES (%s, %s, %s, %s, %s, %s)" $record(program_id) $channel_id $title_id $synopsis_id $record(start) $record(duration)
       }
       $tvdiarydb query "DROP TABLE old_programs;"
@@ -250,11 +260,20 @@ proc create_migrate_tables { tvdiarydb } {
 
       puts "Cleaning up and compacting database."
 
-      set_setting $tvdiarydb "db_ver" 3
+      set_setting $tvdiarydb "db_ver" 4
 
       $tvdiarydb query "VACUUM;"
+    } elseif { $db_ver == 3 } {
+
+      $tvdiarydb query "ALTER TABLE programs ADD COLUMN crid TEXT;"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_crid ON programs (crid);"
+      puts "Added CRID column."
+
+      set_setting $tvdiarydb "db_ver" 4
+    } else {
+      puts "No changes required."
     }
-    
+
   }
 }
 

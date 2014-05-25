@@ -10,7 +10,7 @@
 #puts "auto_path=$auto_path"
 
 source /mod/webif/lib/setup
-require epg.class rsv.class ts.class
+require ts.class
 source /mod/webif/html/tvdiary/tvdiary_db.jim
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
@@ -19,7 +19,6 @@ if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 # --------------------------------------------------------------
 set logging 1
 
-set DB_FILEPATH "/mod/etc/tvdiary.db"
 set LSOF "/mod/bin/lsof"
 set PGREP "/mod/bin/busybox/pgrep"
 
@@ -46,15 +45,6 @@ set logging_time [clock format $current_time -format $log_date_fmt]
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------
-
-#
-# Create or open the database file.
-#
-proc openDB {} {
-  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
-
-  return $tvdiarydb;
-}
 
 #
 # Load the IDs of previously unfinished activities.
@@ -112,13 +102,13 @@ proc get_activity_program_details { tvdiarydb activity_id } {
 #
 # Add details for a program being watched live, played or recorded.
 #
-proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration } {
-  # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
+proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration crid } {
 
   set channel_id [get_channel_id $tvdiarydb $channel_name]
   set title_id [get_title_id $tvdiarydb $title]
   set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
 
+  # Check for an existing entry for this program, searching by channel_name and start_time, or by title if there's no channel.
   if { $channel_name ne "" } {
     set _prog_id [$tvdiarydb query "
       SELECT program_id
@@ -177,9 +167,9 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
   } else {
     # If there's no existing entry for the program, create a new entry, and a new activity.
     $tvdiarydb query "
-      INSERT INTO programs (channel_id, title_id, synopsis_id, start, duration)
-      VALUES (%s, %s, %s, %s, %s)
-      " $channel_id $title_id $synopsis_id $start_time $duration
+      INSERT INTO programs (channel_id, title_id, synopsis_id, start, duration, crid)
+      VALUES (%s, %s, %s, %s, %s, '%s')
+      " $channel_id $title_id $synopsis_id $start_time $duration $crid
     set prog_id [$tvdiarydb lastid]
 
     $tvdiarydb query "
@@ -194,10 +184,65 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
 }
 
 #
+# Get the EPG details from an hsvc. Return as an associative array. With defaults if nothing in the EPG.
+#
+proc get_epg_from_hsvc { epg_db hsvc time } {
+  set records [$epg_db query "
+    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid
+    FROM epg e, channel.TBL_SVC c
+    WHERE c.hSvc = %s
+      AND e.service_id = c.usSvcId
+      AND e.start <= %s and e.end > %s
+    " $hsvc $time $time]
+  if { [llength $records] == 1 } {
+    set record [lindex $records 0]
+  } else {
+    set records [$epg_db query "
+      SELECT SUBSTR(c.szSvcName, 2) AS channel_name
+      FROM channel.TBL_SVC c
+      WHERE c.hSvc = %s
+      " $hsvc]
+    set record [lindex $records 0]
+    dict set record title "Not in EPG"
+    dict set record synopsis "No information available"
+    dict set record start 0
+    dict set record end 0
+    dict set record duration 0
+    dict set record event_crid ""
+  }
+  return $record
+}
+
+#
+# Get the EPG details from a channel name. Return as an associative array. With defaults if nothing in the EPG.
+#
+proc get_epg_from_channel_name { epg_db channel_name time } {
+  set records [$epg_db query "
+    SELECT e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid
+    FROM epg e, channel.TBL_SVC c
+    WHERE SUBSTR(c.szSvcName, 2) = '%s'
+      AND e.service_id = c.usSvcId
+      AND e.start <= %s and e.end > %s
+    " $channel_name $time $time]
+  if { [llength $records] == 1 } {
+    set record [lindex $records 0]
+  } else {
+    set record {}
+    dict set record title "Not in EPG"
+    dict set record synopsis "No information available"
+    dict set record start 0
+    dict set record end 0
+    dict set record duration 0
+    dict set record event_crid ""
+  }
+  return $record
+}
+
+#
 # Add details for a media file being played. Stored like a TV program except blank channel name and no start time or duration.
 #
 proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time filename } {
-  log_program_activity $tvdiarydb finished_activities "P" $log_time "" $filename "" 0 0
+  log_program_activity $tvdiarydb finished_activities "P" $log_time "" $filename "" 0 0 ""
 }
 
 #
@@ -206,29 +251,12 @@ proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time
 # However, that didn't take account of being in the TV Portal but not actually playing anything yet.
 # So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
 #
-proc log_watching_live_tv { tvdiarydb &finished_activities } {
+proc log_watching_live_tv { tvdiarydb epg_db &finished_activities } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
+  
+  set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
 
-  set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
-  if { [llength $_svcid] != 1 } {
-    throw "Failed to get svcid for hsvc=$hsvc"
-  }
-  lassign [lindex $_svcid 0] x svcid x lcn x channel_name
-
-  log_watching_live_tv_details $tvdiarydb finished_activities $svcid $channel_name
-}
-
-#
-# Report the live TV details, once we know the servce ID.
-#
-proc log_watching_live_tv_details { tvdiarydb &finished_activities svcid channel_name } {
-  set epgs [epg dbfetch get -service $svcid -time [clock seconds]]
-  if { [llength $epgs] == 1 } {
-    lassign $epgs epg
-    log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name [$epg get name] [$epg get text] [$epg get start] [expr [$epg get duration] / 60]
-  } else {
-    log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name "Not in EPG" "No information available" 0 0
-  }
+  log_program_activity $tvdiarydb finished_activities "L" $::current_time $epg_record(channel_name) $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid)
 }
 
 #
@@ -290,11 +318,16 @@ proc daily_tasks { tvdiarydb } {
 # Main
 #
 proc main {} {
+  if { ![file exists $::DB_FILEPATH] } {
+    puts "$::logging_time: Missing the database file $::DB_FILEPATH"
+    exit -1
+  }
+
   try {
     set pid [exec $::PGREP -n humaxtv]
   } on error { msg } {
     puts "$::logging_time: Cannot find humaxtv process. \[$msg\]"
-    exit
+    exit -1
   }
 
   # Get the data once, wait, then get the data again to see if files are growing as they're recorded.
@@ -310,8 +343,12 @@ proc main {} {
       puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
       exit -1
     }
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
-    set tvdiarydb [openDB]
+    # Open and attach the EPG and channels DBs.
+    set epg_db [sqlite3.open $::EPG_DB_PATH]
+    $epg_db query {attach database '%s' as channel} $::CHANNEL_DB_PATH
+
     #
     # We load the IDs of the activities currently marked as unfinished into this list.
     # As we update activities we remove their IDs from the list. At the end, any IDs
@@ -362,7 +399,7 @@ proc main {} {
             if { $::logging > 2 } {
               puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
             }
-            log_watching_live_tv $tvdiarydb finished_activities
+            log_watching_live_tv $tvdiarydb $epg_db finished_activities
             dict set watching_live "TSR" 1
           }
 
@@ -371,8 +408,9 @@ proc main {} {
           if { $::logging > 2 } {
             puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
           dict set recording_channels $channel_name 1
           dict set playing_channels $channel_name 1
 
@@ -381,7 +419,8 @@ proc main {} {
           if { $::logging > 2 } {
             puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
+          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
           dict set recording_channels $channel_name 1
 
         } else {
@@ -389,7 +428,7 @@ proc main {} {
           if { $::logging > 2 } {
             puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
           }
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur
+          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
           dict set playing_channels $channel_name 1
         }
 
@@ -414,17 +453,15 @@ proc main {} {
     # Speculative check for watching live, in case live watching a program that's also being recorded.
     if { [llength $watching_live] == 0 && [llength $playing_channels] == 0 && ![system instandby] } {
       set hsvc [system param CUR_SVC Value USERCONFIG]
-      set _svcid [$::rsvdb query "SELECT usSvcid, usLcn AS lcn, SUBSTR(szSvcName, 2) AS name FROM channel.TBL_SVC WHERE hSvc=$hsvc LIMIT 1"]
-      if { [llength $_svcid] != 1 } {
-        throw "Failed to get svcid for hsvc=$hsvc"
-      }
-      lassign [lindex $_svcid 0] x svcid x lcn x channel_name
 
+      set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
+      set channel_name $epg_record(channel_name)
+      
       if { [dict exists $recording_channels $channel_name] } {
         if { $::logging > 2 } {
           puts "$::logging_time: L $channel_name because not watching anything else and $channel_name is being recorded"
         }
-        log_watching_live_tv_details $tvdiarydb finished_activities $svcid $channel_name
+        log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid)
       }
     }
 
@@ -434,6 +471,7 @@ proc main {} {
     # Check whether to carry on to perform daily tasks.
     daily_tasks $tvdiarydb
 
+    $epg_db close
     $tvdiarydb close
   } else {
     # For the cases where there is no activity after a recording finishes, need to mark everything as finished.
@@ -445,8 +483,7 @@ proc main {} {
       puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
       exit -1
     }
-
-    set tvdiarydb [openDB]
+    set tvdiarydb [sqlite3.open $::DB_FILEPATH]
 
     set finished_activities [load_unfinished_activities $tvdiarydb]
     if { [llength $finished_activities] > 0 } {

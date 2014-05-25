@@ -53,7 +53,7 @@ table.tablesorter th.header {
 }
 
 
-/* Minimal tabs */
+/* Minimal tabs. Based on http://keith-wood.name/uiTabs.html#tabs-min */
 #tvd_tabs { 
   background: transparent; 
   border: none;

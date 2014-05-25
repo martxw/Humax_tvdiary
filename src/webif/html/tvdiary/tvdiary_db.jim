@@ -5,6 +5,18 @@ require ts.class
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
+set DB_FILEPATH "/mod/etc/tvdiary.db"
+
+# Locate the EPG DB file on this type of machine.
+set EPG_DB_PATH "/mnt/hd1/epg.db"
+set ALT_EPG_DB_PATH "/media/drive1/epg.db"
+if {![file exists $EPG_DB_PATH] && [file exists $ALT_EPG_DB_PATH]} {
+  set EPG_DB_PATH $ALT_EPG_DB_PATH
+}
+set CHANNEL_DB_PATH "/var/lib/humaxtv/channel.db"
+set RSV_DB_PATH "/var/lib/humaxtv/rsv.db"
+
+
 ######
 # Locking based on webif/lib/lock with retry loop added.
 ######
@@ -65,8 +77,38 @@ proc release_lock {id} {
   return 1
 }
 
+
 ######
-# Experimental inventory code.
+# Common JSON code.
+######
+
+#
+# Initialize a map from control characters to JSON escaped characters. 
+# Initially all non-null control characters to \u00xx sequences.
+for {set i 1} {$i < 32} {incr i} {
+  set json_escape_map([format %c $i]) \\u[format %04x $i]
+}
+# Then overwrite certain well known control characters with shorter versions.
+set json_escape_map([format %c 8]) \\b; # backspace
+set json_escape_map([format %c 9]) \\t; # tab
+set json_escape_map([format %c 10]) \\n; # lf
+set json_escape_map([format %c 12]) \\f; # ff
+set json_escape_map([format %c 13]) \\r; # cr
+# Other special sequences
+set json_escape_map(\") {\"}
+set json_escape_map(\\) {\\}
+set json_escape_map(/)  {\/}
+
+#
+# Escape a string for inclusion in JSON output.
+#
+proc escape_json_string { in } {
+  return [string map $::json_escape_map $in]
+}
+
+
+######
+# Inventory code.
 ######
 
 #
@@ -147,66 +189,6 @@ proc update_inventory_dir { tvdiarydb directory dustbin } {
   return $modified
 }
 
-proc get_setting { tvdiarydb name { def 0 } } {
-  set res [$tvdiarydb query "SELECT value FROM settings WHERE name = '$name'"]
-  if {$res ne ""} {
-    return [lindex [lindex $res end] end]
-  }
-  return $def
-}
-
-proc set_setting { tvdiarydb name value } {
-  $tvdiarydb query "REPLACE INTO settings (name, value) VALUES ('$name', '%s')" $value
-}
-
-#
-# Test whether the named table exists.
-# Returns 1 if it exists, else 0.
-#
-proc table_exists { tvdiarydb name } {
-  set res [$tvdiarydb query "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '$name'"]
-  if {$res ne ""} {
-    return [lindex [lindex $res end] end]
-  }
-  return 0
-}
-
-#
-# Get the ID of an existing channel_name, or create a new ID.
-#
-proc get_channel_id { tvdiarydb name } {
-  set res [$tvdiarydb query "SELECT channel_id FROM channels WHERE channel_name = '%s'" $name]
-  if {$res ne ""} {
-    return [lindex [lindex $res end] end]
-  }
-  $tvdiarydb query "INSERT INTO channels (channel_name) VALUES ('%s')" $name
-  return [$tvdiarydb lastid]
-}
-
-#
-# Get the ID of an existing title, or create a new ID.
-#
-proc get_title_id { tvdiarydb title } {
-  set res [$tvdiarydb query "SELECT title_id FROM titles WHERE title = '%s'" $title]
-  if {$res ne ""} {
-    return [lindex [lindex $res end] end]
-  }
-  $tvdiarydb query "INSERT INTO titles (title) VALUES ('%s')" $title
-  return [$tvdiarydb lastid]
-}
-
-#
-# Get the ID of an existing synopsis, or create a new ID.
-#
-proc get_synopsis_id { tvdiarydb synopsis } {
-  set res [$tvdiarydb query "SELECT synopsis_id FROM synopses WHERE synopsis = '%s'" $synopsis]
-  if {$res ne ""} {
-    return [lindex [lindex $res end] end]
-  }
-  $tvdiarydb query "INSERT INTO synopses (synopsis) VALUES ('%s')" $synopsis
-  return [$tvdiarydb lastid]
-}
-
 #
 # Update the cache.
 #
@@ -246,6 +228,65 @@ proc update_inventory { tvdiarydb directory dustbin} {
   }
 #  puts "//[clock seconds]: update_inventory finished."
 }
+
+
+######
+# Settings code.
+######
+
+proc get_setting { tvdiarydb name { def 0 } } {
+  set res [$tvdiarydb query "SELECT value FROM settings WHERE name = '$name'"]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  return $def
+}
+
+proc set_setting { tvdiarydb name value } {
+  $tvdiarydb query "REPLACE INTO settings (name, value) VALUES ('$name', '%s')" $value
+}
+
+
+######
+# Normalized strings code.
+######
+
+#
+# Get the ID of an existing channel_name, or create a new ID.
+#
+proc get_channel_id { tvdiarydb name } {
+  set res [$tvdiarydb query "SELECT channel_id FROM channels WHERE channel_name = '%s'" $name]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO channels (channel_name) VALUES ('%s')" $name
+  return [$tvdiarydb lastid]
+}
+
+#
+# Get the ID of an existing title, or create a new ID.
+#
+proc get_title_id { tvdiarydb title } {
+  set res [$tvdiarydb query "SELECT title_id FROM titles WHERE title = '%s'" $title]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO titles (title) VALUES ('%s')" $title
+  return [$tvdiarydb lastid]
+}
+
+#
+# Get the ID of an existing synopsis, or create a new ID.
+#
+proc get_synopsis_id { tvdiarydb synopsis } {
+  set res [$tvdiarydb query "SELECT synopsis_id FROM synopses WHERE synopsis = '%s'" $synopsis]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  $tvdiarydb query "INSERT INTO synopses (synopsis) VALUES ('%s')" $synopsis
+  return [$tvdiarydb lastid]
+}
+
 
 proc purge_orphaned_programs { tvdiarydb } {
   $tvdiarydb query "
@@ -306,3 +347,16 @@ proc purge_orphaned_synopses { tvdiarydb } {
        WHERE  inventory.synopsis_id = synopses.synopsis_id)"
   return [$tvdiarydb changes]
 }
+
+#
+# Test whether the named table exists.
+# Returns 1 if it exists, else 0.
+#
+proc table_exists { tvdiarydb name } {
+  set res [$tvdiarydb query "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '$name'"]
+  if {$res ne ""} {
+    return [lindex [lindex $res end] end]
+  }
+  return 0
+}
+

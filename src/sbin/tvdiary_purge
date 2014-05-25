@@ -12,8 +12,6 @@ source /mod/webif/html/tvdiary/tvdiary_db.jim
 # Declare globals
 # --------------------------------------------------------------
 
-set DB_FILEPATH "/mod/etc/tvdiary.db"
-
 set current_time [clock seconds]
 set seconds_per_day 86400
 
@@ -44,7 +42,7 @@ proc main {} {
   }
 
   if { ![file exists $::DB_FILEPATH] } {
-    puts "Error: Unable to open the database file $::DB_FILEPATH"
+    puts "Error: Missing the database file $::DB_FILEPATH"
     exit -1
   }
 

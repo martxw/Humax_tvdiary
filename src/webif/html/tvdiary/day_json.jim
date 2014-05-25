@@ -32,8 +32,6 @@ set current_time [clock seconds]
 set time_fmt "%H:%M"
 set date_time_fmt "%a %d %b %Y $time_fmt"
 
-set DB_FILEPATH "/mod/etc/tvdiary.db"
-
 set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
 
@@ -88,30 +86,6 @@ set include_future_events 1
 # --------------------------------------------------------------
 # Declare procedures
 # --------------------------------------------------------------
-
-#
-# Initialize a map from control characters to JSON escaped characters. 
-# Initially all non-null control characters to \u00xx sequences.
-for {set i 1} {$i < 32} {incr i} {
-  set json_escape_map([format %c $i]) \\u[format %04x $i]
-}
-# Then overwrite certain well known control characters with shorter versions.
-set json_escape_map([format %c 8]) \\b; # backspace
-set json_escape_map([format %c 9]) \\t; # tab
-set json_escape_map([format %c 10]) \\n; # lf
-set json_escape_map([format %c 12]) \\f; # ff
-set json_escape_map([format %c 13]) \\r; # cr
-# Other special sequences
-set json_escape_map(\") {\"}
-set json_escape_map(\\) {\\}
-set json_escape_map(/)  {\/}
-
-#
-# Escape a string for inclusion in JSON output.
-#
-proc escape_json_string { in } {
-  return [string map $::json_escape_map $in]
-}
 
 #
 # Common output of a table row.

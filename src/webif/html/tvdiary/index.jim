@@ -18,8 +18,6 @@ jscss script.js style.css
 header
 
 
-set DB_FILEPATH "/mod/etc/tvdiary.db"
-
 #
 # Open the database file just to get the min and max times for the calendar.
 # Round them to the start & end of the day.
@@ -237,7 +235,7 @@ if { ![file exists $DB_FILEPATH] } {
             </td>
           </tr>
           <tr>
-            <td><button id="history_search_button">Search</button></td>
+            <td colspan="3"><button id="history_diary_search_button">Search Diary</button> <button id="history_epg_search_button">Search EPG</button></td>
           </tr>
         </table>
 
@@ -251,7 +249,7 @@ if { ![file exists $DB_FILEPATH] } {
             <div>
               <table id="history_results_table" class="tablesorter events_table">
                 <thead>
-                  <tr><th>&nbsp;</th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th></tr>
+                  <tr><th>&nbsp;</th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th><th>&nbsp;</th></tr>
                 </thead>
                 <tbody>
                 </tbody>

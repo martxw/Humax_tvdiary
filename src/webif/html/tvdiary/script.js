@@ -287,6 +287,9 @@ $(document).ready(function() {
     headers: {
       0: {
         sorter: false 
+      },
+      6: {
+        sorter: false 
       }
     },
     sortInitialOrder: "desc"
@@ -295,8 +298,11 @@ $(document).ready(function() {
       saveCookies();
   });
 
-  $('#history_search_button').button().click(function() {
+  $('#history_diary_search_button').button().click(function() {
     searchHistory();
+  });
+  $('#history_epg_search_button').button().click(function() {
+    searchEpg();
   });
 
 
@@ -1255,7 +1261,8 @@ $(document).ready(function() {
 
     // Asynchronously request the history tables' data.
     isBusyH = true;
-    $('#history_search_button').attr("disabled", "disabled");
+    $('#history_diary_search_button').attr("disabled", "disabled");
+    $('#history_epg_search_button').attr("disabled", "disabled");
     $.ajax({
       type: "GET",
       dataType: "json",
@@ -1284,14 +1291,16 @@ $(document).ready(function() {
         }
         $('#history_results_spinner').hide('slow');
         isBusyH = false;
-        $('#history_search_button').removeAttr("disabled");
+        $('#history_diary_search_button').removeAttr("disabled");
+        $('#history_epg_search_button').removeAttr("disabled");
       },
       error: function(_, _, e) {
         log_stuff("ajax error " + e);
         $('#history_results_footer').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
         $('#history_results_spinner').hide('slow');
         isBusyH = false;
-        $('#history_search_button').removeAttr("disabled");
+        $('#history_diary_search_button').removeAttr("disabled");
+        $('#history_epg_search_button').removeAttr("disabled");
       }
     });
   }
@@ -1350,6 +1359,17 @@ $(document).ready(function() {
       html += duration + (duration == 1 ? " min" : " mins");
       html += "</td>";
 
+      html += "<td class=\"history_flags\">";
+      if (inventory_enabled) {
+        if (event.available) {
+          html += "<a class=\"inventory\" href=\"#\"><img src=\"images/available.png\" width=16 height=16 title=\"available\"></a>";
+        }
+      }
+      if (event.repeat_count > 1) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+      }
+      html += "</td>";
+
       html += "</tr>";
     }
     return $(html);
@@ -1396,6 +1416,148 @@ $(document).ready(function() {
     caption = "Recorded: " + format_duration(recorded_dur) + " - Watched: " + format_duration(media_dur + live_dur) + " (Media: " + format_duration(media_dur) + " / Live: " + format_duration(live_dur) + ") - ";
     caption += program_ids.length + (program_ids.length == 1 ? " programme - " : " programmes - ");
     caption += data.events.length + (data.events.length == 1 ? " event" : " events");
+    return caption;
+  }
+
+  //////
+  // Search the EPG using values from the text fields.
+  //////
+  function searchEpg() {
+    $('#history_prompt').html("Enter all or part of the title, synopsis or channel name, then search for the history of that programme.");
+
+    var title = $('#history_search_title').val();
+    var synopsis = $('#history_search_synopsis').val();
+    var channel = $('#history_search_channel').val();
+    var title_op = $('#history_search_op_title').val();
+    var synopsis_op = $('#history_search_op_synopsis').val();
+    var channel_op = $('#history_search_op_channel').val();
+
+    if (typeof snapshot_time == "undefined") {
+      var url = '/tvdiary/epgsearch_json.jim?title=' + encodeURIComponent(title) + '&channel=' + encodeURIComponent(channel) + '&synopsis=' + encodeURIComponent(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
+    } else {
+      var url = '/tvdiary/json/epgsearch_json.json?nocache';
+    }
+
+    $('#history_results_table tbody').html("");
+    $('#history_results_table').trigger("update");
+    $('#history_results_caption').html("Programme events");
+    $('#history_results_footer').html("");
+    $('#history_results_spinner').show('fast');
+
+    // Asynchronously request the history tables' data.
+    isBusyH = true;
+    $('#history_diary_search_button').attr("disabled", "disabled");
+    $('#history_epg_search_button').attr("disabled", "disabled");
+    $.ajax({
+      type: "GET",
+      dataType: "json",
+      url: url,
+      success: function(data) {
+        if (data.status == "OK" ) {
+          $('#history_search_title').val(data.title ? data.title : "");
+          $('#history_search_synopsis').val(data.synopsis ? data.synopsis : "");
+          $('#history_search_channel').val(data.channel_name ? data.channel_name : "");
+          $('#history_search_op_title').val(data.title_op ? data.title_op : "E");
+          $('#history_search_op_synopsis').val(data.synopsis_op ? data.synopsis_op : "E");
+          $('#history_search_op_channel').val(data.channel_name_op ? data.channel_name_op : "E");
+          if (data.events.length > 0) {
+            $('#history_results_table tbody').html(epgsearch_json_to_html(data));
+            $('#history_results_caption').html(epgsearch_json_to_caption(data));
+            $("#history_results_table").trigger("update");
+            // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
+            setTimeout(function(){
+              $("#history_results_table").trigger("sorton",[history_sorting]); 
+            }, 2);
+          } else {
+            $('#history_results_footer').html("<span class=\"nothing\">No matches found</span>");
+          }
+        } else {
+          $('#history_results_footer').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
+        }
+        $('#history_results_spinner').hide('slow');
+        isBusyH = false;
+        $('#history_diary_search_button').removeAttr("disabled");
+        $('#history_epg_search_button').removeAttr("disabled");
+      },
+      error: function(_, _, e) {
+        log_stuff("ajax error " + e);
+        $('#history_results_footer').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#history_results_spinner').hide('slow');
+        isBusyH = false;
+        $('#history_diary_search_button').removeAttr("disabled");
+        $('#history_epg_search_button').removeAttr("disabled");
+      }
+    });
+  }
+
+  //////
+  // Render epgsearch HTML from JSON.
+  //////
+  function epgsearch_json_to_html(data) {
+    var html = "";
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+      var duration = Math.round(event.duration / 60);
+
+      html += "<tr>";
+
+      html += "<td class=\"history_type\">";
+      html += "<!-- warning:" + event.warning + ", content_type:" + event.content_type + ", content:" + event.content + ", event_crid:" + event.event_crid + ", series_crid:" + event.series_crid + ", rec_crid:" + event.rec_crid + ". -->";
+      html += "</td>";
+
+      html += "<td class=\"history_channel\">";
+      if (event.channel_name != "") {
+        html += "<div>";
+        html += "<img src=\"" + event.channel_icon_path + "\" width=20 height=20 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
+        html += "<span>" + escapeHtml(event.channel_name) + "</span>";
+        html += "</div>";
+      }
+      html += "</td>";
+
+      html += "<td class=\"history_title\">";
+      html += "<div>" + escapeHtml(event.title) + "</div>";
+      html += "</td>";
+
+      html += "<td class=\"history_synopsis\">";
+      html += "<div>" + escapeHtml(event.synopsis) + "</div>";
+      html += "</td>";
+
+      html += "<td class=\"history_datetime\" sval=\"" + event.start + "\">";
+      html += formatDateTime(event.start);
+      html += "</td>";
+
+      html += "<td class=\"history_duration\" sval=\"" + duration + "\">";
+      html += duration + (duration == 1 ? " min" : " mins");
+      html += "</td>";
+
+      html += "<td class=\"history_flags\">";
+      if (inventory_enabled) {
+        if (event.available) {
+          html += "<a class=\"inventory\" href=\"#\"><img src=\"images/available.png\" width=16 height=16 title=\"available\"></a>";
+        }
+      }
+      if (event.repeat_crid != "") {
+        html += " <a class=\"dejavu\" prog_crid=\"" + event.repeat_crid + "\" href=\"#\"><img src=\"images/repeat.png\" width=16 height=16 title=\"CRID repeat\"></a>";
+      } else if (event.repeat_id != -1) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+      }
+      if (event.to_be_recorded == 1) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.program_id + "\" href=\"#\"><img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"To be recorded\"></a>";
+      } else if (event.to_be_recorded > 1) {
+        html += " <a class=\"dejavu\" prog_id=\"" + event.program_id + "\" href=\"#\"><img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"To be recorded\"></a>";
+      }
+      html += "</td>";
+
+      html += "</tr>";
+    }
+    return $(html);
+  }
+
+  //////
+  // Render results caption from JSON.
+  //////
+  function epgsearch_json_to_caption(data) {
+    caption = data.events.length + (data.events.length == 1 ? " match" : " maches");
     return caption;
   }
 
