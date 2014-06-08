@@ -1,7 +1,7 @@
 #!/mod/bin/jimsh
 
 package require cgi
-source /mod/webif/html/tvdiary/tvdiary_db.jim
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
@@ -13,8 +13,9 @@ puts ""
 set monitoring [cgi_get tvdiary_monitoring]
 set day_start [cgi_get tvdiary_day_start]
 set monthly_summary_enabled [cgi_get tvdiary_monthly]
+set watchlist_enabled [cgi_get tvdiary_watchlist]
 set inventory_enabled [cgi_get tvdiary_inventory]
-puts "Parameters: $monitoring, $day_start, $monthly_summary_enabled, $inventory_enabled<br>"
+puts "Parameters: $monitoring, $day_start, $monthly_summary_enabled, $watchlist_enabled, $inventory_enabled<br>"
 
 try {
   #
@@ -26,6 +27,7 @@ try {
   set tvdiarydb [sqlite3.open $::DB_FILEPATH]
   set_setting $tvdiarydb "day_start" $day_start
   set_setting $tvdiarydb "monthly_summary_enabled" $monthly_summary_enabled
+  set_setting $tvdiarydb "watchlist_enabled" $watchlist_enabled
   set_setting $tvdiarydb "inventory_enabled" $inventory_enabled
 
   set num_program_facts 0
@@ -34,6 +36,13 @@ try {
     set num_program_facts [$tvdiarydb changes]
     $tvdiarydb query "DELETE FROM settings WHERE name='start_aggregated_year_month';"
     $tvdiarydb query "DELETE FROM settings WHERE name='time_for_aggregation';"
+  }
+  set num_watchlist 0
+  if { !$watchlist_enabled } {
+    $tvdiarydb query "DELETE FROM watchlist_inter;"
+    set num_watchlist [$tvdiarydb changes]
+    $tvdiarydb query "DELETE FROM settings WHERE name='time_to_build_watchlist';"
+    $tvdiarydb query "DELETE FROM settings WHERE name='watchlist_next_line';"
   }
   set num_inventory 0
   if { !$inventory_enabled } {

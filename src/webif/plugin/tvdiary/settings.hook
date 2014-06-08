@@ -1,11 +1,12 @@
 #!/mod/bin/jimsh
-source /mod/webif/html/tvdiary/tvdiary_db.jim
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
 set DB_FILEPATH "/mod/etc/tvdiary.db"
 
 set day_start "00:00"
 set monthly_summary_enabled 0
+set watchlist_enabled 0
 set inventory_enabled 0
 try {
   #
@@ -22,8 +23,9 @@ try {
   }
 
   set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" $monthly_summary_enabled]
+  set watchlist_enabled [get_setting $tvdiarydb "watchlist_enabled" $watchlist_enabled]
   set inventory_enabled [get_setting $tvdiarydb "inventory_enabled" $inventory_enabled]
-  
+
   $tvdiarydb close
   #
   # Closed the DB so release the lock.
@@ -42,7 +44,8 @@ try {
 
 if { $monitoring } { set c1 "checked" } else { set c1 "" }
 if { $monthly_summary_enabled } { set c2 "checked" } else { set c2 "" }
-if { $inventory_enabled } { set c3 "checked" } else { set c3 "" }
+if { $watchlist_enabled } { set c3 "checked" } else { set c3 "" }
+if { $inventory_enabled } { set c4 "checked" } else { set c4 "" }
 puts "
   <fieldset style=\"display: inline\">
   <legend>
@@ -74,9 +77,15 @@ puts "
     </td>
   </tr>
   <tr>
+    <th class=\"key\">Enable watchlist:</th>
+    <td>
+      <input id=\"tvdiary_watchlist\" name=\"tvdiary_watchlist\" type=\"checkbox\" value=\"1\" $c3>
+    </td>
+  </tr>
+  <tr>
     <th class=\"key\">Enable inventory:</th>
     <td>
-      <input id=\"tvdiary_inventory\" name=\"tvdiary_inventory\" type=\"checkbox\" value=\"1\" $c3>
+      <input id=\"tvdiary_inventory\" name=\"tvdiary_inventory\" type=\"checkbox\" value=\"1\" $c4>
     </td>
   </tr>
 "

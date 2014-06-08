@@ -6,8 +6,7 @@
 #
 
 source /mod/webif/lib/setup
-source /mod/webif/html/tvdiary/tvdiary_db.jim
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
 
 #
 # Render HTML header and includes.
@@ -53,6 +52,7 @@ if { ![file exists $DB_FILEPATH] } {
 
     # Get the functionality flags.
     set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" 0]
+    set watchlist_enabled [get_setting $tvdiarydb "watchlist_enabled" 0]
     set inventory_enabled [get_setting $tvdiarydb "inventory_enabled" 0]
 
 
@@ -74,6 +74,7 @@ if { ![file exists $DB_FILEPATH] } {
     puts "var max_time=$max_time;"
     puts "var day_start=$day_start;"
     puts "var monthly_summary_enabled=$monthly_summary_enabled;"
+    puts "var watchlist_enabled=$watchlist_enabled;"
     puts "var inventory_enabled=$inventory_enabled;"
     puts "</script>"
 
@@ -84,6 +85,7 @@ if { ![file exists $DB_FILEPATH] } {
         <li><a href="#daily_tab">Daily TV Diary</a></li>
         <li><a href="#monthly_tab">Monthly Summaries</a></li>
         <li><a href="#history_tab">Programme Search</a></li>
+        <li><a href="#watchlist_tab">Watchlist</a></li>
         <li><a href="#inventory_tab">Video Inventory</a></li>
       </ul>
       <div id="daily_tab">
@@ -91,6 +93,8 @@ if { ![file exists $DB_FILEPATH] } {
       <div id="monthly_tab">
       </div>
       <div id="history_tab">
+      </div>
+      <div id="watchlist_tab">
       </div>
       <div id="inventory_tab">
       </div>
@@ -119,7 +123,11 @@ if { ![file exists $DB_FILEPATH] } {
               Recorded
             </div>
             <div>
-              <div id="daily_recorded_inner"></div>
+              <table id="daily_recorded_table" class="events_table">
+                <tbody>
+                </tbody>
+              </table>
+              <div id="daily_recorded_footer"></div>
               <div id="daily_recorded_spinner">
                 <img src="/img/loading.gif" alt="Processing request...">
                 Processing request...
@@ -131,15 +139,35 @@ if { ![file exists $DB_FILEPATH] } {
               Watched
             </div>
             <div>
-              <div id="daily_watched_inner"></div>
+              <table id="daily_watched_table" class="events_table">
+                <tbody>
+                </tbody>
+              </table>
+              <div id="daily_watched_footer"></div>
               <div id="daily_watched_spinner">
                 <img src="/img/loading.gif" alt="Processing request...">
                 Processing request...
               </div>
             </div>
           </div>
-        </div>
 
+          <div id="daily_watchlist_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="daily_watchlist_caption" class="table_caption ui-widget-header ui-corner-all">
+              Watchlist
+            </div>
+            <div>
+              <table id="daily_watchlist_table" class="events_table">
+                <tbody>
+                </tbody>
+              </table>
+              <div id="daily_watchlist_footer"></div>
+              <div id="daily_watchlist_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div id="monthly_panel">
@@ -202,60 +230,100 @@ if { ![file exists $DB_FILEPATH] } {
 
       </div>
 
-      <div id="history_panel">
+      <div id="search_panel">
 
-        <div id="history_prompt">Enter all or part of the title, synopsis or channel name, and search for events for that programme.</div>
+        <div id="search_prompt">Enter all or part of the title, synopsis or channel name, and search for events for that programme.</div>
 
-        <table id="history_search_table">
+        <table id="search_criteria_table">
           <tr>
             <th><div>Title</div></th>
             <td>
-              <select id="history_search_op_title"></select>
+              <select id="search_criteria_op_title"></select>
             </td>
             <td>
-              <textarea rows="1" cols="40" id="history_search_title" maxlength="40" placeholder="Anything"></textarea>
+              <textarea rows="1" cols="40" id="search_criteria_title" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
             <th><div>Synopsis</div></th>
             <td>
-              <select id="history_search_op_synopsis"></select>
+              <select id="search_criteria_op_synopsis"></select>
             </td>
             <td>
-              <textarea rows="3" cols="80" id="history_search_synopsis" maxlength="200" placeholder="Anything"></textarea>
+              <textarea rows="3" cols="80" id="search_criteria_synopsis" maxlength="200" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
             <th><div>Channel</div></th>
             <td>
-              <select id="history_search_op_channel"></select>
+              <select id="search_criteria_op_channel"></select>
             </td>
             <td>
-              <textarea rows="1" cols="40" id="history_search_channel" length="40" maxlength="40" placeholder="Anything"></textarea>
+              <textarea rows="1" cols="40" id="search_criteria_channel" length="40" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
-            <td colspan="3"><button id="history_diary_search_button">Search Diary</button> <button id="history_epg_search_button">Search EPG</button></td>
+            <td colspan="3"><button id="search_diary_button">Search Diary</button> <button id="search_epg_button">Search EPG</button></td>
           </tr>
         </table>
 
         <div class="clear"></div>
 
         <div class="table_wrapper">
-          <div id="history_results_outer" class="ui-widget ui-widget-content ui-corner-all">
-            <div id="history_results_caption" class="table_caption ui-widget-header ui-corner-all">
+          <div id="search_results_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="search_results_caption" class="table_caption ui-widget-header ui-corner-all">
               Programme events
             </div>
             <div>
-              <table id="history_results_table" class="tablesorter events_table">
+              <table id="search_results_table" class="tablesorter events_table">
                 <thead>
                   <tr><th>&nbsp;</th><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th><th>&nbsp;</th></tr>
                 </thead>
                 <tbody>
                 </tbody>
               </table>
-              <div id="history_results_footer"></div>
-              <div id="history_results_spinner">
+              <div id="search_results_footer"></div>
+              <div id="search_results_spinner">
+                <img src="/img/loading.gif" alt="Processing request...">
+                Processing request...
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="watchlist_panel">
+
+        <div>
+          <button id="watchlist_modify_button">Modify</button>
+          <span id="watchlist_modify_spinner"><img src="/img/loading.gif" alt="Processing request..."></span>
+          <span id="watchlist_prompt">The watchlist is recalculated daily. Press to edit its specification.</span>
+        </div>
+        <div id="watchlist_specification">
+          <form id="watchlist_form">
+            <textarea rows="20" cols="80" id="watchlist_text" name="watchlist_text" maxlength="10240" placeholder="Watchlist specification lines"></textarea>
+          </form>
+          <button id="watchlist_save_button">Save</button> <button id="watchlist_cancel_button">Cancel</button>
+        </div>
+
+        <div class="clear"></div>
+
+        <div class="table_wrapper">
+          <div id="watchlist_results_outer" class="ui-widget ui-widget-content ui-corner-all">
+            <div id="watchlist_results_caption" class="table_caption ui-widget-header ui-corner-all">
+              Programme events
+            </div>
+            <div>
+              <table id="watchlist_results_table" class="tablesorter events_table">
+                <thead>
+                  <tr><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th><th>&nbsp;</th></tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+              <div id="watchlist_results_footer"></div>
+              <div id="watchlist_results_spinner">
                 <img src="/img/loading.gif" alt="Processing request...">
                 Processing request...
               </div>
@@ -267,7 +335,7 @@ if { ![file exists $DB_FILEPATH] } {
 
       <div id="inventory_panel">
 
-        <div>The following videos are available. Deleted videos aren't included.</div>
+        <div>The following videos are available. Videos under [Deleted Items] aren't included.</div>
 
         <div class="table_wrapper">
           <div id="inventory_outer" class="ui-widget ui-widget-content ui-corner-all">
@@ -275,7 +343,11 @@ if { ![file exists $DB_FILEPATH] } {
               [HDD] My Video
             </div>
             <div>
-              <div id="inventory_inner"></div>
+              <table id="inventory_table" class="events_table">
+                <tbody>
+                </tbody>
+              </table>
+              <div id="inventory_footer"></div>
               <div id="inventory_spinner">
                 <img src="/img/loading.gif" alt="Processing request...">
                 Processing request...

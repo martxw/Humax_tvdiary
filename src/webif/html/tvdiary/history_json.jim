@@ -10,8 +10,10 @@
 # Clients should therefore check "status" first. If there is a serious server error part way
 # through rendering, the JSON may be malformed and not parsable.
 #
-# CGI usage: /tvdiary/history_json.jim?prog_id=<program_id>|title_id=<title_id>|channel_id=<channel_id>|title=<title>|synopsis=<synopsis>|channel=<channel>
+# CGI usage: /tvdiary/history_json.jim?prog_id=<program_id>|crid=<event_crid>|title_id=<title_id>|channel_id=<channel_id>|title=<title>|synopsis=<synopsis>|channel=<channel>
 #   program_id = the program ID.
+#
+#   event_crid = the program's CRID.
 #
 #   title_id = the title ID.
 #   channel_id = the channel ID.
@@ -28,10 +30,9 @@
 
 package require cgi
 source /mod/webif/lib/setup
-source /mod/webif/html/tvdiary/tvdiary_db.jim
 require mwildcard
-
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -44,6 +45,7 @@ set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
 
 set program_id_specified 0
+set crid_specified 0
 set title_id_specified 0
 set channel_id_specified 0
 
@@ -57,10 +59,13 @@ case $runmode {
   cgi {
     cgi_input
     set program_id_specified [cgi_exists program_id]
+    set crid_specified [cgi_exists crid]
     set title_id_specified [cgi_exists title_id]
     set channel_id_specified [cgi_exists channel_id]
 
     set program_id [cgi_get program_id]
+
+    set crid [cgi_get crid]
 
     set title_id [cgi_get title_id]
     set channel_id [cgi_get channel_id]
@@ -76,6 +81,7 @@ case $runmode {
   }
   cli {
     set program_id ""
+    set crid ""
     set title_id ""
     set channel_id ""
     set title ""
@@ -92,6 +98,11 @@ case $runmode {
         set channel_icons_path [lindex $argv 2]
         set channel_icons_url [lindex $argv 3]
         set program_id_specified 1
+      } elseif { $type eq "C" } {
+        set crid [lindex $argv 1]
+        set channel_icons_path [lindex $argv 2]
+        set channel_icons_url [lindex $argv 3]
+        set crid_specified 1
       } elseif { $type eq "TC" } {
         set title_id [lindex $argv 1]
         set channel_id [lindex $argv 2]
@@ -156,6 +167,7 @@ proc main {} {
   # begin_debug
   #puts "/* Parameters:
   #  program_id=$::program_id
+  #  crid=$::crid
   #  title_id=$::title_id
   #  channel_id=$::channel_id
   #  title=$::title
@@ -199,12 +211,38 @@ proc main {} {
 
     # The records exclude the title and synopsis because they're the search criteria.
     set records [$tvdiarydb query "
-      SELECT activities.type, activities.start, activities.end, channels.channel_name, activities.program_id,
+      SELECT activities.type, activities.start, activities.end, channels.channel_name, activities.program_id, programs.crid as event_crid,
         (SELECT COUNT(*) FROM programs p2 WHERE p2.title_id = programs.title_id AND p2.synopsis_id = programs.synopsis_id) AS repeat_count,
+        (SELECT COUNT(*) FROM programs p3 WHERE p3.crid = programs.crid AND p3.program_id != programs.program_id AND LENGTH(programs.crid) > 0) as repeat_crid_count,
         (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = programs.channel_id AND inventory.scheduled_start = programs.start) AS available
       FROM activities, programs, channels
-      WHERE programs.title_id = %s AND programs.synopsis_id = %s AND activities.program_id = programs.program_id AND programs.channel_id = channels.channel_id
+      WHERE programs.title_id = %s
+        AND programs.synopsis_id = %s
+        AND activities.end != 0
+        AND activities.program_id = programs.program_id
+        AND programs.channel_id = channels.channel_id
       ORDER BY activities.start" $::title_id $::synopsis_id]
+  } elseif { $::crid_specified } {
+    # If the CRID is supplied, do the search on program entries with that crid.
+    # The records include the title and synopsis because they're not guaranteed to be the same.
+    set records [$tvdiarydb query "
+      SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id, programs.crid as event_crid,
+        (SELECT COUNT(*) FROM programs p2 WHERE p2.title_id = programs.title_id AND p2.synopsis_id = programs.synopsis_id) AS repeat_count,
+        (SELECT COUNT(*) FROM programs p3 WHERE p3.crid = programs.crid AND p3.program_id != programs.program_id AND LENGTH(programs.crid) > 0) as repeat_crid_count,
+        (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = programs.channel_id AND inventory.scheduled_start = programs.start) AS available
+      FROM activities, programs, channels, titles, synopses
+      WHERE programs.crid = '%s'
+        AND activities.end != 0
+        AND activities.program_id = programs.program_id
+        AND programs.channel_id = channels.channel_id
+        AND programs.title_id = titles.title_id
+        AND programs.synopsis_id = synopses.synopsis_id
+      ORDER BY activities.start" $::crid]
+
+    # Dummy the title text to be the first found. Not guaranteed identical for all, but it looks better than no title at all.
+    set record [lindex $records 0]
+    set ::title $record(title)
+    set ::title_op "C"
   } elseif { $::title_id_specified } {
     # If the title_id supplied, then exact match, with the channel_id if it's supplied.
     set records [$tvdiarydb query "SELECT titles.title FROM titles WHERE titles.title_id = %s LIMIT 1" $::title_id]
@@ -217,41 +255,62 @@ proc main {} {
       set ::channel_name $record(channel_name)
 
       set records [$tvdiarydb query "
-        SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id,
+        SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id, programs.crid as event_crid,
           (SELECT COUNT(*) FROM programs p2 WHERE p2.title_id = programs.title_id AND p2.synopsis_id = programs.synopsis_id) AS repeat_count,
+          (SELECT COUNT(*) FROM programs p3 WHERE p3.crid = programs.crid AND p3.program_id != programs.program_id AND LENGTH(programs.crid) > 0) as repeat_crid_count,
           (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = programs.channel_id AND inventory.scheduled_start = programs.start) AS available
         FROM activities, programs, channels, titles, synopses
-        WHERE programs.title_id = %s AND programs.channel_id = %s AND activities.program_id = programs.program_id
-          AND programs.channel_id = channels.channel_id AND programs.title_id = titles.title_id AND programs.synopsis_id = synopses.synopsis_id
+        WHERE programs.title_id = %s AND programs.channel_id = %s
+          AND activities.end != 0
+          AND activities.program_id = programs.program_id
+          AND programs.channel_id = channels.channel_id
+          AND programs.title_id = titles.title_id
+          AND programs.synopsis_id = synopses.synopsis_id
         ORDER BY activities.start" $::title_id $::channel_id]
     } else {
       set records [$tvdiarydb query "
-        SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id,
+        SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id, programs.crid as event_crid,
           (SELECT COUNT(*) FROM programs p2 WHERE p2.title_id = programs.title_id AND p2.synopsis_id = programs.synopsis_id) AS repeat_count,
+          (SELECT COUNT(*) FROM programs p3 WHERE p3.crid = programs.crid AND p3.program_id != programs.program_id AND LENGTH(programs.crid) > 0) as repeat_crid_count,
           (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = programs.channel_id AND inventory.scheduled_start = programs.start) AS available
         FROM activities, programs, channels, titles, synopses
-        WHERE programs.title_id = %s AND activities.program_id = programs.program_id
-          AND programs.channel_id = channels.channel_id AND programs.title_id = titles.title_id AND programs.synopsis_id = synopses.synopsis_id
+        WHERE programs.title_id = %s
+          AND activities.end != 0
+          AND activities.program_id = programs.program_id
+          AND programs.channel_id = channels.channel_id
+          AND programs.title_id = titles.title_id
+          AND programs.synopsis_id = synopses.synopsis_id
         ORDER BY activities.start" $::title_id]
     }
   } else {
+    # Check parameters were supplied.
+    if { $::title_op == {} || $::synopsis_op == {} || $::channel_op == {} } {
+      throw error "All comparison operators must be supplied."
+    }
+    if { $::title == {} && $::synopsis == {} && $::channel == {} } {
+      throw error "At least one search value must be specified."
+    }
+
     # If not program or title ID, then the raw text parameters.
     set title_operator [op_code_to_operator $::title_op]
     set synopsis_operator [op_code_to_operator $::synopsis_op]
     set channel_operator [op_code_to_operator $::channel_op]
     set records [$tvdiarydb query "
-      SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id,
+      SELECT activities.type, activities.start, activities.end, channels.channel_name, titles.title, synopses.synopsis, activities.program_id, programs.crid as event_crid,
         (SELECT COUNT(*) FROM programs p2 WHERE p2.title_id = programs.title_id AND p2.synopsis_id = programs.synopsis_id) AS repeat_count,
+        (SELECT COUNT(*) FROM programs p3 WHERE p3.crid = programs.crid AND p3.program_id != programs.program_id AND LENGTH(programs.crid) > 0) as repeat_crid_count,
         (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = programs.channel_id AND inventory.scheduled_start = programs.start) AS available
       FROM activities, programs, channels, titles, synopses
       WHERE ('%s' = '' OR titles.title $title_operator '%s')
         AND ('%s' = '' OR channels.channel_name $channel_operator '%s')
         AND ('%s' = '' OR synopses.synopsis $synopsis_operator '%s')
+        AND activities.end != 0
         AND activities.program_id = programs.program_id
         AND programs.channel_id = channels.channel_id
         AND programs.title_id = titles.title_id
         AND programs.synopsis_id = synopses.synopsis_id
-      ORDER BY activities.start" $::title [op_code_to_parameter $::title_op $::title] $::channel [op_code_to_parameter $::channel_op $::channel] $::synopsis [op_code_to_parameter $::synopsis_op $::synopsis]]
+      ORDER BY activities.start
+      LIMIT 1001" $::title [op_code_to_parameter $::title_op $::title] $::channel [op_code_to_parameter $::channel_op $::channel] $::synopsis [op_code_to_parameter $::synopsis_op $::synopsis]]
   }
 
   # Finished with the DB.
@@ -265,13 +324,21 @@ proc main {} {
   puts "{"
   if { $::program_id_specified } {
     puts " \"program_id\": $::program_id,"
+    puts " \"title_op\": \"E\","
+    puts " \"synopsis_op\": \"E\","
     puts " \"title\": \"[escape_json_string $::title]\","
     puts " \"synopsis\": \"[escape_json_string $::synopsis]\","
+  } elseif { $::crid_specified } {
+    puts " \"crid\": \"$::crid\","
+    puts " \"title_op\": \"[escape_json_string $::title_op]\","
+    puts " \"title\": \"[escape_json_string $::title]\","
   } elseif { $::title_id_specified } {
     puts " \"title_id\": $::title_id,"
+    puts " \"title_op\": \"E\","
     puts " \"title\": \"[escape_json_string $::title]\","
     if { $::channel_id_specified } {
       puts " \"channel_id\": $::channel_id,"
+      puts " \"channel_name_op\": \"E\","
       puts " \"channel_name\": \"[escape_json_string $::channel_name]\","
     }
   } else {
@@ -314,6 +381,8 @@ proc main {} {
       puts " \"start\": $record(start),"
       puts " \"end\": $record(end),"
       puts " \"repeat_count\": $record(repeat_count),"
+      puts " \"repeat_crid_count\": $record(repeat_crid_count),"
+      puts " \"event_crid\": \"$record(event_crid)\","
       puts " \"available\": $record(available),"
       
       if { $::program_id_specified } {

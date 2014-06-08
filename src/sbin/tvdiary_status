@@ -11,8 +11,7 @@
 
 source /mod/webif/lib/setup
 require ts.class
-source /mod/webif/html/tvdiary/tvdiary_db.jim
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -27,8 +26,6 @@ set SLEEP_TIME 10
 
 # Threshold for the age of files to detect recording.
 set RECORDING_THRESHOLD 10
-
-set media_file_extensions {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
 
 set include_live_tv 1
 
@@ -196,6 +193,7 @@ proc get_epg_from_hsvc { epg_db hsvc time } {
     " $hsvc $time $time]
   if { [llength $records] == 1 } {
     set record [lindex $records 0]
+    dict set record duration [expr $record(duration) / 60]
   } else {
     set records [$epg_db query "
       SELECT SUBSTR(c.szSvcName, 2) AS channel_name
@@ -226,6 +224,7 @@ proc get_epg_from_channel_name { epg_db channel_name time } {
     " $channel_name $time $time]
   if { [llength $records] == 1 } {
     set record [lindex $records 0]
+    dict set record duration [expr $record(duration) / 60]
   } else {
     set record {}
     dict set record title "Not in EPG"
@@ -253,7 +252,7 @@ proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time
 #
 proc log_watching_live_tv { tvdiarydb epg_db &finished_activities } {
   set hsvc [system param CUR_SVC Value USERCONFIG]
-  
+
   set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
 
   log_program_activity $tvdiarydb finished_activities "L" $::current_time $epg_record(channel_name) $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid)
@@ -277,7 +276,7 @@ proc get_data { pid } {
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
       set filepath [regsub {^[^/]*} $line {}]
       set type [string tolower [file extension $filepath]]
-      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::media_file_extensions } {
+      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::MEDIA_FILE_EXTENSIONS } {
         if { [dict exists $ret $filepath] } {
           # Could be open twice if playing and downloading, not recording.
           # So check the age. Chase playback if it's newly written, else ignore multiple reads.
@@ -300,19 +299,38 @@ proc get_data { pid } {
 # Check whether any daily tasks need to be chained now.
 #
 proc daily_tasks { tvdiarydb } {
+  set done_task 0
   set monthly_summary_enabled [get_setting $tvdiarydb "monthly_summary_enabled" 0]
+
   if { $monthly_summary_enabled } {
     set time_for_aggregation [get_setting $tvdiarydb "time_for_aggregation" 0]
     if { $::current_time > $time_for_aggregation } {
       source /mod/webif/html/tvdiary/tvdiary_aggregate.jim
       if { [do_aggregate $tvdiarydb $::current_time] } {
-        puts "Succeeded aggregation"
+        puts "$::logging_time: Succeeded aggregation"
       } else {
-        puts "Failed aggregation"
+        puts "$::logging_time: Failed aggregation"
+      }
+      set done_task 1
+    }
+  }
+  if { !$done_task } {
+    set watchlist_enabled [get_setting $tvdiarydb "watchlist_enabled" 0]
+    if { $watchlist_enabled } {
+      set time_to_build_watchlist [get_setting $tvdiarydb "time_to_build_watchlist" 0]
+      if { $::current_time > $time_to_build_watchlist } {
+        source /mod/webif/html/tvdiary/tvdiary_watchlist.jim
+
+        if { [do_build_watchlist $tvdiarydb $::current_time] } {
+          puts "$::logging_time: Succeeded building watchlist"
+        } else {
+          puts "$::logging_time: Failed building watchlist"
+        }
+        set done_task 1
       }
     }
   }
-}    
+}
 
 #
 # Main
@@ -340,7 +358,7 @@ proc main {} {
     # Get a lock for the database.
     #
     if {![acquire_lock tvdiary_db]} {
-      puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      puts "$::logging_time: Cannot acquire exclusive lock for tvdiary.tb. Terminating."
       exit -1
     }
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
@@ -432,7 +450,7 @@ proc main {} {
           dict set playing_channels $channel_name 1
         }
 
-      } elseif { $extension in $::media_file_extensions } {
+      } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
         # "Playing .mp4 etc"
         if { $::logging > 2 } {
           puts "$::logging_time: P $filepath"
@@ -456,7 +474,7 @@ proc main {} {
 
       set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
       set channel_name $epg_record(channel_name)
-      
+
       if { [dict exists $recording_channels $channel_name] } {
         if { $::logging > 2 } {
           puts "$::logging_time: L $channel_name because not watching anything else and $channel_name is being recorded"
@@ -467,11 +485,13 @@ proc main {} {
 
     # Update any activities that are now finished.
     update_finished_activities $tvdiarydb finished_activities
-    
+
+    # Close the EPG DB before daily tasks, as we attach those DBs to the tvdiary DB for the watchlist.
+    $epg_db close
+
     # Check whether to carry on to perform daily tasks.
     daily_tasks $tvdiarydb
 
-    $epg_db close
     $tvdiarydb close
   } else {
     # For the cases where there is no activity after a recording finishes, need to mark everything as finished.
@@ -480,7 +500,7 @@ proc main {} {
     # Get a lock for the database.
     #
     if {![acquire_lock tvdiary_db]} {
-      puts "Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      puts "$::logging_time: Cannot acquire exclusive lock for tvdiary.tb. Terminating."
       exit -1
     }
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]

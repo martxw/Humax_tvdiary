@@ -1,0 +1,179 @@
+#!/mod/bin/jimsh
+#
+# Build the watchlist intermediate cache in the tvdiary database.
+# To be "source" included in tvdiary_status. Not standalone.
+# Author: Martin Wink, 2014.
+#
+
+require mwildcard
+
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Main entry point. Returns 1 on success, 0 on failure.
+#
+proc do_build_watchlist { tvdiarydb current_time } {
+  try {
+
+    if { ![file exists $::EPG_DB_PATH] } {
+      throw error "The $::EPG_DB_PATH database is missing."
+    }
+    if { ![file exists $::CHANNEL_DB_PATH] } {
+      throw error "The $::CHANNEL_DB_PATH database is missing."
+    }
+    if { ![file exists $::RSV_DB_PATH] } {
+      throw error "The $::RSV_DB_PATH database is missing."
+    }
+
+    # Requires the watchlist file.
+    if { ![file exists $::WATCHLIST_FILEPATH] } {
+      throw error "The $::RSV_DB_PATH database is missing."
+    }
+
+    set start_time [clock seconds]
+
+    set settings_val [get_setting $tvdiarydb "day_start" "00:00"]
+    set parts [split $settings_val ":"]
+    set ::day_start_hour [lindex $parts 0]
+    set ::day_start_min [lindex $parts 1]
+    set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
+
+    # On entry only the tvdiary.db is open.
+    $tvdiarydb query {attach database '%s' as channel} $::CHANNEL_DB_PATH
+    $tvdiarydb query {attach database '%s' as epg} $::EPG_DB_PATH
+    $tvdiarydb query {attach database '%s' as rsv} $::RSV_DB_PATH
+
+    # Build the watchlist. This is done in chunks, so only update the time_to_build_watchlist if completely finished.
+    if { [build_watchlist $tvdiarydb $current_time] } {
+      set time_to_build_watchlist [get_tv_day_start [expr $current_time + 86400] $::day_start]
+      set_setting $tvdiarydb "time_to_build_watchlist" $time_to_build_watchlist
+      puts "$::logging_time: Time to next build watchlist: [clock format $time_to_build_watchlist]"
+    }
+
+    set finished_time [clock seconds]
+    set_setting $tvdiarydb "watchlist_modified" $finished_time
+
+    puts "$::logging_time: Building watchlist completed successfully at [clock format $finished_time -format $::log_date_fmt] after [expr $finished_time - $start_time] seconds."
+    return 1
+  } on error { msg } {
+    puts "Building watchlist failed. \[$msg\]"
+    puts [info stacktrace]
+    return 0
+  }
+}
+
+#
+# Convert from op code to operator text.
+#
+proc op_code_to_operator { op } {
+  if { $op eq "E" } {
+    return "="
+  } else {
+    return "LIKE"
+  }
+}
+
+#
+# Convert from op code to parameter text.
+#
+proc op_code_to_parameter { op val } {
+  if { $op eq "C" } {
+    return "%[mwildcard $val]%"
+  } elseif { $op eq "S" } {
+    return "[mwildcard $val]%"
+  } elseif { $op eq "F" } {
+    return "%[mwildcard $val]"
+  } else {
+    return "[mwildcard $val]"
+  }
+}
+
+#
+# Build the watchlist, in chunks to avoid locking the DB for too long continuously.
+# Returns 1 if completed all rules, 0 if not yet finished.
+#
+proc build_watchlist { tvdiarydb current_time } {
+  set watchlist_next_line [get_setting $tvdiarydb "watchlist_next_line" 0]
+  puts "$::logging_time: Starting to build watchlist at line $watchlist_next_line."
+
+  if { $watchlist_next_line == 0 } {
+    # If starting afresh, clear the current table contents
+    $tvdiarydb query "DELETE FROM watchlist_inter;"
+    incr watchlist_next_line
+    # Update the setting so UI can see update is in progress. (Though the DB is locked.)
+    set_setting $tvdiarydb "watchlist_next_line" $watchlist_next_line
+  }
+
+  set line_number 0
+  set broken_out 0
+  set rules_fd [open $::WATCHLIST_FILEPATH r]
+  foreach line [split [read -nonewline $rules_fd] "\n"] {
+    incr line_number
+
+    if { $line_number == $watchlist_next_line } {
+      incr watchlist_next_line
+
+      if { [string equal -length 1 $line "#"] } {
+        continue
+      }
+      set parts [split $line "|"]
+      if { [llength $parts] != 7 } {
+        continue
+      }
+
+      lassign $parts title_op title synopsis_op synopsis channel_op channel flags
+
+      #   $title_op
+      #   $title
+      #   $synopsis_op
+      #   $synopsis
+      #   $channel_op
+      #   $channel
+      #   $flags
+
+      # Check parameters were supplied.
+      if { $title_op == {} || $synopsis_op == {} || $channel_op == {} } {
+        throw error "All comparison operators must be supplied."
+      }
+      if { $title == {} && $synopsis == {} && $channel == {} } {
+        throw error "At least one search value must be specified."
+      }
+
+      set title_operator [op_code_to_operator $title_op]
+      set synopsis_operator [op_code_to_operator $synopsis_op]
+      set channel_operator [op_code_to_operator $channel_op]
+
+      $tvdiarydb query "
+        INSERT OR IGNORE INTO watchlist_inter (title, synopsis, channel_name, start, end, duration, warning, content_type, content, event_crid, series_crid, rec_crid)
+          SELECT e.name, e.text, SUBSTR(c.szSvcName, 2), e.start, e.end, e.duration, e.warning, e.content_type, e.content, e.event_crid, e.series_crid, e.rec_crid
+          FROM epg.epg e, channel.TBL_SVC c
+          WHERE e.end >= %s
+            AND e.service_id = c.usSvcId
+            AND c.eSvcType = 1
+            AND ('%s' = '' OR e.name $title_operator '%s')
+            AND ('%s' = '' OR SUBSTR(c.szSvcName, 2) $channel_operator '%s')
+            AND ('%s' = '' OR e.text $synopsis_operator '%s')
+          LIMIT 1001" [clock seconds] $title [op_code_to_parameter $title_op $title] $channel [op_code_to_parameter $channel_op $channel] $synopsis [op_code_to_parameter $synopsis_op $synopsis]
+      set changes [$tvdiarydb changes]
+      puts "$::logging_time: Watchlist line $line_number (\"$line\") resulted in $changes insertions."
+
+      # Do as many updates as possible but keep within the minute allowed for polling status.
+      if { [clock seconds] > [expr $current_time + 45] } {
+        set broken_out 1
+        break
+      }
+    }
+
+  }
+  $rules_fd close
+
+  if { !$broken_out } {
+    set watchlist_next_line 0
+  }
+  set_setting $tvdiarydb "watchlist_next_line" $watchlist_next_line
+
+  return [expr !$broken_out]
+}

@@ -5,6 +5,8 @@ diff live/sbin/tvdiary_monitor_on src/sbin/tvdiary_monitor_on
 diff live/sbin/tvdiary_purge src/sbin/tvdiary_purge
 diff live/sbin/tvdiary_status src/sbin/tvdiary_status
 diff live/webif/html/tvdiary/day_json.jim src/webif/html/tvdiary/day_json.jim
+diff live/webif/html/tvdiary/epgsearch_json.jim src/webif/html/tvdiary/epgsearch_json.jim
+diff live/webif/html/tvdiary/get_watchlist_cfg_json.jim src/webif/html/tvdiary/get_watchlist_cfg_json.jim
 diff live/webif/html/tvdiary/history_json.jim src/webif/html/tvdiary/history_json.jim
 diff live/webif/html/tvdiary/index.jim src/webif/html/tvdiary/index.jim
 diff live/webif/html/tvdiary/inventory_json.jim src/webif/html/tvdiary/inventory_json.jim
@@ -13,7 +15,10 @@ diff live/webif/html/tvdiary/monthly_json.jim src/webif/html/tvdiary/monthly_jso
 diff live/webif/html/tvdiary/script.js src/webif/html/tvdiary/script.js
 diff live/webif/html/tvdiary/style.css src/webif/html/tvdiary/style.css
 diff live/webif/html/tvdiary/tvdiary_aggregate.jim src/webif/html/tvdiary/tvdiary_aggregate.jim
-diff live/webif/html/tvdiary/tvdiary_db.jim src/webif/html/tvdiary/tvdiary_db.jim
+diff live/webif/html/tvdiary/tvdiary_utils.jim src/webif/html/tvdiary/tvdiary_utils.jim
+diff live/webif/html/tvdiary/tvdiary_watchlist.jim src/webif/html/tvdiary/tvdiary_watchlist.jim
+diff live/webif/html/tvdiary/update_watchlist_cfg_json.jim src/webif/html/tvdiary/update_watchlist_cfg_json.jim
+diff live/webif/html/tvdiary/watchlist_json.jim src/webif/html/tvdiary/watchlist_json.jim
 diff live/webif/plugin/tvdiary/menu.hook src/webif/plugin/tvdiary/menu.hook
 diff live/webif/plugin/tvdiary/settings.hook src/webif/plugin/tvdiary/settings.hook
 diff live/webif/plugin/tvdiary/toolbar.hook src/webif/plugin/tvdiary/toolbar.hook

@@ -1,0 +1,80 @@
+#!/mod/bin/jimsh
+#
+#
+# CGI usage: /tvdiary/get_watchlist_cfg_json.jim
+#
+# Author: Martin Wink, 2014.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
+
+
+# --------------------------------------------------------------
+# CGI parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    httpheader "application/json"
+  }
+  cli {
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  # end_debug
+
+  set watchlist_text "C|title-text|C|synopsis-text|C|channel-text|"
+  try {
+    set settings_fd [open $::WATCHLIST_FILEPATH r]
+    set watchlist_text [read $settings_fd]
+    $settings_fd close
+  } on error { msg } {
+    # Use the default if no file.
+  }
+
+  puts "{"
+  puts " \"text\": \"[escape_json_string $watchlist_text]\","
+  puts " \"status\": \"OK\""
+  puts "}"
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg]\" }"
+  }
+} else {
+  main
+}

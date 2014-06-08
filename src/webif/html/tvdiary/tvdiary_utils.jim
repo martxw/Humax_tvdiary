@@ -16,6 +16,12 @@ if {![file exists $EPG_DB_PATH] && [file exists $ALT_EPG_DB_PATH]} {
 set CHANNEL_DB_PATH "/var/lib/humaxtv/channel.db"
 set RSV_DB_PATH "/var/lib/humaxtv/rsv.db"
 
+set WATCHLIST_FILEPATH "/mod/etc/tvdiary_watchlist.txt"
+set WATCHLIST_FILEPATH_NEW "/mod/etc/tvdiary_watchlist.new"
+set WATCHLIST_FILEPATH_BAK "/mod/etc/tvdiary_watchlist.bak"
+
+set MEDIA_FILE_EXTENSIONS {.avi .mpg .mpeg .wmv .mkv .mp3 .mp4 .mov}
+
 
 ######
 # Locking based on webif/lib/lock with retry loop added.
@@ -117,14 +123,24 @@ proc escape_json_string { in } {
 proc add_to_cache { tvdiarydb directory filename } {
   try {
     set filepath "$directory/$filename"
-    set ts [ts fetch $filepath]
-    set channel_name [$ts get channel_name]
-    set title [$ts get title]
-    set synopsis [$ts get synopsis]
-    set event_start [$ts get start]
-    set event_end [$ts get end]
-    set schedstart [$ts get schedstart]
-    set scheddur [expr [$ts get scheddur] / 60]
+    if { [file extension $filename] eq ".ts" } {
+      set ts [ts fetch $filepath]
+      set channel_name [$ts get channel_name]
+      set title [$ts get title]
+      set synopsis [$ts get synopsis]
+      set event_start [$ts get start]
+      set event_end [$ts get end]
+      set schedstart [$ts get schedstart]
+      set scheddur [duration_seconds_to_minutes [$ts get scheddur]]
+    } else {
+      set channel_name ""
+      set title $filename
+      set synopsis ""
+      set event_start [file mtime $filepath]
+      set event_end $event_start
+      set schedstart $event_start
+      set scheddur 0
+    }
     # Use [file] for consistency with checking.
     set size [file size $filepath]
 
@@ -165,8 +181,9 @@ proc update_inventory_dir { tvdiarydb directory dustbin } {
   set files [glob -nocomplain -directory $directory *]
   foreach filename $files {
     set filepath "$directory/$filename"
-#    puts "//[clock seconds]: Checking file $filepath with extension \"[file extension $filepath]\""
-    if { [file isfile $filepath] && [file extension $filepath] eq ".ts" } {
+    set extension [file extension $filename]
+#    puts "//[clock seconds]: Checking file $filepath with extension \"$extension\""
+    if { [file isfile $filepath] && ($extension eq ".ts" || $extension in $::MEDIA_FILE_EXTENSIONS) } {
       set id [check_entry $tvdiarydb $directory $filename [file size $filepath]]
       if { $id != -1} {
         $tvdiarydb query "UPDATE inventory SET flag = 1 WHERE inventory_id = %s" $id
@@ -360,3 +377,212 @@ proc table_exists { tvdiarydb name } {
   return 0
 }
 
+
+##########
+# Build list of scheduled events.
+##########
+
+#
+# Split the aul binary data into a list of {service_id start end event_id} lists.
+#
+proc aul { aulEventToRecordInfo } {
+  if {![exists -proc binary]} { package require binary }
+  set aul {}
+  for {set i 0} {$i < [string length $aulEventToRecordInfo]} {incr i 16} {
+    binary scan [string range $aulEventToRecordInfo $i $($i + 15)] \
+        iiii service start end event_id
+    catch {lappend aul [list $service $start $end $event_id]}
+  }
+  return $aul
+}
+
+#
+# Build a list of dictionary rows for future events.
+# The tvdiary DB must have epg, rsv & channels attached.
+#
+proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 9999999999 } } {
+  set future_events {}
+
+  # Optional checking for repeats - both matching title & synopsis and by CRID.
+  if { $chk_repeats } {
+    set repeats_clause {
+      ,
+      (SELECT COUNT(*) FROM programs WHERE programs.crid = e.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
+      (SELECT program_id
+        FROM programs, titles, synopses
+        WHERE programs.title_id = titles.title_id
+          AND programs.synopsis_id = synopses.synopsis_id
+          AND titles.title = e.name
+          AND synopses.synopsis = e.text
+          AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 ) LIMIT 1) AS repeat_program_id
+    }
+    set aul_repeats_clause {
+      ,
+      (SELECT COUNT(*) FROM programs WHERE programs.crid = e.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
+      (SELECT program_id
+        FROM programs, titles, synopses
+        WHERE programs.title_id = titles.title_id
+          AND programs.synopsis_id = synopses.synopsis_id
+          AND titles.title = e.name
+          AND synopses.synopsis = e.text
+          AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 ) LIMIT 1) AS repeat_program_id
+    }
+  } else {
+    set repeats_clause {}
+    set aul_repeats_clause {}
+  }
+
+  # Get the details of the scheduled events.
+  # Always get the rsv and channel.
+  # Outer join epg in case it's in a state of flux and not found.
+  # Filter r.ersvtype: 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
+  # Filter r.ucRecKind: 1 == one-off, 2 == split, 4 == series.
+  set records [$tvdiarydb query "
+    SELECT r.nsttime, r.nduration, r.aulEventToRecordInfo, r.ersvtype, r.ucRecKind, r.hsvc,
+      SUBSTR(c.szSvcName, 2) AS channel_name,
+      e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid, e.service_id
+      $repeats_clause
+    FROM rsv.TBL_RESERVATION r, channel.TBL_SVC c
+    LEFT OUTER JOIN epg e
+      ON e.service_id = c.usSvcId
+      AND e.start = r.nsttime
+    WHERE r.ersvtype = 3 AND (r.ucRecKind = 1 OR r.ucRecKind = 2 OR r.ucRecKind = 4)
+      AND r.hsvc = c.hSvc
+    ORDER BY r.nsttime, c.szSvcName"]
+  # (Clause "(r.nsttime + r.nduration) >= %s AND r.nsttime < %s" $min_time $max_time removed as subsequent events still needed. Get all and filter afterwards.
+
+  foreach record $records {
+    if { $record(nsttime) + $record(nduration) >= $min_time && $record(nsttime) < $max_time } {
+      # Use values from the rsv rather than epg where possible.
+      set vals [dict create "channel_name" $record(channel_name) "scheduled_start" $record(nsttime) "scheduled_end" [expr $record(nsttime) + $record(nduration)] "scheduled_duration" $record(nduration) "ucRecKind" $record(ucRecKind)]
+      # Check epg.start to see if it's found in the EPG.
+      if { $record(start) == {} } {
+        dict set vals "title" "Not in EPG"
+        dict set vals "synopsis" "No information available"
+        dict set vals "event_crid" {}
+        dict set vals "repeat_program_id" {}
+        dict set vals "repeat_crid_count" 0
+      } else {
+        dict set vals "title" $record(title)
+        dict set vals "synopsis" $record(synopsis)
+        dict set vals "event_crid" $record(event_crid)
+        if { $chk_repeats } {
+          dict set vals "repeat_program_id" $record(repeat_program_id)
+          dict set vals "repeat_crid_count" $record(repeat_crid_count)
+        } else {
+          dict set vals "repeat_program_id" {}
+          dict set vals "repeat_crid_count" 0
+        }
+        # Some assertions:
+        if { $record(nsttime) != $record(start) } {
+          throw error "***** RSV and EPG start discrepency. $record(nsttime) != $record(start)"
+        }
+        if { $record(nduration) != $record(duration) } {
+          #throw error "***** RSV and EPG duration discrepency. $record(nduration) != $record(duration)"
+        }
+        if { [expr $record(nsttime) + $record(nduration)] != $record(end) } {
+          #throw error "***** RSV and EPG end discrepency. [expr $record(nsttime) + $record(nduration)] != $record(end)"
+        }
+      }
+      set key "$record(nsttime):$record(channel_name)"
+      dict set future_events $key $vals
+    }
+
+    # Check for subsequent events.
+    set elist [aul $record(aulEventToRecordInfo)]
+    foreach e $elist {
+      lassign $e hservice start end event_id
+      # Usually the first entry matches the containing row, so skip.
+      # And if the subsequent events are out of range, skip.
+      if { !($hservice == $record(hsvc) && $start == $record(nsttime)) && $end > $min_time && $start < $max_time } {
+        # Otherwise search for details.
+        # Again, outer join EPG so values may be null.
+        set aulrecords [$tvdiarydb query "
+          SELECT SUBSTR(c.szSvcName, 2) AS channel_name,
+            e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid
+            $aul_repeats_clause
+          FROM channel.TBL_SVC c
+          LEFT OUTER JOIN epg e
+           ON e.service_id = c.usSvcId
+           AND e.start = %s
+          WHERE c.hSvc = %s
+          ORDER BY e.start, c.szSvcName
+          LIMIT 1" $start $hservice]
+        foreach aulrecord $aulrecords {
+          # Use values from the aul rather than epg where possible. ucRecKind from the main record.
+          set vals [dict create "channel_name" $aulrecord(channel_name) "scheduled_start" $start "scheduled_end" $end "scheduled_duration" [expr $end - $start] "ucRecKind" $record(ucRecKind)]
+          # Check epg.start to see if it's found in the EPG.
+          if { $aulrecord(start) == {} } {
+            dict set vals "title" "Not in EPG"
+            dict set vals "synopsis" "No information available"
+            dict set vals "event_crid" {}
+            dict set vals "repeat_program_id" {}
+            dict set vals "repeat_crid_count" 0
+          } else {
+            dict set vals "title" $aulrecord(title)
+            dict set vals "synopsis" $aulrecord(synopsis)
+            dict set vals "event_crid" $aulrecord(event_crid)
+            if { $chk_repeats } {
+              dict set vals "repeat_program_id" $aulrecord(repeat_program_id)
+              dict set vals "repeat_crid_count" $aulrecord(repeat_crid_count)
+            } else {
+              dict set vals "repeat_program_id" {}
+              dict set vals "repeat_crid_count" 0
+            }
+            # Some assertions:
+            if { $start != $aulrecord(start) } {
+              #throw error "***** AUL and EPG start discrepency. $start != $aulrecord(start)"
+            }
+            if { $end != $aulrecord(end) } {
+              #throw error "***** AUL and EPG end discrepency. $end != $aulrecord(end)"
+            }
+            set key "$start:$aulrecord(channel_name)"
+            dict set future_events $key $vals
+          }
+        }
+      }
+
+    }
+  }
+  return $future_events
+}
+
+#
+# Extract the CRIDs of scheduled recordings as dictionary keys, mapping to their ucRecKind.
+# 
+proc crid_ucRecKind_from_future_events { future_events } {
+  set crids {}
+  set keys [dict keys $future_events]
+  foreach key $keys {
+    set vals [dict get $future_events $key]
+    if { $vals(event_crid) != {} } {
+      dict set crids $vals(event_crid) $vals(ucRecKind)
+    }
+  }
+  return $crids
+}
+
+#
+# Convert time of day to time of the start of that TV day.
+# NB The TZ offset in Tcl is opposite sign to JavaScript.
+#
+proc get_tv_day_start { t day_start } {
+  set z [clock format $t -format "%z"]
+  set tz_offset [expr int($z / 100) * 3600 + int($z % 100) * 60]
+  set day_t [expr int( ($t + $tz_offset - $day_start) / 86400 ) * 86400 - $tz_offset + $day_start]
+  return $day_t
+}
+
+#
+# Round a duration from seconds to minutes.
+#
+proc duration_seconds_to_minutes { d } {
+  return [expr $d / 60]
+}
+
+#
+# Round a duration from seconds to minutes.
+#
+proc duration_seconds_to_minutes_rounding { d } {
+  return [expr ($d + 29) / 60]
+}

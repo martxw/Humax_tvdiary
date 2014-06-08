@@ -15,6 +15,8 @@
 proc do_aggregate { tvdiarydb current_time } {
   try {
 
+    set start_time [clock seconds]
+
     set settings_val [get_setting $tvdiarydb "day_start" "00:00"]
     set parts [split $settings_val ":"]
     set ::day_start_hour [lindex $parts 0]
@@ -22,22 +24,25 @@ proc do_aggregate { tvdiarydb current_time } {
     set ::day_start [expr (($::day_start_hour * 60) + $::day_start_min) * 60]
 
     set start_year_month [get_setting $tvdiarydb "start_aggregated_year_month" 201301]
-    puts "Existing start_aggregated_year_month=$start_year_month"
+    puts "$::logging_time: Checking aggregation - start_aggregated_year_month=$start_year_month"
 
     aggregate $tvdiarydb $start_year_month
 
     set date_parts [get_tv_date $current_time]
     set start_year_month [expr ([lindex $date_parts 0] * 100) + [lindex $date_parts 1]]
-    puts "Setting start_aggregated_year_month=$start_year_month"
+    puts "$::logging_time: Setting start_aggregated_year_month=$start_year_month"
     set_setting $tvdiarydb "start_aggregated_year_month" $start_year_month
 
-    set_setting $tvdiarydb "time_for_aggregation" [get_tv_day_start [expr $current_time + 86400]]
-    puts "Time for the next aggregation: [clock format [get_tv_day_start [expr $current_time + 86400]]]"
+    set time_for_aggregation [get_tv_day_start [expr $current_time + 86400] $::day_start]
+    set_setting $tvdiarydb "time_for_aggregation" $time_for_aggregation
+    puts "$::logging_time: Time for the next aggregation: [clock format $time_for_aggregation]"
 
-    puts "Aggregation completed successfully."
+    set finished_time [clock seconds]
+
+    puts "$::logging_time: Aggregation completed successfully at [clock format $finished_time -format $::log_date_fmt] after [expr $finished_time - $start_time] seconds."
     return 1
   } on error { msg } {
-    puts "Aggregation failed. \[$msg\]"
+    puts "$::logging_time: Aggregation failed. \[$msg\]"
     puts [info stacktrace]
     return 0
   }
@@ -53,7 +58,7 @@ proc aggregate { tvdiarydb start_year_month} {
   # Purge aggregated facts from previously incomplete months.
   $tvdiarydb query "DELETE FROM program_facts WHERE year_month >= %s;" $start_year_month
   set changes [$tvdiarydb changes]
-  puts "Purged $changes program_facts rows."
+  puts "$::logging_time: Purged $changes program_facts rows."
 
   report_facts_count $tvdiarydb "After purge, facts count"
 
@@ -64,7 +69,9 @@ proc aggregate { tvdiarydb start_year_month} {
   set records [$tvdiarydb query "
     SELECT programs.program_id, programs.title_id, programs.channel_id, activities.type, activities.start, activities.end, programs.duration AS scheduled_duration
     FROM programs, activities
-    WHERE programs.program_id = activities.program_id AND activities.start > %s
+    WHERE programs.program_id = activities.program_id
+      AND activities.start > %s
+      AND activities.end != 0
     ORDER BY programs.program_id, activities.start
   " $query_start_time]
 
@@ -76,7 +83,7 @@ proc aggregate { tvdiarydb start_year_month} {
   foreach record $records {
     # Calculate the durations & count for this activity.
     if { $record(type) eq "R" } {
-      set record(recorded_duration) [expr ($record(end) - $record(start)) / 60]
+      set record(recorded_duration) [duration_seconds_to_minutes [expr $record(end) - $record(start)]]
       set record(played_duration) 0
       set record(live_duration) 0
       set record(recorded_count) 1
@@ -84,7 +91,7 @@ proc aggregate { tvdiarydb start_year_month} {
       set record(live_count) 0
     } elseif { $record(type) eq "P" } {
       set record(recorded_duration) 0
-      set record(played_duration) [expr ($record(end) - $record(start)) / 60]
+      set record(played_duration) [duration_seconds_to_minutes [expr $record(end) - $record(start)]]
       set record(live_duration) 0
       set record(recorded_count) 0
       set record(played_count) 1
@@ -92,7 +99,7 @@ proc aggregate { tvdiarydb start_year_month} {
     } else {
       set record(recorded_duration) 0
       set record(played_duration) 0
-      set record(live_duration) [expr ($record(end) - $record(start)) / 60]
+      set record(live_duration) [duration_seconds_to_minutes [expr $record(end) - $record(start)]]
       set record(recorded_count) 0
       set record(played_count) 0
       set record(live_count) 1
@@ -187,17 +194,6 @@ proc save_accumulated { tvdiarydb } {
 }
 
 #
-# Convert time of day to time of the start of that TV day.
-# NB The TZ offset in Tcl is opposite sign to JavaScript.
-#
-proc get_tv_day_start { t } {
-  set z [clock format $t -format "%z"]
-  set tz_offset [expr int($z / 100) * 3600 + int($z % 100) * 60]
-  set day_t [expr int( ($t + $tz_offset - $::day_start) / 86400 ) * 86400 - $tz_offset + $::day_start]
-  return $day_t
-}
-
-#
 # Convert the given time to the TV date it belongs to. The input time is a UTC epoch value.
 # Since the start of TV day is in the local time, convert from UTC to local first, check which side
 # of the TV day start it is. If it's before, adjust the time back and re-calculate the local time.
@@ -226,7 +222,7 @@ proc get_tv_month_time { year_month } {
 proc report_facts_count { tvdiarydb label } {
   set res [$tvdiarydb query "SELECT COUNT(*) FROM program_facts"]
   set count [lindex [lindex $res end] end]
-  puts "$label: $count"
+  puts "$::logging_time: $label: $count"
 }
 
 
@@ -234,7 +230,7 @@ proc report_facts_count { tvdiarydb label } {
 
 # Experiment - this is slower 
 proc get_tv_date2 { t } {
-  set day_t [get_tv_day_start $t]
+  set day_t [get_tv_day_start $t $::day_start]
   set locparts [split [clock format $day_t -format "%Y,%m,%d,%H,%M"] ","]
   return [list [lindex $locparts 0] [lindex $locparts 1] [lindex $locparts 2] ]
 }
@@ -257,7 +253,7 @@ proc test_date_converter {} {
   set t_start [clock scan "2014,3,28,0,5" -format "%Y,%m,%d,%H,%M"]
   set t_end [clock scan "2014,4,1,0,0" -format "%Y,%m,%d,%H,%M"]
   for {set t $t_start} {$t < $t_end} {incr t 3600} {
-    puts "$t=[clock format $t], get_tv_day_start=[get_tv_day_start $t], get_tv_date2=[get_tv_date2 $t], get_tv_date=[get_tv_date $t]"
+    puts "$t=[clock format $t], get_tv_day_start=[get_tv_day_start $t $::day_start], get_tv_date2=[get_tv_date2 $t], get_tv_date=[get_tv_date $t]"
   }
   puts [time {get_tv_date2 $t} 1000]
   puts [time {get_tv_date $t} 1000]

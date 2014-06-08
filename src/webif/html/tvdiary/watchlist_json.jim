@@ -1,0 +1,277 @@
+#!/mod/bin/jimsh
+#
+# Render the details of all program activities sharing either the title and synopsis,
+# or just the title, of the one identified by the program or title ID.
+# If the program ID is supplied then the title and synopsis text is matched.
+# If the title ID is supplied then just the title is matched.
+# All of their record and playback activities are listed.
+# After successfully rendering the data, the value "status" is set to "OK".
+# If there is an error, "status" is set to the "<error message>".
+# Clients should therefore check "status" first. If there is a serious server error part way
+# through rendering, the JSON may be malformed and not parsable.
+#
+# CGI usage: /tvdiary/watchlist_json.jim?[start=<time_start>][&end=<time_end>][&modified=<cache-time>]
+# CLI usage: watchlist_json.jim <time_start> <time_end> [<icons_path> <icons_url>]
+#   <cache-time> = optional timestamp of current watchlist results held by the client.
+#   time_start = seconds since 1 Jan 1970 epoch, UTC.
+#   time_end = seconds since 1 Jan 1970 epoch, UTC.
+#   icons_path = disk path to the TV channel icons.
+#   icons_url = URL path to the TV channel icons.
+#
+# Author: Martin Wink, 2014.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
+
+set time_start [clock seconds]
+set time_end [expr $time_start + 864000]
+set clients_modified 0
+
+# --------------------------------------------------------------
+# CGI parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    if { [cgi_exists start] } {
+      set time_start [cgi_get start]
+    }
+    if { [cgi_exists end] } {
+      set time_end [cgi_get end]
+    }
+    set clients_modified [cgi_get modified]
+    httpheader "application/json"
+  }
+  cli {
+    if { $argc >= 2 } {
+      if { [lindex $argv 0] != 0 } {
+        set time_start [lindex $argv 0]
+      }
+      if { [lindex $argv 1] != 0 } {
+        set time_end [lindex $argv 1]
+      }
+      if { $argc == 4 } {
+        set channel_icons_path [lindex $argv 2]
+        set channel_icons_url [lindex $argv 3]
+      }
+    } elseif { $argc != 0 } {
+      puts "Usage: $argv0 <time_start> <time_end> \[<icons_path> <icons_url>\]"
+      puts " time_start = seconds since 1 Jan 1970 epoch"
+      puts " time_end = seconds since 1 Jan 1970 epoch"
+      puts "  icons_path = disk path to the TV channel icons"
+      puts "  icons_url = URL path to the TV channel icons"
+      puts ""
+      puts "Eg: $argv0 $time_start 0 $channel_icons_path $channel_icons_url"
+      exit -1
+    }
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  #puts "/* Parameters:
+  #  start=$::start
+  #  end=$::end*/"
+  # end_debug
+
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists $::DB_FILEPATH] } {
+    throw error "The $::DB_FILEPATH database is missing."
+  }
+
+  if { ![file exists $::EPG_DB_PATH] } {
+    throw error "The $::EPG_DB_PATH database is missing."
+  }
+  if { ![file exists $::CHANNEL_DB_PATH] } {
+    throw error "The $::CHANNEL_DB_PATH database is missing."
+  }
+  if { ![file exists $::RSV_DB_PATH] } {
+    throw error "The $::RSV_DB_PATH database is missing."
+  }
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
+  }
+
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+  # Before attaching the other databases, check whether we can short-circuit the work because the client already has the data/
+
+  set time_to_build_watchlist [get_setting $tvdiarydb "time_to_build_watchlist" 0]
+  set watchlist_next_line [get_setting $tvdiarydb "watchlist_next_line" 0]
+
+  set last_modified [get_setting $tvdiarydb "watchlist_modified" 0]
+
+  #
+  # Check whether to short-circuit the full results if the client already has the data.
+  set short_circuit 0
+  if { $::clients_modified } {
+    if { $::clients_modified == $last_modified } {
+      set short_circuit 1
+      puts "{"
+      puts " \"time_to_build_watchlist\": $time_to_build_watchlist,"
+      puts " \"watchlist_next_line\": $watchlist_next_line,"
+      puts " \"modified\": $last_modified,"
+      puts " \"status\": \"UNMODIFIED\""
+      puts "}"
+    }
+  }
+
+  if { !$short_circuit } {
+
+    $tvdiarydb query {attach database '%s' as channel} $::CHANNEL_DB_PATH
+    $tvdiarydb query {attach database '%s' as epg} $::EPG_DB_PATH
+    $tvdiarydb query {attach database '%s' as rsv} $::RSV_DB_PATH
+
+    # Build list of events to check whether search results are scheduled for recording.
+    # From current time because don't want a filtered list.
+    set future_events [build_future_events_list $tvdiarydb 0 $::current_time]
+
+    # For marking alternative times/channels of scheduled recordings.
+    set crid_recordings [crid_ucRecKind_from_future_events $future_events]
+
+
+    puts "{"
+    puts "  \"time_to_build_watchlist\": $time_to_build_watchlist,"
+    puts "  \"watchlist_next_line\": $watchlist_next_line,"
+    puts "  \"modified\": $last_modified,"
+
+    puts -nonewline " \"events\": \["
+    set comma 0
+
+    set records [$tvdiarydb query "
+      SELECT w.channel_name, w.title, w.synopsis, w.start, w.end, w.duration, w.warning, w.content_type, w.content, w.event_crid, w.series_crid, w.rec_crid,
+        (SELECT COUNT(*) FROM programs WHERE programs.crid = w.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
+        (SELECT p.program_id
+          FROM programs p, titles t, synopses s
+          WHERE p.title_id = t.title_id
+            AND p.synopsis_id = s.synopsis_id
+            AND t.title = w.title
+            AND s.synopsis = w.synopsis
+            AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = p.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 ) LIMIT 1) AS repeat_program_id
+      FROM watchlist_inter w
+      WHERE w.end > %s
+        AND w.start < %s
+      ORDER BY w.start, w.channel_name
+      LIMIT 1001" $::time_start $::time_end]
+
+    foreach record $records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+
+      puts "{"
+      puts " \"title\": \"[escape_json_string $record(title)]\","
+      puts " \"synopsis\": \"[escape_json_string $record(synopsis)]\","
+      puts " \"channel_name\": \"[escape_json_string $record(channel_name)]\","
+
+      set channel_icon_path "$::channel_icons_url/Unknown.png"
+      if { $record(channel_name) != "" } {
+        if { [file exists "$::channel_icons_path/$record(channel_name).png"] } {
+          set channel_icon_path "$::channel_icons_url/[cgi_quote_url $record(channel_name)].png"
+        } else {
+          set channel_icon_path "$::channel_icons_url/Unknown.png"
+        }
+      }
+      puts " \"channel_icon_path\": \"$channel_icon_path\","
+
+      puts " \"start\": $record(start),"
+      puts " \"end\": $record(end),"
+      puts " \"duration\": [duration_seconds_to_minutes $record(duration)],"
+      puts " \"warning\": \"$record(warning)\","
+      puts " \"content_type\": $record(content_type),"
+      puts " \"content\": \"$record(content)\","
+      puts " \"event_crid\": \"$record(event_crid)\","
+      #puts " \"series_crid\": \"$record(series_crid)\","
+      #puts " \"rec_crid\": \"$record(rec_crid)\","
+
+      # Count of already recorded programs with the same event_crid.
+      puts " \"repeat_crid_count\": $record(repeat_crid_count),"
+
+      # The first matching program_id.
+      if { $record(repeat_program_id) == {} } {
+        set repeat_program_id -1
+      } else {
+        set repeat_program_id $record(repeat_program_id)
+      }
+      puts " \"repeat_program_id\": $repeat_program_id,"
+
+      # Check if the event is in the schedule.
+      set ucRecKind 0
+      set key "$record(start):$record(channel_name)"
+      if { [dict exists $future_events $key] } {
+        set vals [dict get $future_events $key]
+        set ucRecKind $vals(ucRecKind)
+      }
+      puts " \"ucRecKind\": $ucRecKind,"
+
+      # Check for events with the same CRID in the schedule.
+      set ucRecKind 0
+      if { [dict exists $crid_recordings $record(event_crid)] } {
+        set ucRecKind [dict get $crid_recordings $record(event_crid)]
+      }
+      puts " \"crid_ucRecKind\": $ucRecKind"
+
+      puts -nonewline "}"
+    }
+
+    puts ""
+    puts " \],"
+
+    puts " \"status\": \"OK\""
+    puts "}"
+  }
+  
+  # Finished with the DBs.
+  $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg]\" }"
+  }
+} else {
+  main
+}

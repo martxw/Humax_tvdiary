@@ -20,10 +20,8 @@
 
 package require cgi
 source /mod/webif/lib/setup
-require rsv.class epg.class
-source /mod/webif/html/tvdiary/tvdiary_db.jim
-
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -34,9 +32,6 @@ set date_time_fmt "%a %d %b %Y $time_fmt"
 
 set channel_icons_path "/mod/webif/html/img/channels/out"
 set channel_icons_url "/img/channels/out"
-
-# Accumulte a map from "<time>:<channel-name>" to a dictionary of values describing the event.
-set future_events {}
 
 # --------------------------------------------------------------
 # CGI or command line parameters
@@ -90,16 +85,18 @@ set include_future_events 1
 #
 # Common output of a table row.
 #
-proc output_row { type active watched repeat_id available event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis } {
+proc output_row { type active watched repeat_program_id repeat_crid_count event_crid available event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis } {
 
-  if { $repeat_id == {} } {
-    set repeat_id -1
+  if { $repeat_program_id == {} } {
+    set repeat_program_id -1
   }
   puts "  {"
   puts "   \"type\": \"$type\","
   puts "   \"active\": $active,"
   puts "   \"watched\": $watched,"
-  puts "   \"repeat_id\": $repeat_id,"
+  puts "   \"repeat_program_id\": $repeat_program_id,"
+  puts "   \"repeat_crid_count\": $repeat_crid_count,"
+  puts "   \"event_crid\": \"$event_crid\","
   puts "   \"available\": $available,"
   puts "   \"event_start\": $event_start,"
   puts "   \"event_end\": $event_end,"
@@ -158,103 +155,23 @@ proc output_past_record { record } {
   }
 
   # All events have their actual duration.
-  set calculated_duration [expr ($record(end) - $record(start) + 30) / 60]
+  set calculated_duration [duration_seconds_to_minutes_rounding [expr $record(end) - $record(start)]]
   set scheduled_end [expr $record(scheduled_start) + ($record(scheduled_duration) * 60)]
 
-  output_row $typeclass $isactive $watched $record(repeat_id) $available $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
+  output_row $typeclass $isactive $watched $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) $available $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
 }
 
 #
 # Output the table row for a future event.
 #
 proc output_future_record { record } {
-  output_row "future" "false" "false" $record(repeat_id) "false" $record(scheduled_start) $record(scheduled_end) $record(scheduled_duration) $record(scheduled_start) $record(scheduled_end) $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
-}
-
-#
-# Convert from the handle of a service to the service ID.
-# (Consider caching results to avoid repeated queries.)
-#
-proc hsvc_to_svcid { hsvc } {
-  if { $hsvc == 0 } { return 0 }
-  set _svcid [$::rsvdb query "SELECT usSvcid FROM channel.TBL_SVC WHERE hSvc = $hsvc LIMIT 1"]
-  if { [llength $_svcid] != 1 } {
-    throw error "Failed to get svcid for hsvc=$hsvc"
+  set duration [duration_seconds_to_minutes $record(scheduled_duration)]
+  if { $record(ucRecKind) == 1 } {
+    set type "future"
+  } else {
+    set type "future_series"
   }
-  set svcid [lindex [lindex $_svcid 0] 1]
-  return $svcid;
-}
-
-#
-# Filter by time and add a record to ::future_events.
-#
-proc filter_and_add_to_future_events {tvdiarydb start end service_id channel_name} {
-  if { $end >= $::time_start && $end > $::current_time && $start < $::time_end } {
-
-    # Get the EPG entry for the other details displayed.
-    # NB: Adding 1 second because the EPG class checks > rather than >= start time.
-    # NB2: It is possible that the EPG entry doesn't get found, so be prepared to substitute "No information".
-    set epgs [epg dbfetch get -service $service_id -time [expr $start + 1]]
-    if { [llength $epgs] == 1 } {
-      lassign $epgs epg
-      set title [$epg get name]
-      set synopsis [$epg get text]
-      set channel_name [$epg get channel_name]
-    } else {
-      set title "Not in EPG"
-      set synopsis "No information available"
-      # channel_name was passed in.
-    }
-
-    set channel_id [get_channel_id $tvdiarydb $channel_name]
-    set title_id [get_title_id $tvdiarydb $title]
-    set synopsis_id [get_synopsis_id $tvdiarydb $synopsis]
-
-    set calculated_duration [expr ($end - $start + 30) / 60]
-
-    set records [$tvdiarydb query "
-      SELECT program_id AS repeat_id FROM programs WHERE programs.title_id = %s AND programs.synopsis_id = %s
-      AND EXISTS (SELECT activity_id FROM activities WHERE activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0 )
-      LIMIT 1
-      " $title_id $synopsis_id]
-    if { [llength $records] == 1 } {
-      set record [lindex $records 0]
-      set repeat_id $record(repeat_id)
-    } else {
-      set repeat_id -1
-    }
-
-    set vals [dict create "repeat_id" $repeat_id "scheduled_start" $start "scheduled_end" $end "scheduled_duration" $calculated_duration "channel_name" $channel_name "title" $title "synopsis" $synopsis]
-
-    set key "$start:$channel_name"
-    dict set ::future_events $key $vals
-    return 1
-  }
-  return 0
-}
-
-#
-# Filter the events and add future events to the global $::future_events.
-#
-proc add_future_event { tvdiarydb event } {
-  set in 0
-  # 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
-  if { [$event get ersvtype] == 3 } {
-    set ucRecKind [$event get ucRecKind]
-    # 1 == one-off, 2 == split, 4 == series.
-    if { $ucRecKind == 1 || $ucRecKind == 2 || $ucRecKind == 4 } {
-
-      # We have to check the entry's own time AND the times from its series link list.
-      set elist [$event aul]
-      foreach e $elist {
-        lassign $e hservice start end event_id
-        set in [filter_and_add_to_future_events $tvdiarydb $start $end [hsvc_to_svcid $hservice] [$event channel_name]]
-      }
-
-      set in [filter_and_add_to_future_events $tvdiarydb [$event get nsttime] [expr [$event get nsttime] + [$event get nduration]] [hsvc_to_svcid [$event get hsvc]] [$event channel_name]]
-    }
-  }
-  return $in
+  output_row $type "false" "false" $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) "false" $record(scheduled_start) $record(scheduled_end) $duration $record(scheduled_start) $record(scheduled_end) $duration $record(channel_name) $record(title) $record(synopsis)
 }
 
 #
@@ -275,7 +192,13 @@ proc main {} {
     #
     # We know there are no playbacks yet in the future.
     #
-    puts "{ \"status\": \"EMPTY\" }"
+    puts "{"
+    puts " \"current_time\": $::current_time,"
+    puts " \"time_start\": $::time_start,"
+    puts " \"time_end\": $::time_end,"
+    puts " \"events\": \[\],"
+    puts " \"status\": \"OK\""
+    puts "}"
 
   } else {
 
@@ -312,10 +235,12 @@ proc main {} {
     # Subquery checks whether the program has been watched - playback or live - long enough to have an end time.
     set records [$tvdiarydb query "
       SELECT a1.start, a1.type, a1.end, a1.unfinished,
-      (SELECT COUNT(*) FROM activities a2 WHERE a2.program_id = p1.program_id AND (a2.type = 'P' OR a2.type = 'L') AND a2.end != 0) AS watched,
-      (SELECT p2.program_id FROM programs p2 WHERE p2.title_id = p1.title_id AND p2.synopsis_id = p1.synopsis_id AND p1.program_id != p2.program_id) AS repeat_id,
-      (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = p1.channel_id AND inventory.scheduled_start = p1.start) AS available,
-      channels.channel_name, titles.title, synopses.synopsis, p1.start AS scheduled_start, p1.duration AS scheduled_duration
+        channels.channel_name, titles.title, synopses.synopsis,
+        p1.start AS scheduled_start, p1.duration AS scheduled_duration, p1.crid as event_crid,
+        (SELECT COUNT(*) FROM activities a2 WHERE a2.program_id = p1.program_id AND (a2.type = 'P' OR a2.type = 'L') AND a2.end != 0) AS watched,
+        (SELECT p2.program_id FROM programs p2 WHERE p2.title_id = p1.title_id AND p2.synopsis_id = p1.synopsis_id AND p1.program_id != p2.program_id) AS repeat_program_id,
+        (SELECT COUNT(*) FROM programs p3 WHERE p1.crid = p3.crid AND p1.program_id != p3.program_id AND LENGTH(p1.crid) > 0) as repeat_crid_count,
+        (SELECT COUNT(*) FROM inventory WHERE inventory.channel_id = p1.channel_id AND inventory.scheduled_start = p1.start) AS available
       FROM activities a1, programs p1, channels, titles, synopses
       WHERE $type_clause AND a1.end > %s AND a1.start < %s AND a1.program_id = p1.program_id AND channels.channel_id = p1.channel_id AND titles.title_id = p1.title_id AND synopses.synopsis_id = p1.synopsis_id
       ORDER BY a1.start" $::time_start $::time_end]
@@ -323,12 +248,14 @@ proc main {} {
     #
     # Determine if future recording events need to be included.
     #
+    set future_events {}
     if { $::include_future_events && $::type == "R" && $::time_end > $::current_time } {
       # Get the details of the scheduled events.
-      set events [rsv list]
-      foreach event $events {
-        add_future_event $tvdiarydb $event
-      }
+      $tvdiarydb query {attach database '%s' as channel} $::CHANNEL_DB_PATH
+      $tvdiarydb query {attach database '%s' as epg} $::EPG_DB_PATH
+      $tvdiarydb query {attach database '%s' as rsv} $::RSV_DB_PATH
+      
+      set future_events [build_future_events_list $tvdiarydb 1 [expr $::time_start > $::current_time ? $::time_start : $::current_time] $::time_end]
 
       # I considered processing the pending scheduled events here to add or remove from the map,
       # but pending events only have the first occurance of a series. So I can't
@@ -350,65 +277,58 @@ proc main {} {
     #
     release_lock tvdiary_db
 
-    if { [llength $records] > 0 || [llength $::future_events] > 0 } {
-      #
-      # Corner case: I initially suppressed future events immediately after their start time, but
-      # this results in events disappearing for a couple of minutes until the show has actually
-      # started and more than a minute has been recorded.
-      # So instead, suppress by spotting & removing duplicates.
-      #
-      # NB: It's arguable that future events that should have started but not yet finished
-      # should be included, but marked as active, and that the filtering be done in JavaScript.
-      # That way the minutes remaining to be recorded can be included in the total counts.
-      #
-      if { [llength $records] > 0 && [llength $::future_events] > 0 } {
-        foreach record $records {
-          set key "$record(scheduled_start):$record(channel_name)"
-          if { [dict exists $::future_events $key]  } {
-            dict unset ::future_events $key
-          }
-        }
-      }
-
-      puts "{"
-      puts " \"current_time\": $::current_time,"
-      puts " \"time_start\": $::time_start,"
-      puts " \"time_end\": $::time_end,"
-
-      puts -nonewline " \"events\": \["
-      set comma 0
+    #
+    # Corner case: I initially suppressed future events immediately after their start time, but
+    # this results in events disappearing for a couple of minutes until the show has actually
+    # started and more than a minute has been recorded.
+    # So instead, suppress by spotting & removing duplicates.
+    #
+    # NB: It's arguable that future events that should have started but not yet finished
+    # should be included, but marked as active, and that the filtering be done in JavaScript.
+    # That way the minutes remaining to be recorded can be included in the total counts.
+    #
+    if { [llength $records] > 0 && [llength $future_events] > 0 } {
       foreach record $records {
-        if { $comma } {
-          puts ","
-        } else {
-          puts ""
-          set comma 1
+        set key "$record(scheduled_start):$record(channel_name)"
+        if { [dict exists $future_events $key]  } {
+          dict unset future_events $key
         }
-        output_past_record $record
       }
-
-      set keys [lsort [dict keys $::future_events]]
-      foreach key $keys {
-        set vals [dict get $::future_events $key]
-        if { $comma } {
-          puts ","
-        } else {
-          puts ""
-          set comma 1
-        }
-        output_future_record $vals
-      }
-      puts ""
-      puts " \],"
-
-      puts " \"status\": \"OK\""
-      puts "}"
-    } else {
-      #
-      # For zero length results.
-      #
-      puts "{ \"status\": \"EMPTY\" }"
     }
+
+    puts "{"
+    puts " \"current_time\": $::current_time,"
+    puts " \"time_start\": $::time_start,"
+    puts " \"time_end\": $::time_end,"
+
+    puts -nonewline " \"events\": \["
+    set comma 0
+    foreach record $records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+      output_past_record $record
+    }
+
+    set keys [lsort [dict keys $future_events]]
+    foreach key $keys {
+      set vals [dict get $future_events $key]
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+      output_future_record $vals
+    }
+    puts ""
+    puts " \],"
+
+    puts " \"status\": \"OK\""
+    puts "}"
   }
 }
 

@@ -1,0 +1,221 @@
+#!/mod/bin/jimsh
+#
+# For testing, generate stub JSON.
+
+# 0 disables all.
+set enable_stubs 0
+
+if { $enable_stubs } {
+
+  # Select the stub number for each script, or 0 to disable.
+  dict set script_stub "/tvdiary/day_json.jim"  3
+  dict set script_stub "/tvdiary/epgsearch_json.jim" 0
+  dict set script_stub "/tvdiary/history_json.jim" 0
+  dict set script_stub "/tvdiary/inventory_json.jim" 0
+  dict set script_stub "/tvdiary/monthly_json.jim" 0
+  dict set script_stub "/tvdiary/watchlist_json.jim" 0
+  
+  if {[dict exists $env "REQUEST_METHOD"] } {
+    set script $env(SCRIPT_NAME)
+    set stub_num $script_stub($script)
+    if { $stub_num } {
+      httpheader "application/json"
+      sleep 1
+
+      if { $script eq "/tvdiary/day_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+{
+  "status": "Stub error."
+}
+          }
+        } elseif { $stub_num == 2 } {
+          puts {
+{
+ "current_time": 1400690250,
+ "time_start": 1400040000,
+ "time_end": 1400126400,
+ "events": [],
+ "status": "OK"
+}
+          }
+        } elseif { $stub_num == 3 } {
+          puts {
+{
+ "current_time": 1400690250,
+ "time_start": 1400040000,
+ "time_end": 1400126400,
+ "events": [
+  {
+   "type": "record",
+   "active": false,
+   "watched": true,
+   "repeat_id": -1,
+   "available": false,
+   "event_start": 1400090221,
+   "event_end": 1400093881,
+   "event_duration": 61,
+   "scheduled_start": 1400090400,
+   "scheduled_end": 1400094000,
+   "scheduled_duration": 60,
+   "channel_name": "BBC ONE HD",
+   "channel_icon_path": "channels/BBC%20ONE%20HD.png",
+   "title": "The One Show",
+   "synopsis": "Matt Baker and Alex Jones are joined by Rita Ora and Stephen Mangan. Plus ex-footballer Robbie Savage makes a secret comeback using some Hollywood magic. [HD] [S] Then BBC News."
+  },
+  {
+   "type": "record",
+   "active": false,
+   "watched": true,
+   "repeat_id": -1,
+   "available": false,
+   "event_start": 1400101262,
+   "event_end": 1400103001,
+   "event_duration": 29,
+   "scheduled_start": 1400101200,
+   "scheduled_end": 1400103000,
+   "scheduled_duration": 30,
+   "channel_name": "BBC TWO HD",
+   "channel_icon_path": "channels/BBC%20TWO%20HD.png",
+   "title": "Episodes",
+   "synopsis": "New series. 1\/9. Comedy series. Matt continues to fight for custody of his children, and Sean and Beverly discover that it is not so easy to heal old wounds. Contains strong language.  [AD,S]"
+  }
+ ],
+ "status": "OK"
+}
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } elseif { $script eq "/tvdiary/epgsearch_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 2 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 3 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } elseif { $script eq "/tvdiary/history_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 2 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 3 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } elseif { $script eq "/tvdiary/inventory_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 2 } {
+          puts "  {"
+          puts "   \"events\": \[\],"
+          puts "   \"modified\": [clock seconds],"
+          puts "   \"status\": \"OK\""
+          puts "  }"
+        } elseif { $stub_num == 3 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } elseif { $script eq "/tvdiary/monthly_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 2 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 3 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } elseif { $script eq "/tvdiary/watchlist_json.jim" } {
+        if { $stub_num == 1 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 2 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } elseif { $stub_num == 3 } {
+          puts {
+            {
+              "status": "Stub error."
+            }
+          }
+        } else {
+          puts "{"
+          puts "  \"status\": \"Stub $script, number $stub_num.\""
+          puts "}"
+        }
+      } else {
+        puts "{"
+        puts "  \"status\": \"Unexpected script name $script, stub number $stub_num.\""
+        puts "}"
+      }
+      exit
+    }
+  }
+}
+

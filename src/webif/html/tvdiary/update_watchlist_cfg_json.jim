@@ -1,0 +1,150 @@
+#!/mod/bin/jimsh
+#
+#
+# CGI usage: /tvdiary/update_watchlist_cfg_json.jim
+#
+# Author: Martin Wink, 2014.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
+
+set search_options {"E" "C" "S" "F" "M"}
+
+
+# --------------------------------------------------------------
+# CGI parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    set watchlist_text [cgi_get "watchlist_text" ""]
+    
+    httpheader "application/json"
+  }
+  cli {
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  # end_debug
+
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists $::DB_FILEPATH] } {
+    throw error "The $::DB_FILEPATH database is missing."
+  }
+
+  # Save to temp file, then validate it.
+  set rules_fd [open $::WATCHLIST_FILEPATH_NEW w]
+  puts -nonewline $rules_fd $::watchlist_text
+  $rules_fd close
+
+  set rules_fd [open $::WATCHLIST_FILEPATH_NEW r]
+  foreach line [split [read -nonewline $rules_fd] "\n"] {
+    incr line_number
+    #puts "Line $line_number = $line"
+    if { [string equal -length 1 $line "#"] } {
+      continue
+    }
+    set parts [split $line "|"]
+    if { [llength $parts] == 0 } {
+      continue
+    }
+    if { [llength $parts] != 7 } {
+      #puts "Incorrect number of parameters on line $line_number. [llength $parts] instead of 7."
+      throw error "Incorrect number of parameters on line $line_number. [llength $parts] instead of 7."
+    }
+    lassign $parts title_op title synopsis_op synopsis channel_op channel flags
+
+    if { [lsearch -exact $::search_options $title_op] == -1 } {
+      #puts "The title comparison operator \"$title_op\" in line $line_number is invalid."
+      throw error "The title comparison operator \"$title_op\" in line $line_number is invalid."
+    }
+    if { [lsearch -exact $::search_options $synopsis_op] == -1 } {
+      #puts "The synopsis comparison operator \"$synopsis_op\" in line $line_number is invalid."
+      throw error "The synopsis comparison operator \"$synopsis_op\" in line $line_number is invalid."
+    }
+    if { [lsearch -exact $::search_options $channel_op] == -1 } {
+      #puts "The channel name comparison operator \"$channel_op\" in line $line_number is invalid."
+      throw error "The channel name comparison operator \"$channel_op\" in line $line_number is invalid."
+    }
+
+    if { $title == {} && $synopsis == {} && $channel == {} } {
+      #puts "All of the search values in line $line_number are empty. At least one must be specified."
+      throw error "All of the search values in line $line_number are empty. At least one must be specified."
+    }
+  }
+  $rules_fd close
+
+  file delete $::WATCHLIST_FILEPATH_BAK
+  file rename $::WATCHLIST_FILEPATH $::WATCHLIST_FILEPATH_BAK
+  file rename $::WATCHLIST_FILEPATH_NEW $::WATCHLIST_FILEPATH
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
+  }
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  set_setting $tvdiarydb "time_to_build_watchlist" 0
+  set_setting $tvdiarydb "watchlist_next_line" 0
+
+  $tvdiarydb query "DELETE FROM watchlist_inter;"
+  set num_watchlist [$tvdiarydb changes]
+
+  # Finished with the DBs.
+  $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
+
+  puts "{"
+  puts " \"text\": \"[escape_json_string $::watchlist_text]\","
+  puts " \"status\": \"OK\""
+  puts "}"
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg].\" }"
+  }
+} else {
+  main
+}

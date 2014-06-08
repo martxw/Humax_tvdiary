@@ -6,7 +6,7 @@
 #
 
 package require sqlite3
-source /mod/webif/html/tvdiary/tvdiary_db.jim
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -93,8 +93,8 @@ proc main {} {
       set num_events [$tvdiarydb changes]
 
       set num_programs [purge_orphaned_programs $tvdiarydb]
-      set num_channels [purge_orphaned_channels $tvdiarydb] 
-      set num_titles [purge_orphaned_titles $tvdiarydb] 
+      set num_channels [purge_orphaned_channels $tvdiarydb]
+      set num_titles [purge_orphaned_titles $tvdiarydb]
       set num_synopses [purge_orphaned_synopses $tvdiarydb]
 
       $tvdiarydb query "COMMIT TRANSACTION"

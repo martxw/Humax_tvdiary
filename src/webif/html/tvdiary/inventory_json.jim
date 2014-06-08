@@ -20,9 +20,8 @@
 
 package require cgi
 source /mod/webif/lib/setup
-source /mod/webif/html/tvdiary/tvdiary_db.jim
-
-if { ![exists -proc sqlite3.open] } { package require sqlite3 }
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+source /mod/webif/html/tvdiary/tvdiary_stub.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -101,11 +100,12 @@ proc output_record { record } {
   set thumbnail [file exists "[file rootname $filepath].thm"]
   puts "  \"has_thumbnail\": [expr { $thumbnail ? {true} : {false} }],"
   
-  set repeat_id $record(repeat_id)
-  if { $repeat_id == {} } {
-    set repeat_id -1
+  set repeat_program_id $record(repeat_program_id)
+  if { $repeat_program_id == {} } {
+    set repeat_program_id -1
   }
-  puts "  \"repeat_id\": $repeat_id,"
+  puts "  \"repeat_program_id\": $repeat_program_id,"
+  puts "  \"repeat_crid_count\": 0,"
 
   if { $record(watched) } {
     set watched "true"
@@ -114,7 +114,7 @@ proc output_record { record } {
   }
   puts "  \"watched\": $watched,"
 
-  set event_duration [expr ($record(event_end) - $record(event_start) + 30) / 60]
+  set event_duration [duration_seconds_to_minutes_rounding [expr $record(event_end) - $record(event_start)]]
   puts "  \"title\": \"[escape_json_string $record(title)]\","
   puts "  \"synopsis\": \"[escape_json_string $record(synopsis)]\","
   puts "  \"event_start\": $record(event_start),"
@@ -173,13 +173,14 @@ proc main {} {
   if { !$short_circuit } {
     #
     # Query the inventory for generating JSON.
+    # COLLATE NOCASE not used as it puts "[*]" folders first rather than last.
     #
     set records [$tvdiarydb query "
       SELECT i.inventory_id, i.flag, i.directory, i.filename, i.size, c.channel_name, t.title, s.synopsis, i.event_start, i.event_end, i.scheduled_start, i.scheduled_duration,
       (SELECT COUNT(*) FROM activities, programs
         WHERE programs.start = i.scheduled_start AND programs.channel_id = i.channel_id
           AND activities.program_id = programs.program_id AND (activities.type = 'P' OR activities.type = 'L') AND activities.end != 0) AS watched,
-      (SELECT program_id FROM programs WHERE programs.title_id = i.title_id AND programs.synopsis_id = i.synopsis_id AND programs.start != i.scheduled_start) AS repeat_id
+      (SELECT program_id FROM programs WHERE programs.title_id = i.title_id AND programs.synopsis_id = i.synopsis_id AND programs.start != i.scheduled_start) AS repeat_program_id
       FROM inventory i, channels c, titles t, synopses s
       WHERE c.channel_id = i.channel_id AND t.title_id = i.title_id AND s.synopsis_id  = i.synopsis_id
       ORDER BY directory, event_start DESC, title"]

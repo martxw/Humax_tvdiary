@@ -44,9 +44,11 @@ table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSo
   background-color: #fece2f;
 }
 
+/*
 table.tablesorter tbody tr:nth-child(2n+1) td {
   background-color:#cf9;
 }
+*/
 
 table.tablesorter th.header {
   padding: 0 1.5em 0 0.2em;
@@ -97,7 +99,7 @@ table.tablesorter th.header {
 }
 
 /* Size tables, and keep them apart in different orientations */
-#daily_recorded_outer, #daily_watched_outer, #history_outer, #inventory_outer {
+#daily_recorded_outer, #daily_watched_outer, #daily_watchlist_outer, #search_outer, #watchlist_outer, #inventory_outer {
   width: 53em;
   float: left;
   margin: 0 1em 1em 0;
@@ -154,20 +156,20 @@ table.tablesorter th.header {
   margin: 0 0 2px 0;
 }
 
-/* Live TV count is clickable */
-span.live_count {
+/* Caption counts are clickable */
+span.caption_count {
   cursor: pointer;
 }
-span.live_count:hover {
+span.caption_count:hover {
   text-decoration: underline;
 }
 
 /* Live TV count - when not shown. */
-span.live_count_hidden {
+span.caption_count_hidden {
   color: #5e5e5e;
   text-decoration: line-through;
 }
-span.live_count_hidden:hover {
+span.caption_count_hidden:hover {
   text-decoration: underline line-through;
 }
 
@@ -304,7 +306,7 @@ td.event_flags {
 
 
 /* Progress indicators centred */
-#daily_recorded_spinner, #daily_watched_spinner, #monthly_programs_spinner, #monthly_channels_spinner, #history_results_spinner, #inventory_spinner {
+#daily_recorded_spinner, #daily_watched_spinner, #daily_watchlist_spinner, #monthly_programs_spinner, #monthly_channels_spinner, #search_results_spinner, #watchlist_results_spinner, #inventory_spinner {
   text-align: center;
 }
 
@@ -329,22 +331,22 @@ monthly_next_prev_table {
   margin: 0 1em 0.3em 0;
 }
 
-table#history_search_table td:nth-child(1), table#history_search_table td:nth-child(2) {
+table#search_criteria_table th:nth-child(1), table#search_criteria_table td:nth-child(2) {
     width:1%;
     white-space:nowrap;
 }
 
-#history_search_table tbody {
+#search_criteria_table tbody {
   vertical-align: top;
 }
-#history_search_table th div {
+#search_criteria_table th div {
   margin-top: 2px;
 }
 
-#history_search_title, #history_search_channel {
+#search_criteria_title, #search_criteria_channel {
   resize: horizontal;
 }
-#history_search_synopsis {
+#search_criteria_synopsis {
   resize: both;
 }
 
@@ -359,31 +361,35 @@ table#monthly_programs_table tr td:first-child::before, table#monthly_channels_t
   content: counter(rowNumber);
 }
 
-table#monthly_programs_table td, table#monthly_channels_table td, table#history_results_table td {
+table#monthly_programs_table td, table#monthly_channels_table td, table#search_results_table td, table#watchlist_results_table td {
   vertical-align: middle;
 }
-table#monthly_programs_table td img, table#monthly_channels_table td img, table#history_results_table td img {
+table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_results_table td img {
   vertical-align: text-bottom;
   margin: 0 0.3em 0 0;
 }
 table#monthly_programs_table td div, table#monthly_channels_table td div {
   white-space: nowrap;
 }
-table#monthly_programs_table th, table#monthly_channels_table th, table#history_results_table th {
+table#monthly_programs_table th, table#monthly_channels_table th, table#search_results_table th, table#watchlist_results_table th {
   white-space: nowrap;
 }
 
 
-.history_title, .history_channel, .history_datetime, .history_duration {
+.search_title, .search_channel, .search_datetime, .search_duration {
   white-space: nowrap;
 }
-td.history_type {
+td.search_type {
   text-align: center;
 }
 a.history_link:hover {
   text-decoration: underline;
 }
 
+/* Dimmed flags icons */
+img.collateral_scheduled, .dejavu img {
+  opacity: 0.5;
+}
 
 td.inventory_dir {
   vertical-align: middle;
