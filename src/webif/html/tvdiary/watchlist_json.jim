@@ -184,7 +184,7 @@ proc main {} {
       FROM watchlist_inter w
       WHERE w.end > %s
         AND w.start < %s
-      ORDER BY w.start, w.channel_name
+      ORDER BY w.title, w.synopsis, w.start
       LIMIT 1001" $::time_start $::time_end]
 
     foreach record $records {

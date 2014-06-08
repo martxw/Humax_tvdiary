@@ -891,8 +891,9 @@ $(document).ready(function() {
             if (data.events.length == 0) {
               $('#daily_watchlist_footer').html("<span class=\"nothing\">Nothing</span>");
             } else {
-              $('#daily_watchlist_caption').html(day_watchlist_json_to_caption(data));
-              $('#daily_watchlist_table tbody').html(day_watchlist_json_to_html(data));
+              var groups_array = build_groups_array(data);
+              $('#daily_watchlist_caption').html(day_grouped_watchlist_json_to_caption(data, groups_array));
+              $('#daily_watchlist_table tbody').html(day_grouped_watchlist_json_to_html(data, groups_array));
 
               bind_caption_counts($('#daily_watchlist_caption'), $('#daily_watchlist_table'), $('#daily_watchlist_footer'), "<span class=\"nothing\">All programmes filtered out</span>");
               update_event_visibility(".dwatch_repeat", $('#daily_watchlist_table'), $('#daily_watchlist_caption span[toggle=".dwatch_repeat"]'), events_visible[".dwatch_repeat"]);
@@ -1224,7 +1225,180 @@ $(document).ready(function() {
   }
 
   //////
-  // Render table body HTML from JSON.
+  // Build array of arrays to event IDs, grouped by matching titles and synopses.
+  // Where event_crids match, it trumps the title & synopsis check.
+  //////
+  function build_groups_array(data) {
+    var results = new Array();
+    
+    // Map from CRID to group index.
+    var crids_map = {};
+    
+    var group_title = "";
+    var group_synopsis = "";
+    for (var i = 0, len = data.events.length; i < len; i++) {
+      var event = data.events[i];
+
+      // Check CRID first.
+      var crid_index = crids_map[event.event_crid];
+      if (crid_index != undefined) {
+
+        // Add new member to existing group.
+        var members = results[crid_index];
+        members.push(i);
+
+      } else {
+      
+        // Is next event in current group, or start a new one?
+        if (results.length > 0 && event.title == group_title && event.synopsis == group_synopsis) {
+          // Add new member to the latest existing group.
+          var members = results[results.length - 1];
+          members.push(i);
+        } else {
+          // Create new members array with this event, and push a new group.
+          var new_members = [i];
+          results.push(new_members);
+          group_title = event.title;
+          group_synopsis = event.synopsis;
+          
+          // Remember the index of this group in the CRID map.
+          if (event.event_crid.length > 0) {
+            crids_map[event.event_crid] = results.length - 1;
+          }
+        }
+
+      }
+    }
+    return results;
+  }
+
+  //////
+  // Render table body HTML from JSON - grouped.
+  //////
+  function day_grouped_watchlist_json_to_html(data, groups_array) {
+    var html = "";
+    for (var i = 0, len_i = groups_array.length; i < len_i; i++) {
+      var group_members = groups_array[i];
+
+      // Scan members for repeat indications - any of them flagged means the whole group is flagged.
+      var classes = "";
+      for (var j = 0, len_j = group_members.length; j < len_j; j++) {
+        var event = data.events[group_members[j]];
+        if ( (event.repeat_crid_count > 0)
+          || (event.repeat_program_id != -1)
+          || (event.ucRecKind == 1 || event.ucRecKind == 2 || event.ucRecKind == 4 || event.crid_ucRecKind == 1 || event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4)) {
+          classes = " dwatch_repeat";
+          break;
+        }
+      }
+
+      var event = data.events[group_members[0]];
+
+      //
+      // Group start row - 1 column spanning 3. The title and synopsis, formatted like the other daily tables, but no time.
+      //
+      html += "<tr class=\"event_row visible_event" + classes + "\">";
+
+      html += "<td colspan=\"3\" class=\"event_descr\">";
+      html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+      if (event.synopsis != "") {
+        html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
+      }
+      html += "</td>"
+
+      // Dummy column 4 - flags.
+      html += "<td class=\"dwatch_flags\">";
+      html += "</td>"
+
+      html += "</tr>";
+
+      // Iterate over all members to render their channels, times and flags on separate rows.
+      for (var j = 0, len_j = group_members.length; j < len_j; j++) {
+        var event = data.events[group_members[j]];
+        
+        html += "<tr class=\"event_row visible_event" + classes + "\">";
+
+        // Column 1 - dummy padding, to be as wide as possible to push the others to the right.
+        html += "<td class=\"dwatch_padding\">";
+        html += "</td>";
+        
+        // Column 2 - the channel, small icon horizontally aligned.
+        html += "<td class=\"dwatch_channel\">";
+        if (event.channel_name != "") {
+          html += "<div>";
+          html += "<img src=\"" + event.channel_icon_path + "\" width=20 height=20 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
+          html += "<span>" + escapeHtml(event.channel_name) + "</span>";
+          html += "</div>";
+        }
+        html += "</td>";
+
+        // Column 3 - Time and duration.
+        html += "<td class=\"dwatch_datetime\">";
+        html += "<span class=\"tvschedule\">" + formatDateTime(event.start) + ", " + event.duration + (event.duration == 1 ? " min" : " mins") + "</span>";
+        html += "</td>";
+
+        // Column 4 - flags.
+        html += "<td class=\"dwatch_flags\">";
+        if (event.repeat_crid_count > 0) {
+          html += " <a class=\"repeat\" prog_crid=\"" + event.event_crid + "\" href=\"#\"><img src=\"images/repeat.png\" width=16 height=16 title=\"CRID repeat\"></a>";
+        } else if (event.repeat_program_id != -1) {
+          html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
+        }
+        if (event.ucRecKind == 1) {
+          html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
+        } else if (event.ucRecKind == 2 || event.ucRecKind == 4) {
+          html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
+        } else if (event.crid_ucRecKind == 1) {
+          html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording another time\">";
+        } else if (event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4) {
+          html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording another time\">";
+        }
+        html += "</td>";
+
+        html += "</tr>";
+      }
+    }
+    return $(html);
+  }
+
+  //////
+  // Render results caption from JSON.
+  //////
+  function day_grouped_watchlist_json_to_caption(data, groups_array) {
+    var num_new = 0;
+    var num_repeats = 0;
+
+    for (var i = 0, len_i = groups_array.length; i < len_i; i++) {
+      var group_members = groups_array[i];
+
+      // Scan members for repeat indications - any of them flagged means the whole group is flagged.
+      for (var j = 0, len_j = group_members.length; j < len_j; j++) {
+        var event = data.events[group_members[j]];
+        if ( (event.repeat_crid_count > 0)
+          || (event.repeat_program_id != -1)
+          || (event.ucRecKind == 1 || event.ucRecKind == 2 || event.ucRecKind == 4 || event.crid_ucRecKind == 1 || event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4)) {
+          num_repeats += 1;
+          break;
+        }
+      }
+    }
+    num_new = groups_array.length - num_repeats;
+
+    caption = "";
+    if (num_new > 0) {
+      caption += num_new + (num_new == 1 ? " suggested new programme" : " suggested new programmes");
+    }
+    if (num_new > 0 && num_repeats > 0) {
+      caption += " / ";
+    }
+    if (num_repeats > 0) {
+      caption += "<span class=\"caption_count\" toggle=\".dwatch_repeat\">" + num_repeats + (num_repeats == 1 ? " repeat" : " repeats") + "</span>";
+    }
+    return caption;
+  }
+
+  //////
+  // Render table body HTML from JSON - flat. (To be obsoleted.)
   //////
   function day_watchlist_json_to_html(data) {
     var html = "";

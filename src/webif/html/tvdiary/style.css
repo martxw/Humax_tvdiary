@@ -299,9 +299,17 @@ tr.live_event td.event_time:before {
   float: right;
 }
 
-td.event_flags {
+td.event_flags, td.dwatch_flags {
   width: 16px;
   vertical-align: bottom;
+}
+
+td.dwatch_padding {
+  width: 50%;
+}
+
+td.dwatch_channel, td.dwatch_datetime {
+  white-space: nowrap;
 }
 
 
@@ -364,7 +372,7 @@ table#monthly_programs_table tr td:first-child::before, table#monthly_channels_t
 table#monthly_programs_table td, table#monthly_channels_table td, table#search_results_table td, table#watchlist_results_table td {
   vertical-align: middle;
 }
-table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_results_table td img {
+table#daily_watchlist_table td.dwatch_channel img, table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_results_table td img {
   vertical-align: text-bottom;
   margin: 0 0.3em 0 0;
 }
