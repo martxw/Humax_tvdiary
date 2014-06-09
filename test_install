@@ -1,0 +1,71 @@
+#!/bin/sh
+ver=`grep Version src/CONTROL/control | sed -e "s/.*: *//"`
+echo "Testing the installation for the current tvdiary version $ver"
+
+echo "YOU MUST ENSURE THAT THE TV DIARY DATABASE HAS BEEN BACKED UP BEFORE RUNNING THIS TEST"
+
+[ -f /mod/etc/tvdiary.db ] && exit
+
+read -p "Ensure there, type 'y' to update:" GO
+if [ "$GO" == "y" ]; then
+  echo "Fresh installion first."
+
+  echo "opkg remove tvdiary"
+  opkg remove tvdiary
+
+  echo "rm /mod/etc/tvdiary.db"
+  rm /mod/etc/tvdiary.db
+
+  echo "opkg install out/tvdiary_${ver}_mipsel.opk"
+  opkg install out/tvdiary_${ver}_mipsel.opk
+
+  read -p "Verify the fresh installation worked. Then hit return." GO
+
+  sqlite3 /mod/etc/tvdiary.db ".schema" > /mod/tmp/tvdiary_schema_fresh.txt
+  sqlite3 /mod/etc/tvdiary.db "select * from settings;" >> /mod/tmp/tvdiary_schema_fresh.txt
+  mv /mod/tmp/tvdiary.log /mod/tmp/tvdiary_log_fresh.txt
+
+  upgrade_test()
+  {
+    echo "Upgrade from $1."
+
+    echo "opkg remove tvdiary"
+    opkg remove tvdiary
+
+    echo "rm /mod/etc/tvdiary.db"
+    rm /mod/etc/tvdiary.db
+
+    echo "cp /mod/etc/tvdiary_$1.db /mod/etc/tvdiary.db"
+    cp /mod/etc/tvdiary_$1.db /mod/etc/tvdiary.db
+
+    sqlite3 /mod/etc/tvdiary.db ".schema" > /mod/tmp/tvdiary_schema_from_$1.txt
+
+    echo "opkg install out/tvdiary_${ver}_mipsel.opk"
+    opkg install out/tvdiary_${ver}_mipsel.opk
+
+    echo ""
+    echo "Now manually go to settings and enable all functionality."
+    echo "Then step through the tabs and wait for aggregation and the watchlist recalculation to complete."
+
+    read -p "Verify the $1 upgrade worked. Then hit return." GO
+
+    sqlite3 /mod/etc/tvdiary.db ".schema" >> /mod/tmp/tvdiary_schema_from_$1.txt
+    sqlite3 /mod/etc/tvdiary.db "select * from settings;" >> /mod/tmp/tvdiary_schema_from_$1.txt
+    mv /mod/tmp/tvdiary.log /mod/tmp/tvdiary_log_from_$1.txt
+  }
+
+  upgrade_test "v1"
+  upgrade_test "v2-1"
+  upgrade_test "v2-2"
+  upgrade_test "v2-3"
+  upgrade_test "v2-4"
+  upgrade_test "v2-5"
+  upgrade_test "v2-6"
+  upgrade_test "v2-7"
+  upgrade_test "v3-0"
+  upgrade_test "v3-1"
+
+  echo "Finished tests"
+else
+  echo "Skipped testing."
+fi

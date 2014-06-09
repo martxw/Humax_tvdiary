@@ -5,4 +5,4 @@ Version: 0.0.3-1
 Architecture: mipsel
 Maintainer: martxw
 Depends: webif (>= 1.0.13-1)
-Description: An add-on to the web interface that tracks the TV programmes you record and watch, presenting them in a diary view.
+Description: An add-on to the web interface that tracks the TV programmes you record and watch, presenting them in a diary view. NB Upgrade from pre 0.0.3 may take a few minutes to complete.

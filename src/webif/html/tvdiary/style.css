@@ -329,6 +329,9 @@ td.dwatch_padding {
 td.dwatch_channel, td.dwatch_datetime {
   white-space: nowrap;
 }
+#daily_watchlist_table .event_descr {
+  padding-left: 3px;
+}
 
 
 /* Progress indicators centred */

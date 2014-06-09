@@ -63,7 +63,9 @@ proc main {} {
     #
     release_lock tvdiary_db
 
-    puts "$::logging_time: Migration completed successfully."
+    set finished_time [clock seconds]
+
+    puts "$::logging_time: Migration completed successfully at [clock format $finished_time -format $::log_date_fmt] after [expr $finished_time - $::current_time] seconds."
   } on error { msg } {
     puts "$::logging_time: Migration failed. \[$msg\]"
     puts [info stacktrace]
