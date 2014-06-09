@@ -120,8 +120,16 @@ table.tablesorter th.header {
 }
 
 /* Wrap the daily tables without falling to the left */
-#daily_tables_wrapper {
-  overflow: hidden;
+@media all and (min-width: 70.2em) {
+  #daily_tables_wrapper {
+    overflow: hidden;
+  }
+}
+@media all and (max-width: 70.2em) {
+  #daily_tables_wrapper {
+    float: left;
+    overflow: hidden;
+  }
 }
  
 /* Date shown in diary */
