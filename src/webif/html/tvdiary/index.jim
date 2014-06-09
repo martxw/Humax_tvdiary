@@ -106,18 +106,20 @@ if { ![file exists $DB_FILEPATH] } {
 
         <div id="daily_title_date"></div>
 
-        <div class="table_wrapper">
-          <div class="controls_panel">
-            <div id="daily_datepicker"></div>
-            <table id="daily_next_prev_table"><tr>
+        <div class="controls_panel">
+          <table id="daily_next_prev_table">
+            <tr>
+              <td colspan="3"><div id="daily_datepicker"></div></td>
+            </tr>
+            <tr>
               <td><button id="daily_prev_day">Prev</button></td>
               <td><button id="daily_today">Today</button></td>
               <td><button id="daily_next_day">Next</button></td>
-            </tr></table>
-          </div>
+            </tr>
+          </table>
         </div>
 
-        <div class="table_wrapper">
+        <div id="daily_tables_wrapper">
           <div id="daily_recorded_outer" class="ui-widget ui-widget-content ui-corner-all">
             <div id="daily_recorded_caption" class="table_caption ui-widget-header ui-corner-all">
               Recorded

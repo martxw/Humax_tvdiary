@@ -1385,14 +1385,9 @@ $(document).ready(function() {
     num_new = groups_array.length - num_repeats;
 
     caption = "";
-    if (num_new > 0) {
-      caption += num_new + (num_new == 1 ? " suggested new programme" : " suggested new programmes");
-    }
-    if (num_new > 0 && num_repeats > 0) {
-      caption += " / ";
-    }
+    caption += num_new + (num_new == 1 ? " suggested new programme" : " suggested new programmes");
     if (num_repeats > 0) {
-      caption += "<span class=\"caption_count\" toggle=\".dwatch_repeat\">" + num_repeats + (num_repeats == 1 ? " repeat" : " repeats") + "</span>";
+      caption += " / <span class=\"caption_count\" toggle=\".dwatch_repeat\">" + num_repeats + (num_repeats == 1 ? " repeat" : " repeats") + "</span>";
     }
     return caption;
   }

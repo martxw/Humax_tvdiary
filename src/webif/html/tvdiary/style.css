@@ -93,7 +93,7 @@ table.tablesorter th.header {
   margin: 0 1.5em 0 1.5em;
 }
 
-/* Keep tables & fields together */
+/* Makes div large enough for contents rather that filling width. */
 .table_wrapper {
   float: left;
 }
@@ -114,6 +114,16 @@ table.tablesorter th.header {
 }
 
 
+/* Make panel properly contain its contents */
+#daily_panel {
+  overflow:hidden;
+}
+
+/* Wrap the daily tables without falling to the left */
+#daily_tables_wrapper {
+  overflow: hidden;
+}
+ 
 /* Date shown in diary */
 #daily_title_date {
   font-size: 150%;
@@ -123,6 +133,7 @@ table.tablesorter th.header {
 /* The controls */
 .controls_panel {
   margin: 0 1em 1em 0;
+  float:left;
 }
 
 /* Space from other fields below */
@@ -132,7 +143,6 @@ table.tablesorter th.header {
 
 /* The prev/today/next buttons and their table */
 #daily_next_prev_table {
-  width:100%;
   margin: 0 1em 0.3em 0;
 }
 #daily_prev_day, #daily_today, #daily_next_day {
