@@ -793,9 +793,9 @@ $(document).ready(function() {
       wl_url = "/tvdiary/watchlist_json.jim?start=" + watch_start + "&end=" + watch_end;
     } else {
       var date_filename = $.datepicker.formatDate("yy_mm_dd", new Date(daily_start_time * 1000));
-      r_url = "/tvdiary/json/" + date_filename + "_R.json?nocache";
-      w_url = "/tvdiary/json/" + date_filename + "_W.json?nocache";
-      wl_url = "/tvdiary/json/" + date_filename + "_WL.json?nocache";
+      r_url = "/tvdiary/json/" + date_filename + "_R.json?nocache=" + today_start;
+      w_url = "/tvdiary/json/" + date_filename + "_W.json?nocache=" + today_start;
+      wl_url = "/tvdiary/json/" + date_filename + "_WL.json?nocache=" + today_start;
     }
 
     if (show_watched) {
@@ -1552,7 +1552,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       m_url = "/tvdiary/monthly_json.jim?year=" + year + "&month=" + month;
     } else {
-      m_url = "/tvdiary/json/" + year + "_" + month + "_M.json?nocache";
+      m_url = "/tvdiary/json/" + year + "_" + month + "_M.json?nocache=" + today_start;
     }
 
     // Asynchronously request the summary tables' data.
@@ -1740,7 +1740,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?program_id=' + prog_id;
     } else {
-      var url = '/tvdiary/json/history_' + prog_id + '.json?nocache';
+      var url = '/tvdiary/json/history_' + prog_id + '.json?nocache=' + today_start;
     }
     update_history(url, true);
   }
@@ -1754,7 +1754,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?crid=' + encodeURIComponent(crid);
     } else {
-      var url = '/tvdiary/json/history_' + encodeURIComponent(crid) + '.json?nocache';
+      var url = '/tvdiary/json/history_' + encodeURIComponent(crid) + '.json?nocache=' + today_start;
     }
     update_history(url, true);
   }
@@ -1768,7 +1768,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?title_id=' + title_id + '&channel_id=' + channel_id;
     } else {
-      var url = '/tvdiary/json/history_' + title_id + '_' + channel_id + '.json?nocache';
+      var url = '/tvdiary/json/history_' + title_id + '_' + channel_id + '.json?nocache=' + today_start;
     }
     update_history(url, true);
   }
@@ -1789,7 +1789,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/history_json.jim?title=' + encodeURIComponent(title) + '&channel=' + encodeURIComponent(channel) + '&synopsis=' + encodeURIComponent(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
     } else {
-      var url = '/tvdiary/json/history_search.json?nocache';
+      var url = '/tvdiary/json/history_search.json?nocache=' + today_start;
     }
     update_history(url, false);
   }
@@ -1998,7 +1998,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/epgsearch_json.jim?title=' + encodeURIComponent(title) + '&channel=' + encodeURIComponent(channel) + '&synopsis=' + encodeURIComponent(synopsis) + '&title_op=' + title_op + '&channel_op=' + channel_op + '&synopsis_op=' + synopsis_op;
     } else {
-      var url = '/tvdiary/json/epgsearch_json.json?nocache';
+      var url = '/tvdiary/json/epgsearch.json?nocache=' + today_start;
     }
 
     $('#search_results_table tbody').html("");
@@ -2142,7 +2142,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/watchlist_json.jim?modified=' + watchlist_modified;
     } else {
-      var url = '/tvdiary/json/watchlist_json.json?nocache';
+      var url = '/tvdiary/json/watchlist.json?nocache=' + today_start;
     }
 
     //$('#watchlist_results_footer').html("");
@@ -2336,7 +2336,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/get_watchlist_cfg_json.jim';
     } else {
-      var url = '/tvdiary/json/get_watchlist_cfg.txt?nocache';
+      var url = '/tvdiary/json/get_watchlist_cfg.json?nocache=' + today_start;
     }
     $.ajax({
       type: "GET",
@@ -2367,7 +2367,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/update_watchlist_cfg_json.jim';
     } else {
-      var url = '';
+      var url = '/tvdiary/json/update_watchlist_cfg.json?nocache=' + today_start;
     }
     var formdata = $('#watchlist_form').serialize();
     $.ajax({
@@ -2411,7 +2411,7 @@ $(document).ready(function() {
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/inventory_json.jim?modified=' + inventory_modified;
     } else {
-      var url = '/tvdiary/json/inventory.json?nocache';
+      var url = '/tvdiary/json/inventory.json?nocache=' + today_start;
     }
     $('#inventory_spinner').show();
     $('#inventory_footer').html("");

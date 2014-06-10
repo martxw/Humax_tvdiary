@@ -56,6 +56,7 @@ mkdir /mod/dev/tvdiary/live/etc
 TDIR=/mod/etc
 LDIR=/mod/dev/tvdiary/live/etc
 ln -s $TDIR/tvdiary.db $LDIR/tvdiary.db
+ln -s $TDIR/tvdiary_watchlist.txt $LDIR/tvdiary_watchlist.txt
 
 mkdir /mod/dev/tvdiary/live/tmp
 TDIR=/mod/tmp

@@ -38,6 +38,11 @@ case $runmode {
     httpheader "application/json"
   }
   cli {
+    # Total fake as don't want publishing to change the configuration.
+    puts "{"
+    puts " \"status\": \"OK\""
+    puts "}"
+    exit
   }
 }
 
