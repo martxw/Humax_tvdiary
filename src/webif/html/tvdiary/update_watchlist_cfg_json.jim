@@ -112,9 +112,15 @@ proc main {} {
   }
   $rules_fd close
 
-  file delete $::WATCHLIST_FILEPATH_BAK
-  file rename $::WATCHLIST_FILEPATH $::WATCHLIST_FILEPATH_BAK
-  file rename $::WATCHLIST_FILEPATH_NEW $::WATCHLIST_FILEPATH
+  if { [file exists $::WATCHLIST_FILEPATH_BAK] } {
+    file delete $::WATCHLIST_FILEPATH_BAK
+  }
+  if { [file exists $::WATCHLIST_FILEPATH] } {
+    file rename $::WATCHLIST_FILEPATH $::WATCHLIST_FILEPATH_BAK
+  }
+  if { [file exists $::WATCHLIST_FILEPATH_NEW] } {
+    file rename $::WATCHLIST_FILEPATH_NEW $::WATCHLIST_FILEPATH
+  }
 
   #
   # Get a lock for the database

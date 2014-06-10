@@ -54,7 +54,7 @@ proc main {} {
   # begin_debug
   # end_debug
 
-  set watchlist_text "C|title-text|C|synopsis-text|C|channel-text|"
+  set watchlist_text "#C|title-text|C|channel-text|C|synopsis-text|"
   try {
     set settings_fd [open $::WATCHLIST_FILEPATH r]
     set watchlist_text [read $settings_fd]

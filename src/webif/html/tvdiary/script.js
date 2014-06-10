@@ -2351,7 +2351,7 @@ $(document).ready(function() {
       },
       error: function(_, _, e) {
         log_stuff("ajax error " + e);
-        $('#watchlist_prompt').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#watchlist_prompt').html("Sorry, unavailable due to server error");
         $('#watchlist_modify_spinner').hide('slow');
       }
     });
@@ -2388,13 +2388,13 @@ $(document).ready(function() {
           $('#watchlist_results_table').trigger("update");
           $('#watchlist_results_footer').html("<span class=\"nothing\">No matches found</span>");
         } else {
-          $('#watchlist_prompt').html(data.status);
+          $('#watchlist_prompt').html("Error: " + escapeHtml(data.status));
         }
         $('#watchlist_modify_spinner').hide('slow');
       },
       error: function(_, _, e) {
         log_stuff("ajax error " + e);
-        $('#watchlist_prompt').html("<span class=\"nothing\">Sorry, unavailable due to server error</span>");
+        $('#watchlist_prompt').html("Sorry, unavailable due to server error");
         $('#watchlist_modify_spinner').hide('slow');
       }
     });
