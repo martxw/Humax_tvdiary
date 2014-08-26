@@ -6,9 +6,11 @@
 #[ -f $dbfile ] && rm -f $dbfile
 
 logfile=/mod/tmp/tvdiary.log
-[ -f $logfile ] && rm -f $logfile
+#[ -f $logfile ] && rm -f $logfile
+[ -f $logfile ] && echo "-- Package removed --" >> $logfile
 
 logfile=/mod/tmp/tvdiaryjs.log
-[ -f $logfile ] && rm -f $logfile
+#[ -f $logfile ] && rm -f $logfile
+[ -f $logfile ] && echo "-- Package removed --" >> $logfile
 
 exit 0
