@@ -437,6 +437,7 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
   # Outer join epg in case it's in a state of flux and not found.
   # Filter r.ersvtype: 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
   # Filter r.ucRecKind: 1 == one-off, 2 == split, 4 == series.
+  # 0 also appears for BBC RB 301 non-repeating events. Accept these rows but substitute value 1 instead.
   set records [$tvdiarydb query "
     SELECT r.nsttime, r.nduration, r.aulEventToRecordInfo, r.ersvtype, r.ucRecKind, r.hsvc,
       SUBSTR(c.szSvcName, 2) AS channel_name,
@@ -446,13 +447,17 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
     LEFT OUTER JOIN epg e
       ON e.service_id = c.usSvcId
       AND e.start = r.nsttime
-    WHERE r.ersvtype = 3 AND (r.ucRecKind = 1 OR r.ucRecKind = 2 OR r.ucRecKind = 4)
+    WHERE r.ersvtype = 3 AND r.ucRecKind IN (0, 1, 2, 4)
       AND r.hsvc = c.hSvc
     ORDER BY r.nsttime, c.szSvcName"]
   # (Clause "(r.nsttime + r.nduration) >= %s AND r.nsttime < %s" $min_time $max_time removed as subsequent events still needed. Get all and filter afterwards.
 
   foreach record $records {
-    if { $record(nsttime) + $record(nduration) >= $min_time && $record(nsttime) < $max_time } {
+    # Substitute ucRecKind=1 for cases where ucRecKind==0 - special case added for BBC RB 301.
+    if { $record(ucRecKind) == 0 } {
+      dict set record "ucRecKind" 1
+    }
+    if { $record(nsttime) + $record(nduration) > $min_time && $record(nsttime) < $max_time } {
       # Use values from the rsv rather than epg where possible.
       set vals [dict create "channel_name" $record(channel_name) "scheduled_start" $record(nsttime) "scheduled_end" [expr $record(nsttime) + $record(nduration)] "scheduled_duration" $record(nduration) "ucRecKind" $record(ucRecKind)]
       # Check epg.start to see if it's found in the EPG.
