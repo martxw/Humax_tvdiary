@@ -276,21 +276,27 @@ proc get_data { pid } {
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
       set filepath [regsub {^[^/]*} $line {}]
       set type [string tolower [file extension $filepath]]
-      if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::MEDIA_FILE_EXTENSIONS } {
-        if { [dict exists $ret $filepath] } {
-          # Could be open twice if playing and downloading, not recording.
-          # So check the age. Chase playback if it's newly written, else ignore multiple reads.
-          set age [expr abs([clock seconds] - [file mtime $filepath])]
-          if { $age < $::RECORDING_THRESHOLD } {
-            set ret($filepath) -1
+
+      # If race conditions cause the file to not exist any more, catch and just treat as if that file wasn't seen.
+      try {
+        if { [file tail $filepath] eq "Streamer_down_file" || $type eq ".ts" || $type in $::MEDIA_FILE_EXTENSIONS } {
+          if { [dict exists $ret $filepath] } {
+            # Could be open twice if playing and downloading, not recording.
+            # So check the age. Chase playback if it's newly written, else ignore multiple reads.
+            set age [expr abs([clock seconds] - [file mtime $filepath])]
+            if { $age < $::RECORDING_THRESHOLD } {
+              set ret($filepath) -1
+            }
+          } else {
+            set ret($filepath) [file size $filepath]
           }
-        } else {
-          set ret($filepath) [file size $filepath]
         }
+      } on error { msg } {
+        puts "$::logging_time: ** Error getting details of humaxtv file $filepath. Ignoring it. \[$msg\]"
       }
     }
   } on error { msg } {
-    puts "$::logging_time: Error listing humaxtv files. \[$msg\]"
+    puts "$::logging_time: ** Error listing humaxtv files. \[$msg\]"
   }
   return $ret
 }
@@ -337,14 +343,14 @@ proc daily_tasks { tvdiarydb } {
 #
 proc main {} {
   if { ![file exists $::DB_FILEPATH] } {
-    puts "$::logging_time: Missing the database file $::DB_FILEPATH"
+    puts "$::logging_time: ** Error, missing the database file $::DB_FILEPATH"
     exit -1
   }
 
   try {
     set pid [exec $::PGREP -n humaxtv]
   } on error { msg } {
-    puts "$::logging_time: Cannot find humaxtv process. \[$msg\]"
+    puts "$::logging_time: ** Error, cannot find humaxtv process. \[$msg\]"
     exit -1
   }
 
@@ -358,7 +364,7 @@ proc main {} {
     # Get a lock for the database.
     #
     if {![acquire_lock tvdiary_db]} {
-      puts "$::logging_time: Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      puts "$::logging_time: ** Error, cannot acquire exclusive lock for tvdiary.tb. Terminating."
       exit -1
     }
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
@@ -380,91 +386,102 @@ proc main {} {
     set watching_live {}
 
     foreach filepath [array names ndata] {
-      if { ![dict exists $data $filepath] } {
-        # New file exists that didn't on the first pass.
-        # Could be recording or playback. Check the age to decide whether to show size static or growing.
-        set age [expr abs([clock seconds] - [file mtime $filepath])]
-        if { $age < $::RECORDING_THRESHOLD } {
-          set data($filepath) 0
-        } else {
-          set data($filepath) $ndata($filepath)
-        }
-        if { $::logging > 2 } {
-          puts "$::logging_time: Newly opened $filepath age=$age"
-        }
-      }
-
-      set filename [file tail $filepath]
-      set extension [string tolower [file extension $filename]]
-      if { $extension eq ".ts" } {
-        set basename [file rootname $filename]
-        set ts [ts fetch $filepath]
-        set channel_name [$ts get channel_name]
-        set title [$ts get title]
-        set synopsis [$ts get synopsis]
-        set schedstart [$ts get schedstart]
-        set scheddur [expr [$ts get scheddur] / 60]
-
-        if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
-          # "Decrypting"
-          if { $::logging > 2 } {
-            puts "$::logging_time: Decrypting /mod/tmp/webif_auto/decrypting.$basename.ts"
+      # Catch errors dealing with individual files so if one has been deleted since it was seen, only that one gets ignored and the rest get processed as normal.
+      try {
+        if { ![dict exists $data $filepath] } {
+          # New file exists that didn't on the first pass.
+          # Could be recording or playback. Check the age to decide whether to show size static or growing.
+          set age [expr abs([clock seconds] - [file mtime $filepath])]
+          if { $age < $::RECORDING_THRESHOLD } {
+            set data($filepath) 0
+          } else {
+            set data($filepath) $ndata($filepath)
           }
+          if { $::logging > 2 } {
+            puts "$::logging_time: Newly opened $filepath age=$age"
+          }
+        }
 
-        } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
-          # This file exists only when watching live TV. "Time Shift Recording" I assume.
-          if { $::include_live_tv } {
+        set filename [file tail $filepath]
+        set extension [string tolower [file extension $filename]]
+        if { $extension eq ".ts" } {
+          set basename [file rootname $filename]
+          set ts [ts fetch $filepath]
+          if { $ts == 0 } {
+            throw error "Unable to fetch $filepath details."
+          }
+          set channel_name [$ts get channel_name]
+          set title [$ts get title]
+          set synopsis [$ts get synopsis]
+          set schedstart [$ts get schedstart]
+          set scheddur [expr [$ts get scheddur] / 60]
+
+          if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
+            # "Decrypting"
             if { $::logging > 2 } {
-              puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
+              puts "$::logging_time: Decrypting /mod/tmp/webif_auto/decrypting.$basename.ts"
             }
-            log_watching_live_tv $tvdiarydb $epg_db finished_activities
-            dict set watching_live "TSR" 1
+
+          } elseif { $filepath eq "/mnt/hd2/Tsr/0.ts" } {
+            # This file exists only when watching live TV. "Time Shift Recording" I assume.
+            if { $::include_live_tv } {
+              if { $::logging > 2 } {
+                puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
+              }
+              log_watching_live_tv $tvdiarydb $epg_db finished_activities
+              dict set watching_live "TSR" 1
+            }
+
+          } elseif { ($data($filepath) == -1) || ($ndata($filepath) == -1) } {
+            # "Chase Playing"
+            if { $::logging > 2 } {
+              puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
+            }
+            set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
+            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
+            dict set recording_channels $channel_name 1
+            dict set playing_channels $channel_name 1
+
+          } elseif { $ndata($filepath) > $data($filepath) } {
+            # "Recording"
+            if { $::logging > 2 } {
+              puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
+            }
+            set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
+            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
+            dict set recording_channels $channel_name 1
+
+          } else {
+            # "Playing"
+            if { $::logging > 2 } {
+              puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
+            }
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
+            dict set playing_channels $channel_name 1
           }
 
-        } elseif { ($data($filepath) == -1) || ($ndata($filepath) == -1) } {
-          # "Chase Playing"
+        } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
+          # "Playing .mp4 etc"
           if { $::logging > 2 } {
-            puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
+            puts "$::logging_time: P $filepath"
           }
-          set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
-          dict set recording_channels $channel_name 1
-          dict set playing_channels $channel_name 1
+          log_stream_activity $tvdiarydb finished_activities "P" $::current_time $filename
+          dict set playing_channels $filename 1
 
-        } elseif { $ndata($filepath) > $data($filepath) } {
-          # "Recording"
+        } elseif { $filename eq "Streamer_down_file" } {
+          # "Playing network streamed media"
           if { $::logging > 2 } {
-            puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
+            puts "$::logging_time: P Network streamed media"
           }
-          set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
-          log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
-          dict set recording_channels $channel_name 1
-
-        } else {
-          # "Playing"
-          if { $::logging > 2 } {
-            puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
-          }
-          log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
-          dict set playing_channels $channel_name 1
+          log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
+          dict set playing_channels "Network streamed media" 1
         }
-
-      } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
-        # "Playing .mp4 etc"
-        if { $::logging > 2 } {
-          puts "$::logging_time: P $filepath"
-        }
-        log_stream_activity $tvdiarydb finished_activities "P" $::current_time $filename
-        dict set playing_channels $filename 1
-
-      } elseif { $filename eq "Streamer_down_file" } {
-        # "Playing network streamed media"
-        if { $::logging > 2 } {
-          puts "$::logging_time: P Network streamed media"
-        }
-        log_stream_activity $tvdiarydb finished_activities "P" $::current_time "Network streamed media"
-        dict set playing_channels "Network streamed media" 1
+      } on error { msg } {
+        # If there was any problem, abort processing this file but continue with the rest.
+        # Likely errors at [file mtime $filepath] & [ts fetch $filepath].
+        # The result should be that log_program_activity isn't called, and the recording/playing will appear ended.
+        puts "$::logging_time: ** Error processing details of file $filepath. Ignoring it. \[$msg\]"
       }
     }
 
@@ -500,7 +517,7 @@ proc main {} {
     # Get a lock for the database.
     #
     if {![acquire_lock tvdiary_db]} {
-      puts "$::logging_time: Cannot acquire exclusive lock for tvdiary.tb. Terminating."
+      puts "$::logging_time: ** Error, cannot acquire exclusive lock for tvdiary.tb."
       exit -1
     }
     set tvdiarydb [sqlite3.open $::DB_FILEPATH]
