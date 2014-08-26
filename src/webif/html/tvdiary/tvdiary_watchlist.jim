@@ -30,7 +30,7 @@ proc do_build_watchlist { tvdiarydb current_time } {
 
     # Requires the watchlist file.
     if { ![file exists $::WATCHLIST_FILEPATH] } {
-      throw error "The $::RSV_DB_PATH database is missing."
+      throw error "The $::WATCHLIST_FILEPATH is missing."
     }
 
     set start_time [clock seconds]
