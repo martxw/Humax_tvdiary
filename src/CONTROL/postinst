@@ -6,10 +6,12 @@ echo "Postinstall $*"
 #[ -f $dbfile ] && rm -f $dbfile
 
 logfile=/mod/tmp/tvdiaryjs.log
-[ -f $logfile ] && rm -f $logfile
+#[ -f $logfile ] && rm -f $logfile
+[ -f $logfile ] && echo "-- Package installed --" >> $logfile
 
 logfile=/mod/tmp/tvdiary.log
-[ -f $logfile ] && rm -f $logfile
+#[ -f $logfile ] && rm -f $logfile
+[ -f $logfile ] && echo "-- Package installed --" >> $logfile
 
 /mod/sbin/tvdiary_migrate >> $logfile 2>&1
 
