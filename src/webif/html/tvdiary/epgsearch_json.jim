@@ -186,7 +186,7 @@ proc main {} {
   set channel_operator [op_code_to_operator $::channel_op]
 
   set records [$tvdiarydb query "
-    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.warning, e.content_type, e.content, e.event_crid, e.series_crid, e.rec_crid,
+    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid,
       (SELECT COUNT(*) FROM programs WHERE programs.crid = e.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
       (SELECT program_id
         FROM programs, titles, synopses
@@ -250,9 +250,6 @@ proc main {} {
       puts " \"start\": $record(start),"
       puts " \"end\": $record(end),"
       puts " \"duration\": [duration_seconds_to_minutes $record(duration)],"
-      puts " \"warning\": \"$record(warning)\","
-      puts " \"content_type\": $record(content_type),"
-      puts " \"content\": \"$record(content)\","
       puts " \"event_crid\": \"$record(event_crid)\","
       #puts " \"series_crid\": \"$record(series_crid)\","
       #puts " \"rec_crid\": \"$record(rec_crid)\","

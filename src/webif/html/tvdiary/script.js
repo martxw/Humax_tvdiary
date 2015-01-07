@@ -2068,7 +2068,7 @@ $(document).ready(function() {
       html += "<tr class=\"event_row visible_event\">";
 
       html += "<td class=\"search_type\">";
-      html += "<!-- warning:" + event.warning + ", content_type:" + event.content_type + ", content:" + event.content + ", event_crid:" + event.event_crid + ", series_crid:" + event.series_crid + ", rec_crid:" + event.rec_crid + ". -->";
+      html += "<!-- event_crid:" + event.event_crid + ", series_crid:" + event.series_crid + ", rec_crid:" + event.rec_crid + ". -->";
       html += "</td>";
 
       html += "<td class=\"search_channel\">";

@@ -147,8 +147,8 @@ proc build_watchlist { tvdiarydb current_time } {
       set synopsis_operator [op_code_to_operator $synopsis_op]
 
       $tvdiarydb query "
-        INSERT OR IGNORE INTO watchlist_inter (title, synopsis, channel_name, start, end, duration, warning, content_type, content, event_crid, series_crid, rec_crid)
-          SELECT e.name, e.text, SUBSTR(c.szSvcName, 2), e.start, e.end, e.duration, e.warning, e.content_type, e.content, e.event_crid, e.series_crid, e.rec_crid
+        INSERT OR IGNORE INTO watchlist_inter (title, synopsis, channel_name, start, end, duration, event_crid, series_crid, rec_crid)
+          SELECT e.name, e.text, SUBSTR(c.szSvcName, 2), e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid
           FROM epg.epg e, channel.TBL_SVC c
           WHERE e.end >= %s
             AND e.service_id = c.usSvcId

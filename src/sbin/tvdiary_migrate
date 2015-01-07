@@ -128,14 +128,14 @@ proc create_migrate_tables { tvdiarydb } {
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS ipf_channel_id ON program_facts (channel_id);"
 
     # The watchlist intermediate cache.
-    $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, warning TEXT, content_type INTEGER, content TEXT, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
+    $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_start ON watchlist_inter (start);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_end ON watchlist_inter (end);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_title ON watchlist_inter (title);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
 
-    set_setting $tvdiarydb "db_ver" 4
+    set_setting $tvdiarydb "db_ver" 5
 
   } else {
     # There is an existing DB, so migration is necessary.
@@ -177,6 +177,10 @@ proc create_migrate_tables { tvdiarydb } {
     # 3) Explicit db_ver in settings & separate tables for strings.
     # ** Except, db_ver only in settings for upgrades. Fresh installs left with no db_ver.
 
+    # 4) Had watchlist_inter with "warning TEXT, content_type INTEGER, content TEXT".
+
+    # 5) Removed watchlist_inter "warning TEXT, content_type INTEGER, content TEXT" columns.
+
     if { $db_ver == 1 || $db_ver == 2 } {
       # Create the missing tables if they're not present.
       $tvdiarydb query "CREATE TABLE IF NOT EXISTS channels(channel_id INTEGER PRIMARY KEY, channel_name TEXT);"
@@ -210,7 +214,7 @@ proc create_migrate_tables { tvdiarydb } {
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS ip_crid ON programs (crid);"
 
       # The watchlist intermediate cache.
-      $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, warning TEXT, content_type INTEGER, content TEXT, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_start ON watchlist_inter (start);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_end ON watchlist_inter (end);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_title ON watchlist_inter (title);"
@@ -277,7 +281,7 @@ proc create_migrate_tables { tvdiarydb } {
 
       puts "$::logging_time: Cleaning up and compacting database."
 
-      set_setting $tvdiarydb "db_ver" 4
+      set_setting $tvdiarydb "db_ver" 5
 
       $tvdiarydb query "VACUUM;"
     } elseif { $db_ver == 3 } {
@@ -287,14 +291,25 @@ proc create_migrate_tables { tvdiarydb } {
       puts "$::logging_time: Added CRID column."
 
       # The watchlist intermediate cache.
-      $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, warning TEXT, content_type INTEGER, content TEXT, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_start ON watchlist_inter (start);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_end ON watchlist_inter (end);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_title ON watchlist_inter (title);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
 
-      set_setting $tvdiarydb "db_ver" 4
+      set_setting $tvdiarydb "db_ver" 5
+    } elseif { $db_ver == 4 } {
+
+      $tvdiarydb query "DROP TABLE watchlist_inter;"
+      $tvdiarydb query "CREATE TABLE IF NOT EXISTS watchlist_inter(title TEXT, synopsis TEXT, channel_name TEXT, start INTEGER, end INTEGER, duration INTEGER, event_crid TEXT, series_crid TEXT, rec_crid TEXT, PRIMARY KEY(channel_name, start));"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_start ON watchlist_inter (start);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_end ON watchlist_inter (end);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_title ON watchlist_inter (title);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
+      $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
+
+      set_setting $tvdiarydb "db_ver" 5
     } else {
       puts "$::logging_time: No changes required."
     }

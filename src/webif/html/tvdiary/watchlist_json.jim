@@ -172,7 +172,7 @@ proc main {} {
     set comma 0
 
     set records [$tvdiarydb query "
-      SELECT w.channel_name, w.title, w.synopsis, w.start, w.end, w.duration, w.warning, w.content_type, w.content, w.event_crid, w.series_crid, w.rec_crid,
+      SELECT w.channel_name, w.title, w.synopsis, w.start, w.end, w.duration, w.event_crid, w.series_crid, w.rec_crid,
         (SELECT COUNT(*) FROM programs WHERE programs.crid = w.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
         (SELECT p.program_id
           FROM programs p, titles t, synopses s
@@ -213,9 +213,6 @@ proc main {} {
       puts " \"start\": $record(start),"
       puts " \"end\": $record(end),"
       puts " \"duration\": [duration_seconds_to_minutes $record(duration)],"
-      puts " \"warning\": \"$record(warning)\","
-      puts " \"content_type\": $record(content_type),"
-      puts " \"content\": \"$record(content)\","
       puts " \"event_crid\": \"$record(event_crid)\","
       #puts " \"series_crid\": \"$record(series_crid)\","
       #puts " \"rec_crid\": \"$record(rec_crid)\","
