@@ -178,7 +178,7 @@ proc check_entry { tvdiarydb directory filename size } {
 proc update_inventory_dir { tvdiarydb directory dustbin } {
 #  puts "//[clock seconds]: update_inventory_dir $tvdiarydb $directory $dustbin"
   set modified 0
-  set files [glob -nocomplain -directory $directory *]
+  set files [glob -nocomplain -directory $directory -tails *]
   foreach filename $files {
     set filepath "$directory/$filename"
     set extension [file extension $filename]
