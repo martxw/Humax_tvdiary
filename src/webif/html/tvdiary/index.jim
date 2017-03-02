@@ -2,7 +2,7 @@
 #
 # Render the main TV Diary web page.
 # Fetch parameters from DB first, and alternative placeholder if the DB is locked.
-# Author: Martin Wink, 2013-2014.
+# Author: Martin Wink, 2013-2017.
 #
 
 source /mod/webif/lib/setup
@@ -15,7 +15,6 @@ jqplugin easing ui.totop iajax
 jscss jquery.tablesorter.min.js
 jscss script.js style.css
 header
-
 
 #
 # Open the database file just to get the min and max times for the calendar.
@@ -361,6 +360,8 @@ if { ![file exists $DB_FILEPATH] } {
       </div>
 
     </div>
+
+    <div id=schedule_dialog></div>
 
     }
   }

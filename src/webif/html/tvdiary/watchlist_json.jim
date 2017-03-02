@@ -18,7 +18,7 @@
 #   icons_path = disk path to the TV channel icons.
 #   icons_url = URL path to the TV channel icons.
 #
-# Author: Martin Wink, 2014.
+# Author: Martin Wink, 2014-2017.
 #
 
 package require cgi
@@ -172,7 +172,7 @@ proc main {} {
     set comma 0
 
     set records [$tvdiarydb query "
-      SELECT w.channel_name, w.title, w.synopsis, w.start, w.end, w.duration, w.event_crid, w.series_crid, w.rec_crid,
+      SELECT w.channel_name, w.title, w.synopsis, w.start, w.end, w.duration, w.event_crid, w.series_crid, w.rec_crid, w.service_id, w.event_id,
         (SELECT COUNT(*) FROM programs WHERE programs.crid = w.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
         (SELECT p.program_id
           FROM programs p, titles t, synopses s
@@ -217,6 +217,10 @@ proc main {} {
       #puts " \"series_crid\": \"$record(series_crid)\","
       #puts " \"rec_crid\": \"$record(rec_crid)\","
 
+      puts " \"service_id\": \"$record(service_id)\","
+      puts " \"event_id\": \"$record(event_id)\","
+      puts " \"series_crid\": \"$record(series_crid)\","
+
       # Count of already recorded programs with the same event_crid.
       puts " \"repeat_crid_count\": $record(repeat_crid_count),"
 
@@ -230,12 +234,15 @@ proc main {} {
 
       # Check if the event is in the schedule.
       set ucRecKind 0
+      set scheduled_slot -1
       set key "$record(start):$record(channel_name)"
       if { [dict exists $future_events $key] } {
         set vals [dict get $future_events $key]
         set ucRecKind $vals(ucRecKind)
+        set scheduled_slot $vals(scheduled_slot)
       }
       puts " \"ucRecKind\": $ucRecKind,"
+      puts " \"scheduled_slot\": $scheduled_slot,"
 
       # Check for events with the same CRID in the schedule.
       set ucRecKind 0

@@ -2,7 +2,7 @@
 #
 # Build the watchlist intermediate cache in the tvdiary database.
 # To be "source" included in tvdiary_status. Not standalone.
-# Author: Martin Wink, 2014.
+# Author: Martin Wink, 2014-2017.
 #
 
 require mwildcard
@@ -147,8 +147,8 @@ proc build_watchlist { tvdiarydb current_time } {
       set synopsis_operator [op_code_to_operator $synopsis_op]
 
       $tvdiarydb query "
-        INSERT OR IGNORE INTO watchlist_inter (title, synopsis, channel_name, start, end, duration, event_crid, series_crid, rec_crid)
-          SELECT e.name, e.text, SUBSTR(c.szSvcName, 2), e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid
+        INSERT OR IGNORE INTO watchlist_inter (title, synopsis, channel_name, start, end, duration, event_crid, series_crid, rec_crid, service_id, event_id)
+          SELECT e.name, e.text, SUBSTR(c.szSvcName, 2), e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid, e.service_id, e.event_id
           FROM epg.epg e, channel.TBL_SVC c
           WHERE e.end >= %s
             AND e.service_id = c.usSvcId

@@ -18,7 +18,7 @@
 #   channel_op = the channel operator [E|C|S|F].
 #   channel = the channel text.
 #
-# Author: Martin Wink, 2014.
+# Author: Martin Wink, 2017.
 #
 
 package require cgi
@@ -186,7 +186,7 @@ proc main {} {
   set channel_operator [op_code_to_operator $::channel_op]
 
   set records [$tvdiarydb query "
-    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid,
+    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid, e.series_crid, e.rec_crid, e.service_id, e.event_id,
       (SELECT COUNT(*) FROM programs WHERE programs.crid = e.event_crid AND LENGTH(programs.crid) > 0) as repeat_crid_count,
       (SELECT program_id
         FROM programs, titles, synopses
@@ -251,8 +251,10 @@ proc main {} {
       puts " \"end\": $record(end),"
       puts " \"duration\": [duration_seconds_to_minutes $record(duration)],"
       puts " \"event_crid\": \"$record(event_crid)\","
-      #puts " \"series_crid\": \"$record(series_crid)\","
       #puts " \"rec_crid\": \"$record(rec_crid)\","
+      puts " \"service_id\": \"$record(service_id)\","
+      puts " \"event_id\": \"$record(event_id)\","
+      puts " \"series_crid\": \"$record(series_crid)\","
 
       # Count of already recorded programs with the same event_crid.
       puts " \"repeat_crid_count\": $record(repeat_crid_count),"
@@ -267,12 +269,15 @@ proc main {} {
 
       # Check if the event is in the schedule.
       set ucRecKind 0
+      set scheduled_slot -1
       set key "$record(start):$record(channel_name)"
       if { [dict exists $future_events $key] } {
         set vals [dict get $future_events $key]
         set ucRecKind $vals(ucRecKind)
+        set scheduled_slot $vals(scheduled_slot)
       }
       puts " \"ucRecKind\": $ucRecKind,"
+      puts " \"scheduled_slot\": $scheduled_slot,"
 
       # Check for events with the same CRID in the schedule.
       set ucRecKind 0

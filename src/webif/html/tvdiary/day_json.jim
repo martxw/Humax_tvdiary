@@ -15,7 +15,7 @@
 #   icons_path = disk path to the TV channel icons.
 #   icons_url = URL path to the TV channel icons.
 #
-# Author: Martin Wink, 2013-2014.
+# Author: Martin Wink, 2013-2017.
 #
 
 package require cgi
@@ -85,7 +85,7 @@ set include_future_events 1
 #
 # Common output of a table row.
 #
-proc output_row { type active watched repeat_program_id repeat_crid_count event_crid available event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis } {
+proc output_row { type active watched repeat_program_id repeat_crid_count event_crid available event_start event_end event_duration scheduled_start scheduled_end scheduled_duration channel_name title synopsis scheduled_slot } {
 
   if { $repeat_program_id == {} } {
     set repeat_program_id -1
@@ -104,6 +104,7 @@ proc output_row { type active watched repeat_program_id repeat_crid_count event_
   puts "   \"scheduled_start\": $scheduled_start,"
   puts "   \"scheduled_end\": $scheduled_end,"
   puts "   \"scheduled_duration\": $scheduled_duration,"
+  puts "   \"scheduled_slot\": $scheduled_slot,"
 
   puts "   \"channel_name\": \"[escape_json_string $channel_name]\","
   set channel_icon_path "$::channel_icons_url/Unknown.png"
@@ -158,7 +159,7 @@ proc output_past_record { record } {
   set calculated_duration [duration_seconds_to_minutes_rounding [expr $record(end) - $record(start)]]
   set scheduled_end [expr $record(scheduled_start) + ($record(scheduled_duration) * 60)]
 
-  output_row $typeclass $isactive $watched $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) $available $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis)
+  output_row $typeclass $isactive $watched $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) $available $record(start) $record(end) $calculated_duration $record(scheduled_start) $scheduled_end $record(scheduled_duration) $record(channel_name) $record(title) $record(synopsis) -1
 }
 
 #
@@ -166,12 +167,14 @@ proc output_past_record { record } {
 #
 proc output_future_record { record } {
   set duration [duration_seconds_to_minutes $record(scheduled_duration)]
-  if { $record(ucRecKind) == 1 } {
+  if { $record(ucRecKind) == -1 } {
+    set type "future_reminder"
+  } elseif { $record(ucRecKind) == 1 } {
     set type "future"
   } else {
     set type "future_series"
   }
-  output_row $type "false" "false" $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) "false" $record(scheduled_start) $record(scheduled_end) $duration $record(scheduled_start) $record(scheduled_end) $duration $record(channel_name) $record(title) $record(synopsis)
+  output_row $type "false" "false" $record(repeat_program_id) $record(repeat_crid_count) $record(event_crid) "false" $record(scheduled_start) $record(scheduled_end) $duration $record(scheduled_start) $record(scheduled_end) $duration $record(channel_name) $record(title) $record(synopsis) $record(scheduled_slot)
 }
 
 #

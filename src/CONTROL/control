@@ -1,8 +1,8 @@
 Package: tvdiary
 Priority: optional
 Section: misc
-Version: 0.0.3-4
+Version: 0.0.3-5
 Architecture: mipsel
 Maintainer: martxw
-Depends: webif (>= 1.2.1),jim-binary (>= 0.76)
+Depends: webif (>= 1.4.0),jim-binary (>= 0.76)
 Description: An add-on to the web interface that tracks the TV programmes you record and watch, presenting them in a diary view. NB Upgrade from pre 0.0.3 may take a few minutes to complete.

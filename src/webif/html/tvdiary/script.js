@@ -1,6 +1,6 @@
 /*
  * TV Diary main display page scripts.
- * Author: Martin Wink, 2013-2014.
+ * Author: Martin Wink, 2013-2017.
  */
 
 // The main page itself is rendered after accessing the DB to initialize the following global variables:
@@ -56,6 +56,11 @@ var tabIndex_search = 2;
 var tabIndex_watchlist = 3;
 var tabIndex_inventory = 4;
 
+// For forcing tab updates
+var forceDailyTabUpdate = false;
+var forceSearchTabUpdate = false;
+var forceWatchlistTabUpdate = false;
+
 // Monthly summary table sorting order.
 var programs_sorting = [[1,0],[2,0]];
 var channels_sorting = [[1,0]];
@@ -69,6 +74,9 @@ var epgsearch_sorting = [[4, 1]];
 
 // Watchlist results table.
 var watchlist_sorting = [[3, 1]];
+
+// Last search type, for refreshing. D or E.
+var lastSearchType = "";
 
 //////
 // Logging wrapper.
@@ -128,6 +136,10 @@ $(document).ready(function() {
       switch (ui.newTab.index()) {
         case tabIndex_daily:
           $("#daily_panel").show("fade");
+          if (forceDailyTabUpdate) {
+            update_daily(daily_start_time);
+            forceDailyTabUpdate = false;
+          }
           break;
 
         case tabIndex_monthly:
@@ -141,11 +153,16 @@ $(document).ready(function() {
 
         case tabIndex_search:
           $("#search_panel").show("fade");
+          if (forceSearchTabUpdate) {
+            update_search();
+            forceSearchTabUpdate = false;
+          }
           break;
 
         case tabIndex_watchlist:
           $("#watchlist_panel").show("fade");
-          update_watchlist();
+          update_watchlist(forceWatchlistTabUpdate);
+          forceWatchlistTabUpdate = false;
           break;
 
         case tabIndex_inventory:
@@ -609,6 +626,19 @@ $(document).ready(function() {
   }
   
   //////
+  // Bind click handler to all schedule/cancel links.
+  //////
+  function bind_schedule(el) {
+    $('a.cancel_rec', el).click(function(e) {
+      schedule_popup_cancel(e, $(this));
+    });
+
+    $('a.schedule_rec', el).click(function(e) {
+      schedule_popup_add(e, $(this));
+    });
+  }
+
+  //////
   // Bind click handler to all deja vu links.
   //////
   function bind_dejavu(el) {
@@ -862,6 +892,7 @@ $(document).ready(function() {
             bind_dejavu($('#daily_recorded_table'));
             bind_crid_repeats($('#daily_recorded_table'));
             bind_inventory($('#daily_recorded_table'));
+            bind_schedule($('#daily_recorded_table'));
           }
         } else {
           $('#daily_recorded_footer').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
@@ -906,6 +937,7 @@ $(document).ready(function() {
               apply_altrow($('#daily_watchlist_table'));
               bind_dejavu($('#daily_watchlist_table'));
               bind_crid_repeats($('#daily_watchlist_table'));
+              bind_schedule($('#daily_watchlist_table'));
             }
           } else {
             $('#daily_watchlist_footer').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
@@ -934,10 +966,10 @@ $(document).ready(function() {
     var overlaps = [];
     for (var i = 0, len = data.events.length; i < len; i++) {
       var event_a = data.events[i];
-      if (event_a.type == "future" || event_a.type == "future_series" || (event_a.type == "record" && event_a.active)) {
+      if (event_a.type == "future" || event_a.type == "future_series" || event_a.type == "future_reminder" || (event_a.type == "record" && event_a.active)) {
         for (var j = i + 1; j < len; j++) {
           var event_b = data.events[j];
-          if (event_b.type == "future" || event_b.type == "future_series" || (event_b.type == "record" && event_b.active)) {
+          if (event_b.type == "future" || event_b.type == "future_series" || event_b.type == "future_reminder" || (event_b.type == "record" && event_b.active)) {
             if ((event_b.scheduled_start >= event_a.scheduled_start && event_b.scheduled_start < event_a.scheduled_end)
               || (event_b.scheduled_end >= event_a.scheduled_start && event_b.scheduled_start < event_a.scheduled_end)
               || (event_b.scheduled_start < event_a.scheduled_start && event_b.scheduled_end >= event_a.scheduled_end)) {
@@ -991,6 +1023,7 @@ $(document).ready(function() {
       switch (event.type) {
         case "future":
         case "future_series":
+        case "future_reminder":
           typeclass = "future_event";
           break;
         case "record":
@@ -1079,6 +1112,13 @@ $(document).ready(function() {
         html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
       } else if (event.type == "future_series") {
         html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
+      } else if (event.type == "future_reminder") {
+        html += "<img src=\"images/175_1_00_Reservation_Watch.png\" width=16 height=16 title=\"Programme reminder\">";
+      }
+      if (event.scheduled_slot != -1) {
+        html += "<a href=\"#\" class=\"cancel_rec\" sid=\"" + event.scheduled_slot + "\">";
+        html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+        html += "</a>";
       }
       html += "</td>"
 
@@ -1344,7 +1384,9 @@ $(document).ready(function() {
         } else if (event.repeat_program_id != -1) {
           html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
         }
-        if (event.ucRecKind == 1) {
+        if (event.ucRecKind == -1) {
+          html += "<img src=\"images/175_1_00_Reservation_Watch.png\" width=16 height=16 title=\"Programme reminder\">";
+        } else if (event.ucRecKind == 1) {
           html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
         } else if (event.ucRecKind == 2 || event.ucRecKind == 4) {
           html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
@@ -1352,6 +1394,16 @@ $(document).ready(function() {
           html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording another time\">";
         } else if (event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4) {
           html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording another time\">";
+        }
+        if (event.scheduled_slot != -1) {
+          html += "<a href=\"#\" class=\"cancel_rec\" sid=\"" + event.scheduled_slot + "\">";
+          html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+          html += "</a>";
+        } else {
+          var rec = (event.series_crid == "" ? 1 : 2);
+          html += "<a href=\"#\" class=\"schedule_rec\" xs=\"" + event.service_id + "\" xe=\"" + event.event_id + "\" sch=\"0\" rec=\"" + rec + "\">";
+          html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+          html += "</a>";
         }
         html += "</td>";
 
@@ -1391,118 +1443,6 @@ $(document).ready(function() {
     }
     return caption;
   }
-
-  //////
-  // Render table body HTML from JSON - flat. (To be obsoleted.)
-  //////
-  function day_watchlist_json_to_html(data) {
-    var html = "";
-    for (var i = 0, len = data.events.length; i < len; i++) {
-      var event = data.events[i];
-
-      var classes = "";
-      if ( (event.repeat_crid_count > 0)
-        || (event.repeat_program_id != -1)
-        || (event.ucRecKind == 1 || event.ucRecKind == 2 || event.ucRecKind == 4 || event.crid_ucRecKind == 1 || event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4)) {
-        classes = " dwatch_repeat";
-      }
-
-      html += "<tr class=\"event_row visible_event future_event" + classes + "\">";
-
-      //
-      // Column 1. The actual record or watching time. This is always known.
-      //
-      html += "<td class=\"event_time\">";
-      html += "<div class=\"event_start\">" + formatTime(event.start) + "</div>";
-      html += "<div class=\"event_duration\">" + event.duration + (event.duration == 1 ? " min" : " mins") + "</div>";
-      html += "<div class=\"event_end\">" + formatTime(event.end) + "</div>";
-      html += "</td>";
-
-      //
-      // Column 2. The channel icon and name.
-      //
-      html += "<td class=\"tvchannel\">";
-      if (event.channel_name != "") {
-        html += "<img src=\"" + event.channel_icon_path + "\" width=50 height=50 alt=\"" + escapeHtml(event.channel_name) + "\"/>";
-        html += "<div>" + escapeHtml(event.channel_name) + "</div>";
-      }
-      html += "</td>";
-
-      //
-      // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
-      //
-      html += "<td class=\"event_descr\">";
-      html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
-      if (event.synopsis != "") {
-        html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis + " {" + event.event_crid + "}" ) + "</span>";
-      }
-      if (event.start != 0 && event.duration != 0) {
-        html += "<span class=\"tvschedule\">(" + formatDateTime(event.start) + ", " + event.duration + (event.duration == 1 ? " min" : " mins") + ")</span>";
-      }
-      html += "</td>"
-
-      //
-      // Column 4. Icons for unwatched. deleted-unwatched and deja vu icons.
-      //
-      html += "<td class=\"event_flags\">";
-      if (event.repeat_crid_count > 0) {
-        html += " <a class=\"repeat\" prog_crid=\"" + event.event_crid + "\" href=\"#\"><img src=\"images/repeat.png\" width=16 height=16 title=\"CRID repeat\"></a>";
-      } else if (event.repeat_program_id != -1) {
-        html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
-      }
-      if (event.ucRecKind == 1) {
-        html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
-      } else if (event.ucRecKind == 2 || event.ucRecKind == 4) {
-        html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
-      } else if (event.crid_ucRecKind == 1) {
-        html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording another time\">";
-      } else if (event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4) {
-        html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording another time\">";
-      }
-      html += "</td>"
-
-      html += "</tr>";
-    }
-    return $(html);
-  }
-
-  //////
-  // Render results caption from JSON.
-  //////
-  function day_watchlist_json_to_caption(data) {
-    var num_matches = data.events.length;
-    var num_new = 0;
-    var num_repeats = 0;
-    var distinct_new_crids = new Array();
-    
-    for (var i = 0; i < num_matches; i++) {
-      var event = data.events[i];
-      if ( (event.repeat_crid_count > 0)
-        || (event.repeat_program_id != -1)
-        || (event.ucRecKind == 1 || event.ucRecKind == 2 || event.ucRecKind == 4 || event.crid_ucRecKind == 1 || event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4)) {
-        num_repeats += 1;
-        isNew = false;
-      } else {
-        num_new += 1;
-        if (distinct_new_crids.indexOf(event.event_crid) == -1) {
-          distinct_new_crids.push(event.event_crid);
-        }
-      }
-    }
-
-    caption = "";
-    if (num_new > 0) {
-      caption += num_new + (num_new == 1 ? " suggested new programme" : " suggested new programmes");
-    }
-    if (num_new > 0 && num_repeats > 0) {
-      caption += " / ";
-    }
-    if (num_repeats > 0) {
-      caption += "<span class=\"caption_count\" toggle=\".dwatch_repeat\">" + num_repeats + (num_repeats == 1 ? " repeat" : " repeats") + "</span>";
-    }
-    return caption;
-  }
-
 
   ////////////////////////////////
   // Monthly summaries panel code
@@ -1732,6 +1672,17 @@ $(document).ready(function() {
   ////////////////////////////////
 
   //////
+  // Repeat the last search.
+  //////
+  function update_search() {
+    if (lastSearchType == "D") {
+      searchHistory();
+    } else if (lastSearchType == "E") {
+      searchEpg();
+    }
+  }
+
+  //////
   // Request display of history by program_id, for repeats.
   //////
   function update_history_program(prog_id) {
@@ -1777,6 +1728,7 @@ $(document).ready(function() {
   // Request display of history using the text fields.
   //////
   function searchHistory() {
+    lastSearchType = "D";
     $('#search_prompt').html("Enter all or part of the title, synopsis or channel name, then search for the history of that programme.");
 
     var title = $('#search_criteria_title').val();
@@ -1986,6 +1938,7 @@ $(document).ready(function() {
   // Search the EPG using values from the text fields.
   //////
   function searchEpg() {
+    lastSearchType = "E";
     $('#search_prompt').html("Enter all or part of the title, synopsis or channel name, then search for the history of that programme.");
 
     var title = $('#search_criteria_title').val();
@@ -2028,6 +1981,7 @@ $(document).ready(function() {
             bind_dejavu($('#search_results_table'));
             bind_crid_repeats($('#search_results_table'));
             bind_inventory($('#search_results_table'));
+            bind_schedule($('#search_results_table'));
             $('#search_results_caption').html(epgsearch_json_to_caption(data));
             $("#search_results_table").trigger("update");
             // Must delay sorting because the tablesorter introduces a delay before it acts on the "update".
@@ -2107,7 +2061,9 @@ $(document).ready(function() {
       } else if (event.repeat_program_id != -1) {
         html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
-      if (event.ucRecKind == 1) {
+      if (event.ucRecKind == -1) {
+        html += "<img src=\"images/175_1_00_Reservation_Watch.png\" width=16 height=16 title=\"Programme reminder\">";
+      } else if (event.ucRecKind == 1) {
         html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
       } else if (event.ucRecKind == 2 || event.ucRecKind == 4) {
         html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
@@ -2115,6 +2071,16 @@ $(document).ready(function() {
         html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording another time\">";
       } else if (event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4) {
         html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording another time\">";
+      }
+      if (event.scheduled_slot != -1) {
+        html += "<a href=\"#\" class=\"cancel_rec\" sid=\"" + event.scheduled_slot + "\">";
+        html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+        html += "</a>";
+      } else {
+        var rec = (event.series_crid == "" ? 1 : 2);
+        html += "<a href=\"#\" class=\"schedule_rec\" xs=\"" + event.service_id + "\" xe=\"" + event.event_id + "\" sch=\"0\" rec=\"" + rec + "\">";
+        html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+        html += "</a>";
       }
       html += "</td>";
 
@@ -2138,7 +2104,12 @@ $(document).ready(function() {
   //////
   // Request display of watchlist results.
   //////
-  function update_watchlist() {
+  function update_watchlist(force) {
+    if (force) {
+      watchlist_modified = 0;
+      $('#watchlist_results_table tbody').empty();
+    }
+
     if (typeof snapshot_time == "undefined") {
       var url = '/tvdiary/watchlist_json.jim?modified=' + watchlist_modified;
     } else {
@@ -2148,7 +2119,7 @@ $(document).ready(function() {
     //$('#watchlist_results_footer').html("");
     $('#watchlist_results_spinner').show('fast');
 
-    // Asynchronously request the history tables' data.
+    // Asynchronously request the watchlist tables' data.
     isBusyWL = true;
     $.ajax({
       type: "GET",
@@ -2168,6 +2139,8 @@ $(document).ready(function() {
             bind_dejavu($('#watchlist_results_table'));
             bind_crid_repeats($('#watchlist_results_table'));
             bind_inventory($('#watchlist_results_table'));
+            bind_schedule($('#watchlist_results_table'));
+
             $('#watchlist_results_caption').html(watchlist_json_to_caption(data));
             bind_caption_counts($('#watchlist_results_caption'), $('#watchlist_results_table'), $('#watchlist_results_footer'), "<span class=\"nothing\">All programmes filtered out</span>");
 
@@ -2266,7 +2239,9 @@ $(document).ready(function() {
       } else if (event.repeat_program_id != -1) {
         html += " <a class=\"dejavu\" prog_id=\"" + event.repeat_program_id + "\" href=\"#\"><img src=\"images/dejavu.png\" width=16 height=16 title=\"d&eacute;j&agrave; vu?\"></a>";
       }
-      if (event.ucRecKind == 1) {
+      if (event.ucRecKind == -1) {
+        html += "<img src=\"images/175_1_00_Reservation_Watch.png\" width=16 height=16 title=\"Programme reminder\">";
+      } else if (event.ucRecKind == 1) {
         html += "<img src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording programme\">";
       } else if (event.ucRecKind == 2 || event.ucRecKind == 4) {
         html += "<img src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording series\">";
@@ -2274,6 +2249,16 @@ $(document).ready(function() {
         html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Reservation_Record.png\" width=16 height=16 title=\"Recording another time\">";
       } else if (event.crid_ucRecKind == 2 || event.crid_ucRecKind == 4) {
         html += "<img class=\"collateral_scheduled\" src=\"images/175_1_11_Series_Record.png\" width=28 height=16 title=\"Recording another time\">";
+      }
+      if (event.scheduled_slot != -1) {
+        html += "<a href=\"#\" class=\"cancel_rec\" sid=\"" + event.scheduled_slot + "\">";
+        html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+        html += "</a>";
+      } else {
+        var rec = (event.series_crid == "" ? 1 : 2);
+        html += "<a href=\"#\" class=\"schedule_rec\" xs=\"" + event.service_id + "\" xe=\"" + event.event_id + "\" sch=\"0\" rec=\"" + rec + "\">";
+        html += "<img src=\"images/schedule.png\" width=16 height=16 title=\"Schedule\">";
+        html += "</a>";
       }
       html += "</td>";
 
@@ -2548,6 +2533,182 @@ $(document).ready(function() {
       total_duration += event.event_duration;
     }
     return total_duration;
+  }
+
+
+  ////////////////////////////////
+  // Code for the TV Diary's schedule dialog
+  // (Based on epg_popup.js)
+  ////////////////////////////////
+
+  //////
+  // Cause the current tab to be refreshed upon scheduling.
+  //////
+  function refreshActiveTab() {
+    var index = $( "#tvd_tabs" ).tabs('option', 'active');
+    switch (index) {
+      case tabIndex_daily:
+        update_daily(daily_start_time);
+        forceDailyTabUpdate = false;
+        break;
+
+      case tabIndex_search:
+        update_search();
+        forceSearchTabUpdate = false;
+        break;
+
+      case tabIndex_watchlist:
+        update_watchlist(forceWatchlistTabUpdate);
+        forceWatchlistTabUpdate = false;
+        break;
+
+      default:
+        break;
+    }
+  }
+  
+  //////
+  // Cause all dependent tabs to be refreshed upon scheduling.
+  //////
+  function refreshDependentTabs() {
+    forceDailyTabUpdate = true;
+    forceSearchTabUpdate = true;
+    forceWatchlistTabUpdate = true;
+    
+    refreshActiveTab();
+  }
+
+  //////
+  // Perform the recording/reminder scheduling within the dialog.
+  //////
+  function doschedule(type)
+  {
+    $('#epginfo_extra')
+        .empty()
+        .html('<img src=/img/spin.gif> Processing request...')
+        .load('/cgi-bin/epg/schedule.jim', {
+          'service': $('#schedule_dialog').attr('xs'),
+          'event': $('#schedule_dialog').attr('xe'),
+          'type': type
+        }, function() {
+      $.getJSON('/cgi-bin/pending.jim', function(data) {
+        if (data.pending > 0)
+          $('#restart_block').slideDown('slow');
+      });
+        });
+    $(":button:contains('Record')").fadeOut('slow');
+    $(":button:contains('Reminder')").fadeOut('slow');
+    $('#schedule_dialog').attr('refresh', "T");
+  }
+
+  //////
+  // Perform cancel within the dialog.
+  //////
+  function docancel()
+  {
+    var table = 'TBL_RESERVATION';
+    var slot = $('#schedule_dialog').attr('slot');
+
+    $('#schedule_dialog').prepend('<div id="epginfo_extra"><img src=/img/spin.gif> Processing request...</div>');
+    $.get('/sched/rpc/cancel.jim?slot=' + slot + '&table=TBL_RESERVATION', function() {
+      $('#epginfo_extra')
+        .empty()
+        .html('Successfully cancelled');
+      $(":button:contains('Cancel')").fadeOut('slow');
+    });
+    $('#schedule_dialog').attr('refresh', "T");
+  }
+
+  //////
+  // Define the schedule dialog and its buttons.
+  //////
+  var $buttons1 = {
+      "Close" : function() {
+          $(this).dialog('close');
+          if ($('#schedule_dialog').attr('refresh') == "T") {
+            refreshDependentTabs();
+          }
+        }
+  };
+  var $buttons2 = $.extend(
+      {"Record Programme": function() { doschedule(1) }},
+      {"Set Reminder": function() { doschedule(3) }},
+      $buttons1);
+  var $buttons3 = $.extend(
+      {"Record Series": function() { doschedule(2) }},
+      $buttons2);
+  var $buttons4 = $.extend(
+      {"Cancel Event": function() { docancel() }},
+      $buttons1);
+
+  var $dialog = $('#schedule_dialog').dialog({
+    title: "Programme Details",
+    modal: false, autoOpen: false,
+    height: 500, width: 700,
+    show: 'scale', hide: 'fade',
+    draggable: true, resizable: true,
+    buttons: $buttons1,
+    close: function(e,u) { $('#schedule_dialog').empty().html(
+        '<img src="/img/spin.gif" alt="loading">'); }
+  });
+
+  //////
+  // Bring up the schedule dialog.
+  // NB called from inside the dialog itself too.
+  //////
+  function schedule_popup_add(e, o)
+  {
+    e.preventDefault();
+
+    var sch = o.attr('sch');
+    var rec = o.attr('rec');
+    $dialog.dialog("option", "buttons", $buttons1);
+
+    if (sch != 0)
+      $buttons = $buttons1;
+    else if (rec == 2)
+      $buttons = $buttons3;
+    else if (rec == 1)
+      $buttons = $buttons2;
+    else
+      $buttons = $buttons1;
+
+    var url = '/cgi-bin/epg/info.jim?service=' + o.attr('xs') + '&event=' + o.attr('xe') + '&bare=1';
+    $('#schedule_dialog')
+        .html('<img src=/img/spin.gif> Loading details... Please wait...')
+        .load(url, function() {
+      $dialog.dialog("option", "buttons", $buttons);
+      $('#schedule_dialog a.event').click(function(e) {
+        schedule_popup_add(e, $(this));
+      });
+    });
+    $('#schedule_dialog')
+        .attr('xs', o.attr('xs'))
+        .attr('xe', o.attr('xe'))
+        .attr('refresh', "F");
+    $dialog.dialog('open');
+  }
+
+  //////
+  // Bring up the cancel dialog.
+  //////
+  function schedule_popup_cancel(e, o)
+  {
+    e.preventDefault();
+
+    var slot = o.attr('sid');
+    $dialog.dialog("option", "buttons", $buttons1);
+
+    var url = '/sched/rpc/info.jim?slot=' + slot + '&table=TBL_RESERVATION';
+    $('#schedule_dialog')
+      .html('<img src=/img/spin.gif> Loading details... Please wait...')
+      .load(url, function() {
+        $dialog.dialog("option", "buttons", $buttons4);
+      });
+    $('#schedule_dialog')
+        .attr('slot', slot)
+        .attr('refresh', "F");
+    $dialog.dialog('open');
   }
 
   ////////////////////////////////

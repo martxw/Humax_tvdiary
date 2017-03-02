@@ -1,4 +1,5 @@
 #!/mod/bin/jimsh
+# Author: Martin Wink, 2014-2017.
 
 source /mod/webif/lib/setup
 require ts.class
@@ -46,7 +47,7 @@ proc _lock_to_port {id} {
 
 proc _lock_dummy {newsock addr port} { }
 
-proc acquire_lock {id {wait_time 15}} {
+proc acquire_lock {id {wait_time 20}} {
   global _locks
 
   set port [_lock_to_port $id]
@@ -438,8 +439,9 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
   # Filter r.ersvtype: 3 == recording vs. a reminder, wake-up, sleep or auto-update event.
   # Filter r.ucRecKind: 1 == one-off, 2 == split, 4 == series.
   # 0 also appears for BBC RB 301 non-repeating events. Accept these rows but substitute value 1 instead.
+  # A new magic ucRecKind: -1 = a reminder. But filter out reminders that have already started, and the Disable OTA reminder..
   set records [$tvdiarydb query "
-    SELECT r.nsttime, r.nduration, r.aulEventToRecordInfo, r.ersvtype, r.ucRecKind, r.hsvc,
+    SELECT r.nsttime, r.nduration, r.aulEventToRecordInfo, r.ersvtype, r.ucRecKind, r.hsvc, r.ulslot, r.ersvtype, r.usevtid,
       SUBSTR(c.szSvcName, 2) AS channel_name,
       e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid, e.service_id
       $repeats_clause
@@ -447,7 +449,7 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
     LEFT OUTER JOIN epg e
       ON e.service_id = c.usSvcId
       AND e.start = r.nsttime
-    WHERE r.ersvtype = 3 AND r.ucRecKind IN (0, 1, 2, 4)
+    WHERE ((r.ersvtype = 3 AND r.ucRecKind IN (0, 1, 2, 4)) OR (r.ersvtype = 2 AND r.usevtid != 0 AND r.nsttime > $min_time))
       AND r.hsvc = c.hSvc
     ORDER BY r.nsttime, c.szSvcName"]
   # (Clause "(r.nsttime + r.nduration) >= %s AND r.nsttime < %s" $min_time $max_time removed as subsequent events still needed. Get all and filter afterwards.
@@ -457,9 +459,13 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
     if { $record(ucRecKind) == 0 } {
       dict set record "ucRecKind" 1
     }
+    # Substiture ucRecKind=1 for reminders.
+    if { $record(ersvtype) == 2 } {
+      dict set record "ucRecKind" -1
+    }
     if { $record(nsttime) + $record(nduration) > $min_time && $record(nsttime) < $max_time } {
       # Use values from the rsv rather than epg where possible.
-      set vals [dict create "channel_name" $record(channel_name) "scheduled_start" $record(nsttime) "scheduled_end" [expr $record(nsttime) + $record(nduration)] "scheduled_duration" $record(nduration) "ucRecKind" $record(ucRecKind)]
+      set vals [dict create "channel_name" $record(channel_name) "scheduled_start" $record(nsttime) "scheduled_end" [expr $record(nsttime) + $record(nduration)] "scheduled_duration" $record(nduration) "ucRecKind" $record(ucRecKind) "scheduled_slot" $record(ulslot)]
       # Check epg.start to see if it's found in the EPG.
       if { $record(start) == {} } {
         dict set vals "title" "Not in EPG"
@@ -515,7 +521,7 @@ proc build_future_events_list { tvdiarydb chk_repeats { min_time 0 } { max_time 
           LIMIT 1" $start $hservice]
         foreach aulrecord $aulrecords {
           # Use values from the aul rather than epg where possible. ucRecKind from the main record.
-          set vals [dict create "channel_name" $aulrecord(channel_name) "scheduled_start" $start "scheduled_end" $end "scheduled_duration" [expr $end - $start] "ucRecKind" $record(ucRecKind)]
+          set vals [dict create "channel_name" $aulrecord(channel_name) "scheduled_start" $start "scheduled_end" $end "scheduled_duration" [expr $end - $start] "ucRecKind" $record(ucRecKind) "scheduled_slot" $record(ulslot)]
           # Check epg.start to see if it's found in the EPG.
           if { $aulrecord(start) == {} } {
             dict set vals "title" "Not in EPG"
