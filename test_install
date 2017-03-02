@@ -64,6 +64,8 @@ if [ "$GO" == "y" ]; then
   upgrade_test "v2-7"
   upgrade_test "v3-0"
   upgrade_test "v3-1"
+  upgrade_test "v4"
+  upgrade_test "v5"
 
   echo "Finished tests"
 else
