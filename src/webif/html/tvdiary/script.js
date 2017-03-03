@@ -76,7 +76,7 @@ var epgsearch_sorting = [[4, 1]];
 var watchlist_sorting = [[3, 1]];
 
 // Last search type, for refreshing. D or E.
-var lastSearchType = "";
+var lastSearchType = "E";
 
 //////
 // Logging wrapper.
@@ -154,7 +154,7 @@ $(document).ready(function() {
         case tabIndex_search:
           $("#search_panel").show("fade");
           if (forceSearchTabUpdate) {
-            update_search();
+            perform_search();
             forceSearchTabUpdate = false;
           }
           break;
@@ -328,7 +328,7 @@ $(document).ready(function() {
     });
 
   ///////////////
-  // Initialize the history panel.
+  // Initialize the search panel.
   ///////////////
   $('#search_results_spinner').hide();
   $('#search_results_footer').html("<span class=\"nothing\">Not yet searched</span>");
@@ -366,11 +366,24 @@ $(document).ready(function() {
   });
 
   $('#search_diary_button').button().click(function() {
-    searchHistory();
+    set_search_type("D");
+    perform_search();
   });
   $('#search_epg_button').button().click(function() {
-    searchEpg();
+    set_search_type("E");
+    perform_search();
   });
+
+  $("#search_panel textarea").keypress(function(e) {
+    var code = e.keyCode ? e.keyCode : e.which;
+    if (code == 13) {  // Enter keycode
+      e.preventDefault();
+      perform_search();
+    }
+  });
+
+  // Initial default is EPG.
+  set_search_type("E");
 
 
   ///////////////
@@ -1672,9 +1685,24 @@ $(document).ready(function() {
   ////////////////////////////////
 
   //////
-  // Repeat the last search.
+  // Set the default search type.
   //////
-  function update_search() {
+  function set_search_type(type) {
+    if (type == "D") {
+      lastSearchType = "D";
+      $('#search_diary_button').addClass('ui-priority-primary').removeClass('ui-priority-secondary');
+      $('#search_epg_button').addClass('ui-priority-secondary').removeClass('ui-priority-primary');
+    } else {
+      lastSearchType = "E";
+      $('#search_diary_button').addClass('ui-priority-secondary').removeClass('ui-priority-primary');
+      $('#search_epg_button').addClass('ui-priority-primary').removeClass('ui-priority-secondary');
+    }
+  }
+
+  //////
+  // Perform the default selected search.
+  //////
+  function perform_search() {
     if (lastSearchType == "D") {
       searchHistory();
     } else if (lastSearchType == "E") {
@@ -2553,7 +2581,7 @@ $(document).ready(function() {
         break;
 
       case tabIndex_search:
-        update_search();
+        perform_search();
         forceSearchTabUpdate = false;
         break;
 
