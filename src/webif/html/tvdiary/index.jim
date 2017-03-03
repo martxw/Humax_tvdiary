@@ -242,7 +242,7 @@ if { ![file exists $DB_FILEPATH] } {
               <select id="search_criteria_op_title"></select>
             </td>
             <td>
-              <textarea rows="1" cols="40" id="search_criteria_title" maxlength="40" placeholder="Anything"></textarea>
+              <textarea rows="1" cols="60" id="search_criteria_title" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
@@ -251,7 +251,7 @@ if { ![file exists $DB_FILEPATH] } {
               <select id="search_criteria_op_synopsis"></select>
             </td>
             <td>
-              <textarea rows="3" cols="80" id="search_criteria_synopsis" maxlength="200" placeholder="Anything"></textarea>
+              <textarea rows="3" cols="60" id="search_criteria_synopsis" maxlength="200" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
@@ -260,7 +260,7 @@ if { ![file exists $DB_FILEPATH] } {
               <select id="search_criteria_op_channel"></select>
             </td>
             <td>
-              <textarea rows="1" cols="40" id="search_criteria_channel" length="40" maxlength="40" placeholder="Anything"></textarea>
+              <textarea rows="1" cols="60" id="search_criteria_channel" length="40" maxlength="40" placeholder="Anything"></textarea>
             </td>
           </tr>
           <tr>
@@ -304,6 +304,10 @@ if { ![file exists $DB_FILEPATH] } {
         <div id="watchlist_specification">
           <form id="watchlist_form">
             <textarea rows="20" cols="80" id="watchlist_text" name="watchlist_text" maxlength="10240" placeholder="Watchlist specification lines"></textarea>
+            <div id="watchlist_recent_search_block">
+              <div id="watchlist_recent_search_header">Recent searches:</div>
+              <div id="watchlist_recent_searches"></div>
+            </div>
           </form>
           <button id="watchlist_save_button">Save</button> <button id="watchlist_cancel_button">Cancel</button>
         </div>

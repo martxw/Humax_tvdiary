@@ -1711,6 +1711,13 @@ $(document).ready(function() {
   }
 
   //////
+  // Add the search specification to suggested watchlist settings.
+  //////
+  function appendToWatchlistSearches(s) {
+    $("#watchlist_recent_searches").append("<div>" + s + "</div>");
+  }
+
+  //////
   // Request display of history by program_id, for repeats.
   //////
   function update_history_program(prog_id) {
@@ -1810,6 +1817,9 @@ $(document).ready(function() {
           $('#search_criteria_op_title').val(data.title_op ? data.title_op : "C");
           $('#search_criteria_op_synopsis').val(data.synopsis_op ? data.synopsis_op : "C");
           $('#search_criteria_op_channel').val(data.channel_name_op ? data.channel_name_op : "C");
+
+          appendToWatchlistSearches(data.title_op + "|" + data.title + "|" + data.channel_name_op + "|" + data.channel_name + "|" + data.synopsis_op + "|" + data.synopsis + "|");
+
           if (data.events.length > 0) {
             $('#search_results_table tbody').html(history_json_to_html(data));
             apply_altrow($('#search_results_table'));
@@ -2004,6 +2014,9 @@ $(document).ready(function() {
           $('#search_criteria_op_title').val(data.title_op ? data.title_op : "C");
           $('#search_criteria_op_synopsis').val(data.synopsis_op ? data.synopsis_op : "C");
           $('#search_criteria_op_channel').val(data.channel_name_op ? data.channel_name_op : "C");
+
+          appendToWatchlistSearches(data.title_op + "|" + data.title + "|" + data.channel_name_op + "|" + data.channel_name + "|" + data.synopsis_op + "|" + data.synopsis + "|");
+
           if (data.events.length > 0) {
             $('#search_results_table tbody').html(epgsearch_json_to_html(data));
             bind_dejavu($('#search_results_table'));

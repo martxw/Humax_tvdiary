@@ -430,3 +430,23 @@ td.inventory_dir {
   background: url("images/711_1_09_Media_Folder.png") no-repeat white;
   padding-left: 50px;
 }
+
+#watchlist_text {
+  display: inline-block;
+}
+
+#watchlist_recent_search_block {
+  display: inline-block;
+  vertical-align: top;
+  margin-left: 1em;
+}
+
+#watchlist_recent_search_header {
+  font-weight: bold;
+}
+
+#watchlist_recent_searches {
+  font-family: monospace;
+  white-space: pre;
+  line-height: normal;
+}
