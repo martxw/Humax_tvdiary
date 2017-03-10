@@ -32,7 +32,7 @@ table.tablesorter thead tr .header {
 table.tablesorter tbody td {
   color: #3D3D3D;
   padding: 4px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 table.tablesorter thead tr .headerSortUp {
   background-image: url(images/asc.gif);
@@ -319,7 +319,11 @@ tr.live_event td.event_time:before {
 
 td.event_flags, td.dwatch_flags {
   width: 16px;
-  vertical-align: bottom;
+  vertical-align: middle;
+}
+
+td.dwatch_flags {
+  white-space: nowrap;
 }
 
 td.dwatch_padding {
@@ -328,9 +332,7 @@ td.dwatch_padding {
 
 td.dwatch_channel, td.dwatch_datetime {
   white-space: nowrap;
-}
-#daily_watchlist_table .event_descr {
-  padding-left: 3px;
+  vertical-align: middle;
 }
 
 
@@ -390,17 +392,20 @@ table#monthly_programs_table tr td:first-child::before, table#monthly_channels_t
   content: counter(rowNumber);
 }
 
-table#monthly_programs_table td, table#monthly_channels_table td, table#search_results_table td, table#watchlist_results_table td {
-  vertical-align: middle;
+td.event_descr {
+  padding: 4px;
 }
-table#daily_watchlist_table td.dwatch_channel img, table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_results_table td img {
-  vertical-align: text-bottom;
+table#daily_watchlist_table td.dwatch_channel img, table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_grouped_table td img {
+  vertical-align: middle;
   margin: 0 0.3em 0 0;
+}
+table#daily_watchlist_table td.dwatch_channel span, table#monthly_programs_table td span, table#monthly_channels_table td span, table#search_results_table td span, table#watchlist_grouped_table td span {
+  vertical-align: middle;
 }
 table#monthly_programs_table td div, table#monthly_channels_table td div {
   white-space: nowrap;
 }
-table#monthly_programs_table th, table#monthly_channels_table th, table#search_results_table th, table#watchlist_results_table th {
+table#monthly_programs_table th, table#monthly_channels_table th, table#search_results_table th, table#watchlist_grouped_table th {
   white-space: nowrap;
 }
 
@@ -429,6 +434,10 @@ td.inventory_dir {
   height: 32px;
   background: url("images/711_1_09_Media_Folder.png") no-repeat white;
   padding-left: 50px;
+}
+
+#watchlist_panel {
+  max-width: 70em;
 }
 
 #watchlist_text {

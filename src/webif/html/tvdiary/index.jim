@@ -320,10 +320,7 @@ if { ![file exists $DB_FILEPATH] } {
               Programme events
             </div>
             <div>
-              <table id="watchlist_results_table" class="tablesorter events_table">
-                <thead>
-                  <tr><th>Channel</th><th>Title</th><th>Synopsis</th><th>Date & Time</th><th>Duration</th><th>&nbsp;</th></tr>
-                </thead>
+              <table id="watchlist_grouped_table" class="events_table">
                 <tbody>
                 </tbody>
               </table>
