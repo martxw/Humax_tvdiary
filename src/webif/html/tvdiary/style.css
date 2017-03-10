@@ -395,7 +395,7 @@ table#monthly_programs_table tr td:first-child::before, table#monthly_channels_t
 td.event_descr {
   padding: 4px;
 }
-table#daily_watchlist_table td.dwatch_channel img, table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td img, table#watchlist_grouped_table td img {
+table#daily_watchlist_table td.dwatch_channel img, table#monthly_programs_table td img, table#monthly_channels_table td img, table#search_results_table td.search_channel img, table#watchlist_grouped_table td.dwatch_channel img {
   vertical-align: middle;
   margin: 0 0.3em 0 0;
 }
@@ -458,4 +458,8 @@ td.inventory_dir {
   font-family: monospace;
   white-space: pre;
   line-height: normal;
+}
+
+#watchlist_panel, #watchlist_panel div.table_wrapper {
+  margin-top: 0.5em;
 }
