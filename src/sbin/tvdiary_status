@@ -274,7 +274,7 @@ proc get_data { pid } {
       regsub -all -- {[[:space:]]+} $line " " line
 
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
-      set filepath [regsub {^[^/]*} $line {}]
+      set filepath [subst [regsub {^[^/]*} $line {}]]
       set type [string tolower [file extension $filepath]]
 
       # If race conditions cause the file to not exist any more, catch and just treat as if that file wasn't seen.
