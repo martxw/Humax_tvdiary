@@ -274,7 +274,7 @@ proc get_data { pid } {
       regsub -all -- {[[:space:]]+} $line " " line
 
       # Filenames include spaces, so instead of splitting, just remove all chars up to the first slash to get the file path.
-      set filepath [subst [regsub {^[^/]*} $line {}]]
+      set filepath [subst -nocommands -novariables [regsub {^[^/]*} $line {}]]
       set type [string tolower [file extension $filepath]]
 
       # If race conditions cause the file to not exist any more, catch and just treat as if that file wasn't seen.
@@ -452,6 +452,11 @@ proc main {} {
             log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
             dict set recording_channels $channel_name 1
 
+          } elseif { $ndata($filepath) == 0 } {
+            # File isn't growing and is empty - trying to record a programme not being broadcast.
+            if { $::logging > 2 } {
+              puts "$::logging_time: Recording but not being broadcast"
+            }
           } else {
             # "Playing"
             if { $::logging > 2 } {
