@@ -135,7 +135,7 @@ proc create_migrate_tables { tvdiarydb } {
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
     $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
 
-    set_setting $tvdiarydb "db_ver" 6
+    set_setting $tvdiarydb "db_ver" 7
 
   } else {
     # There is an existing DB, so migration is necessary.
@@ -182,6 +182,8 @@ proc create_migrate_tables { tvdiarydb } {
     # 5) Removed watchlist_inter "warning TEXT, content_type INTEGER, content TEXT" columns.
 
     # 6) Added watchlist_inter "service_id TEXT, event_id TEXT" columns.
+
+    # 7) Corrected the storage of extended characters in the synopses.
 
     if { $db_ver == 1 || $db_ver == 2 } {
       # Create the missing tables if they're not present.
@@ -283,9 +285,11 @@ proc create_migrate_tables { tvdiarydb } {
 
       puts "$::logging_time: Cleaning up and compacting database."
 
-      set_setting $tvdiarydb "db_ver" 6
+      migrate_extended_characters $tvdiarydb
+      set_setting $tvdiarydb "db_ver" 7
 
       $tvdiarydb query "VACUUM;"
+
     } elseif { $db_ver == 3 } {
 
       $tvdiarydb query "ALTER TABLE programs ADD COLUMN crid TEXT;"
@@ -300,7 +304,9 @@ proc create_migrate_tables { tvdiarydb } {
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
 
-      set_setting $tvdiarydb "db_ver" 6
+      migrate_extended_characters $tvdiarydb
+      set_setting $tvdiarydb "db_ver" 7
+
     } elseif { $db_ver == 4 || $db_ver == 5 } {
 
       $tvdiarydb query "DROP TABLE watchlist_inter;"
@@ -311,12 +317,27 @@ proc create_migrate_tables { tvdiarydb } {
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_synopsis ON watchlist_inter (synopsis);"
       $tvdiarydb query "CREATE INDEX IF NOT EXISTS iwi_event_crid ON watchlist_inter (event_crid);"
 
-      set_setting $tvdiarydb "db_ver" 6
+      migrate_extended_characters $tvdiarydb
+      set_setting $tvdiarydb "db_ver" 7
+
+    } elseif { $db_ver == 6 } {
+
+      migrate_extended_characters $tvdiarydb
+      set_setting $tvdiarydb "db_ver" 7
+
     } else {
       puts "$::logging_time: No changes required."
     }
 
   }
+}
+
+#
+# Correct the extended characters in the synopses.
+#
+proc migrate_extended_characters { tvdiarydb } {
+  $tvdiarydb extension /mod/lib/sql/xconv.so
+  $tvdiarydb query "UPDATE synopses SET synopsis=xconv(synopsis);"
 }
 
 #
