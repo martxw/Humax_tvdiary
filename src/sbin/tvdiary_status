@@ -412,7 +412,7 @@ proc main {} {
           }
           set channel_name [$ts get channel_name]
           set title [$ts get title]
-          set synopsis [$ts get synopsis]
+          set synopsis [xconv [$ts get synopsis]]
           set schedstart [$ts get schedstart]
           set scheddur [expr [$ts get scheddur] / 60]
 
