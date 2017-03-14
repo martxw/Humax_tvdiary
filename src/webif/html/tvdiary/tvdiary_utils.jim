@@ -3,7 +3,6 @@
 
 source /mod/webif/lib/setup
 require ts.class
-package require xconv
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
@@ -129,7 +128,7 @@ proc add_to_cache { tvdiarydb directory filename } {
       set ts [ts fetch $filepath]
       set channel_name [$ts get channel_name]
       set title [$ts get title]
-      set synopsis [xconv [$ts get synopsis]]
+      set synopsis [$ts get synopsis]
       set event_start [$ts get start]
       set event_end [$ts get end]
       set schedstart [$ts get schedstart]
