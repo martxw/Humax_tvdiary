@@ -3,6 +3,7 @@
 
 source /mod/webif/lib/setup
 require ts.class
+package require xconv
 
 if { ![exists -proc sqlite3.open] } { package require sqlite3 }
 
