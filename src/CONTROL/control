@@ -4,5 +4,5 @@ Section: misc
 Version: 0.0.3-11
 Architecture: mipsel
 Maintainer: martxw
-Depends: webif (>= 1.4.0), jim-binary (>= 0.76), sqlite3-xconv (>= 1.0.1)
+Depends: webif (>= 1.4.1-2), jim-binary (>= 0.76), sqlite3-xconv (>= 1.0.1)
 Description: An add-on to the web interface that tracks the TV programmes you record and watch, presenting them in a diary view.
