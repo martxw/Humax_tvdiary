@@ -366,6 +366,16 @@ proc purge_orphaned_synopses { tvdiarydb } {
   return [$tvdiarydb changes]
 }
 
+proc purge_orphaned_viewtimes { tvdiarydb } {
+  $tvdiarydb query "
+    DELETE FROM viewtimes
+    WHERE  NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.activity_id = viewtimes.activity_id)"
+  return [$tvdiarydb changes]
+}
+
 #
 # Test whether the named table exists.
 # Returns 1 if it exists, else 0.

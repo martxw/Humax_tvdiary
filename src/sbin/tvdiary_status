@@ -12,6 +12,8 @@
 source /mod/webif/lib/setup
 require ts.class
 source /mod/webif/html/tvdiary/tvdiary_utils.jim
+# Experimental viewing behaviour analysis
+source /mod/webif/plugin/redring/lib.jim
 
 # --------------------------------------------------------------
 # Declare globals
@@ -43,6 +45,64 @@ set logging_time [clock format $current_time -format $log_date_fmt]
 # Declare procedures
 # --------------------------------------------------------------
 
+proc my_redring_offset {} {
+  if {![file exists /tmp/.offset]} {
+    return ""
+  }
+  if {[clock seconds] - [file mtime /tmp/.offset] > 60 && ![::redring::iconset Pause]} {
+    return ""
+  }
+  return [file read /tmp/.offset]
+}
+
+#
+# Calculate the live time, using the offset if available.
+#
+proc calc_live_time { the_time the_offset } {
+  puts "$::logging_time: calc_live_time $the_time $the_offset"
+  if { $the_offset != "" } {
+    lassign [split $the_offset ":"] h m
+    set offset_time [expr ($h * 60) + $m]
+    puts "$::logging_time: calc_live_time h=$h, m=$m, offset_time=$offset_time"
+
+    lassign [split [clock format $the_time -format "%H:%M"] ":"] h m
+    set cur_time [expr ($h * 60) + $m]
+    puts "$::logging_time: calc_live_time h=$h, m=$m, cur_time=$cur_time"
+
+    if { $offset_time > $cur_time } {
+      # Paused yesterday. (Not handling days before then!)
+      set the_time [expr $the_time - 86400]
+    }
+    set the_time [expr $the_time - ($cur_time * 60) + ($offset_time * 60)]
+  }
+  puts "$::logging_time: calc_live_time returning $the_time [clock format $the_time -format $::log_date_fmt]"
+  return $the_time
+}
+
+#
+# Calculate the viewtime from the offset in minutes.
+#
+proc calc_viewtime_minutes { the_offset } {
+  set mins -1
+  if { $the_offset != "" } {
+    lassign [split $the_offset ":"] h m
+    set mins [expr ($h * 60) + $m]
+  }
+  return $mins
+}
+
+#
+# Generate the live viewtime in minutes from midnight.
+#
+proc calc_live_viewtime_minutes { the_time the_offset } {
+  if { $the_offset eq "" } {
+    set the_offset [clock format $the_time -format "%H:%M"]
+  }
+  lassign [split $the_offset ":"] h m
+  set mins [expr ($h * 60) + $m]
+  return $mins
+}
+
 #
 # Load the IDs of previously unfinished activities.
 #
@@ -59,6 +119,7 @@ proc load_unfinished_activities { tvdiarydb } {
 #
 # Update the flags on activities that are now finished.
 # Any activities that haven't got end times (ie represent less than a minute) are deleted.
+# Any viewtimes associated with them will also be deleted.
 #
 proc update_finished_activities { tvdiarydb &finished_activities } {
   foreach activity_id $finished_activities {
@@ -76,12 +137,41 @@ proc update_finished_activities { tvdiarydb &finished_activities } {
   }
   $tvdiarydb query "DELETE FROM activities WHERE unfinished = 0 AND end = 0"
 
+  if { $::logging } {
+    set res [$tvdiarydb query "
+    SELECT program_id FROM programs
+    WHERE  NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.program_id = programs.program_id)"]
+    foreach rec $res {
+      puts "$::logging_time: Deleted activity-less program $rec(program_id)"
+    }
+  }
   $tvdiarydb query "
     DELETE FROM programs
     WHERE  NOT EXISTS
       (SELECT activity_id
        FROM   activities
        WHERE  activities.program_id = programs.program_id)"
+
+  if { $::logging } {
+    set res [$tvdiarydb query "
+    SELECT DISTINCT activity_id FROM viewtimes
+    WHERE  NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.activity_id = viewtimes.activity_id)"]
+    foreach rec $res {
+      puts "$::logging_time: Deleted activity-less viewtimes for $rec(activity_id)"
+    }
+  }
+  $tvdiarydb query "
+    DELETE FROM viewtimes
+    WHERE  NOT EXISTS
+      (SELECT activity_id
+       FROM   activities
+       WHERE  activities.activity_id = viewtimes.activity_id)"
 }
 
 #
@@ -99,7 +189,7 @@ proc get_activity_program_details { tvdiarydb activity_id } {
 #
 # Add details for a program being watched live, played or recorded.
 #
-proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration crid } {
+proc log_program_activity { tvdiarydb &finished_activities activity_type log_time channel_name title synopsis start_time duration crid viewing_time} {
 
   set channel_id [get_channel_id $tvdiarydb $channel_name]
   set title_id [get_title_id $tvdiarydb $title]
@@ -127,6 +217,7 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
     set prog_id {}
   }
 
+  set act_id {}
   if { $prog_id ne {} } {
     # If there's an existing program entry, check for an unfinished activity of the right type for it that we can update.
     set _act_id [$tvdiarydb query "
@@ -137,8 +228,6 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
       " $prog_id $activity_type]
     if { [llength $_act_id] == 1 } {
       set act_id [lindex [lindex $_act_id 0] 1]
-    } else {
-      set act_id {}
     }
 
     if { $act_id ne {} } {
@@ -156,8 +245,8 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
         INSERT INTO activities (program_id, type, start, end, unfinished)
         VALUES (%s, '%s', %s, 0, 1)
         " $prog_id $activity_type $log_time
+      set act_id [$tvdiarydb lastid]
       if { $::logging } {
-        set act_id [$tvdiarydb lastid]
         puts "$::logging_time: Started new activity $act_id, [get_activity_program_details $tvdiarydb $act_id]"
       }
     }
@@ -173,9 +262,19 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
       INSERT INTO activities (program_id, type, start, end, unfinished)
       VALUES (%s, '%s', %s, 0, 1)
       " $prog_id $activity_type $log_time
+    set act_id [$tvdiarydb lastid]
     if { $::logging } {
-      set act_id [$tvdiarydb lastid]
       puts "$::logging_time: Started new activity $act_id, [get_activity_program_details $tvdiarydb $act_id]"
+    }
+  }
+  if { $act_id ne {} && $viewing_time != -1 } {
+    # Add viewing offset for the activity.
+    $tvdiarydb query "
+      INSERT OR REPLACE INTO viewtimes(activity_id, time, count)
+      VALUES (%s, %s, COALESCE( (SELECT count FROM viewtimes WHERE activity_id=%s AND time=%s), 0) + 1)
+      " $act_id $viewing_time $act_id $viewing_time
+    if { $::logging } {
+      puts "$::logging_time: Incremented count for activity $act_id, time $viewing_time"
     }
   }
 }
@@ -241,21 +340,7 @@ proc get_epg_from_channel_name { epg_db channel_name time } {
 # Add details for a media file being played. Stored like a TV program except blank channel name and no start time or duration.
 #
 proc log_stream_activity { tvdiarydb &finished_activities activity_type log_time filename } {
-  log_program_activity $tvdiarydb finished_activities "P" $log_time "" $filename "" 0 0 ""
-}
-
-#
-# Report if we're watching live TV.
-# The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
-# However, that didn't take account of being in the TV Portal but not actually playing anything yet.
-# So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
-#
-proc log_watching_live_tv { tvdiarydb epg_db &finished_activities } {
-  set hsvc [system param CUR_SVC Value USERCONFIG]
-
-  set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
-
-  log_program_activity $tvdiarydb finished_activities "L" $::current_time $epg_record(channel_name) $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid)
+  log_program_activity $tvdiarydb finished_activities "P" $log_time "" $filename "" 0 0 "" -1
 }
 
 #
@@ -428,20 +513,44 @@ proc main {} {
               if { $::logging > 2 } {
                 puts "$::logging_time: L [expr $ndata($filepath) - $data($filepath)] change ($ndata($filepath) - $data($filepath)) $filepath"
               }
-              log_watching_live_tv $tvdiarydb $epg_db finished_activities
+
+              #log_watching_live_tv $tvdiarydb $epg_db finished_activities
+              #
+              # Report if we're watching live TV.
+              # The previous assumption was that we're watching live TV if it's not in standby and it's not playing anything else.
+              # However, that didn't take account of being in the TV Portal but not actually playing anything yet.
+              # So, instead, humaxtv accessing the "/mnt/hd2/Tsr/0.ts" file is the only signal that we're watching live TV.
+              #
+              set hsvc [system param CUR_SVC Value USERCONFIG]
+
+              set offset [my_redring_offset]
+              # TODO: Calculate time from offset instead of clock seconds. Verify the EPG still contains entries for past programmes.
+              set live_time [calc_live_time [clock seconds] $offset]
+
+              set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
+
+              log_program_activity $tvdiarydb finished_activities "L" $::current_time $epg_record(channel_name) $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid) [calc_live_viewtime_minutes $::current_time $offset]
+
+              puts "$::logging_time: Live $epg_record(title) Offset=[calc_live_viewtime_minutes $::current_time $offset]=$offset\n"
+
               dict set watching_live "TSR" 1
             }
 
           } elseif { ($data($filepath) == -1) || ($ndata($filepath) == -1) } {
             # "Chase Playing"
+            set offset [my_redring_offset]
             if { $::logging > 2 } {
               puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
             }
+
+            # Get epg_rec for current time - ONLY use for recording. Playback is at the redring offset.
             set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
-            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
-            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
+            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid) -1
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset]
             dict set recording_channels $channel_name 1
             dict set playing_channels $channel_name 1
+
+            puts "$::logging_time: Chase Playing $title Offset=[calc_viewtime_minutes $offset]=$offset\n"
 
           } elseif { $ndata($filepath) > $data($filepath) } {
             # "Recording"
@@ -449,7 +558,7 @@ proc main {} {
               puts "$::logging_time: R [expr $ndata($filepath) - $data($filepath)] growth ($ndata($filepath) - $data($filepath)) $filepath"
             }
             set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
-            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid)
+            log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid) -1
             dict set recording_channels $channel_name 1
 
           } elseif { $ndata($filepath) == 0 } {
@@ -459,11 +568,14 @@ proc main {} {
             }
           } else {
             # "Playing"
+            set offset [my_redring_offset]
             if { $::logging > 2 } {
               puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
             }
-            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur ""
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset]
             dict set playing_channels $channel_name 1
+
+            puts "$::logging_time: Playing $title Offset=[calc_viewtime_minutes $offset]=$offset\n"
           }
 
         } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
@@ -494,14 +606,20 @@ proc main {} {
     if { [llength $watching_live] == 0 && [llength $playing_channels] == 0 && ![system instandby] } {
       set hsvc [system param CUR_SVC Value USERCONFIG]
 
-      set epg_record [get_epg_from_hsvc $epg_db $hsvc [clock seconds]]
+      set offset [my_redring_offset]
+      # TODO: Calculate time from offset instead of clock seconds. Verify the EPG still contains entries for past programmes.
+      set live_time [calc_live_time [clock seconds] $offset]
+
+      set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
       set channel_name $epg_record(channel_name)
 
       if { [dict exists $recording_channels $channel_name] } {
         if { $::logging > 2 } {
           puts "$::logging_time: L $channel_name because not watching anything else and $channel_name is being recorded"
         }
-        log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid)
+        log_program_activity $tvdiarydb finished_activities "L" $::current_time $channel_name $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid) [calc_live_viewtime_minutes $::current_time $offset]
+
+        puts "$::logging_time: Speculative Live $epg_record(title) Offset=[calc_live_viewtime_minutes $::current_time $offset]=$offset\n"
       }
     }
 

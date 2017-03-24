@@ -96,10 +96,11 @@ proc main {} {
       set num_channels [purge_orphaned_channels $tvdiarydb]
       set num_titles [purge_orphaned_titles $tvdiarydb]
       set num_synopses [purge_orphaned_synopses $tvdiarydb]
+      set num_viewtimes [purge_orphaned_viewtimes $tvdiarydb]
 
       $tvdiarydb query "COMMIT TRANSACTION"
       $tvdiarydb query "VACUUM"
-      puts "Successfully deleted $num_events events, details of $num_programs programmes, $num_channels channel names, $num_titles titles, and $num_synopses synopses."
+      puts "Successfully deleted $num_events events, details of $num_programs programmes, $num_channels channel names, $num_titles titles, $num_synopses synopses, and $num_viewtimes viewtimes."
 
     } else {
       puts "OK. Leaving all of the data there."
