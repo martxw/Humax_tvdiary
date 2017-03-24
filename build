@@ -2,6 +2,10 @@
 ver=`grep Version src/CONTROL/control | sed -e "s/.*: *//"`
 echo "Building tvdiary version $ver"
 
+chmod u+x src/webif/html/tvdiary/*.jim
+chmod u+x src/sbin/*
+chmod u+x src/plugin/*.jim
+
 echo "opkg-pack src"
 opkg-pack src
 
