@@ -463,3 +463,10 @@ td.inventory_dir {
 #watchlist_panel, #watchlist_panel div.table_wrapper {
   margin-top: 0.5em;
 }
+
+span.analysis {
+    cursor: pointer;
+}
+span.analysis:hover {
+  text-decoration: underline;
+}

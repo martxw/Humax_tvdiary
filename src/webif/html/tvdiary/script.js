@@ -640,6 +640,15 @@ $(document).ready(function() {
   }
 
   //////
+  // Bind click handler to all analysis links.
+  //////
+  function bind_analysis(el) {
+    $('span.analysis', el).click(function(e) {
+      analysis_popup(e, $(this));
+    });
+  }
+
+  //////
   // Bind click handler to all deja vu links.
   //////
   function bind_dejavu(el) {
@@ -857,6 +866,7 @@ $(document).ready(function() {
               bind_dejavu($('#daily_watched_table'));
               bind_crid_repeats($('#daily_watched_table'));
               bind_inventory($('#daily_watched_table'));
+              bind_analysis($('#daily_watched_table'));
             }
           } else {
             $('#daily_watched_footer').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
@@ -894,6 +904,7 @@ $(document).ready(function() {
             bind_crid_repeats($('#daily_recorded_table'));
             bind_inventory($('#daily_recorded_table'));
             bind_schedule($('#daily_recorded_table'));
+            bind_analysis($('#daily_recorded_table'));
           }
         } else {
           $('#daily_recorded_footer').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
@@ -1079,7 +1090,8 @@ $(document).ready(function() {
       // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
       //
       html += "<td class=\"event_descr\">";
-      html += "<span class=\"tvtitle\">" + escapeHtml(event.title) + "</span>";
+      var analysis_class = (event.activity_id == -1 ? "" : " analysis");
+      html += "<span class=\"tvtitle" + analysis_class + "\" act_id=\"" + event.activity_id + "\">" + escapeHtml(event.title) + "</span>";
       if (event.synopsis != "") {
         html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
       }
@@ -2598,6 +2610,120 @@ $(document).ready(function() {
       });
     $('#schedule_dialog')
         .attr('slot', slot)
+        .attr('refresh', "F");
+    $dialog.dialog('open');
+  }
+
+  //////
+  // Bring up the analysis dialog.
+  //////
+  function analysis_popup(e, o)
+  {
+    e.preventDefault();
+    
+    var act_id = o.attr('act_id');
+    $dialog.dialog("option", "buttons", $buttons1);
+
+    $('#schedule_dialog')
+      .html('<img src=/img/spin.gif> Loading details... Please wait...');
+
+    var url = '/tvdiary/view_analysis.jim?activity_id=' + act_id;
+    $.ajax({
+      type: "GET",
+      dataType: "json",
+      url: url,
+      success: function(data) {
+        if (data.status == "OK" ) {
+          if (data.viewtimes.length == 0) {
+            $('#schedule_dialog').html("<span class=\"nothing\">No viewing statistics available</span>");
+          } else {
+            $('#schedule_dialog').html('<div id="container" style="width: 370px; height: 370px; margin: 0 auto"></div>');
+
+            var options = {
+              credits: false,
+              chart: {
+                  renderTo: 'container',
+                  backgroundColor: 'transparent',
+                  polar: true
+              },
+              title: {
+                  text: data.title
+              },
+              legend: {
+                enabled: false
+              },
+              pane: {
+                  startAngle: 0,
+                  endAngle: 360,
+                  size: "95%" 
+              },
+              xAxis: {
+                  min: 0,
+                  max: data.duration,
+              },
+              yAxis: {
+                  min: 0,
+                  max: 2
+              },
+              plotOptions: {
+                  series: {
+                      pointStart: 0,
+                      pointInterval: 1
+                  },
+                  column: {
+                      pointPadding: 0,
+                      groupPadding: 0
+                  }
+              },
+              tooltip: {
+                useHTML: true,
+                headerFormat: '',
+                pointFormat: 'Minute: {point.x}<br>Views: {point.y}',
+                footerFormat: '',
+                followPointer: true
+              },
+              series: [{
+                  type: 'column',
+                  name: 'Views',
+                  data: [],
+                  pointPlacement: 'between'
+              }]
+            };
+
+            // Run through the times, accumulating the counts and filling in zeros for missing times.
+            var lastTime = 0;
+            options.series[0].data[0] = 0;
+            for (var e = 0; e < data.viewtimes.length; e++) {
+              var entry = data.viewtimes[e];
+              if (entry.time > lastTime) {
+                for (var i = lastTime + 1; i <= entry.time; i++) {
+                  options.series[0].data[i] = 0;
+                }
+                lastTime = entry.time;
+              }
+              options.series[0].data[entry.time] += entry.count;
+            }
+            if (lastTime < data.duration - 1) {
+              for (var i = lastTime + 1; i < data.duration - 1; i++) {
+                options.series[0].data[i] = 0;
+              }
+              lastTime = entry.time;
+            }
+
+            var chart = new Highcharts.Chart(options);
+
+          }
+        } else {
+          $('#schedule_dialog').html("<span class=\"nothing\">Error: " + escapeHtml(data.status) + "</span>");
+        }
+      },
+      error: function(_, _, e) {
+        log_stuff("ajax error " + e);
+      }
+    });
+
+    $('#schedule_dialog')
+        .attr('act_id', act_id)
         .attr('refresh', "F");
     $dialog.dialog('open');
   }

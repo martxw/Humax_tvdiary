@@ -14,6 +14,7 @@ source /mod/webif/html/tvdiary/tvdiary_utils.jim
 jqplugin easing ui.totop iajax
 jscss jquery.tablesorter.min.js
 jscss script.js style.css
+jscss /charts/high/highcharts-more.js
 header
 
 #

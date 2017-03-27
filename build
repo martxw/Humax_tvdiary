@@ -4,7 +4,7 @@ echo "Building tvdiary version $ver"
 
 chmod u+x src/webif/html/tvdiary/*.jim
 chmod u+x src/sbin/*
-chmod u+x src/plugin/*.jim
+chmod u+x src/webif/plugin/tvdiary/*.jim
 
 echo "opkg-pack src"
 opkg-pack src

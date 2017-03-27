@@ -41,6 +41,7 @@ ln -s $TDIR/tvdiary_stub.jim $LDIR/tvdiary_stub.jim
 ln -s $TDIR/tvdiary_watchlist.jim $LDIR/tvdiary_watchlist.jim
 ln -s $TDIR/update_watchlist_cfg_json.jim $LDIR/update_watchlist_cfg_json.jim
 ln -s $TDIR/watchlist_json.jim $LDIR/watchlist_json.jim
+ln -s $TDIR/view_analysis.jim $LDIR/view_analysis.jim
 
 mkdir /mod/dev/tvdiary/live/webif/plugin
 mkdir /mod/dev/tvdiary/live/webif/plugin/tvdiary

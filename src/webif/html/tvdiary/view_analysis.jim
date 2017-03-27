@@ -1,0 +1,183 @@
+#!/mod/bin/jimsh
+#
+# Render the viewing analysis for a program, starting with one of its activities.
+# The starting activity can be used to select the starting activity, although
+# only if it's a live or playback activity.
+# After successfully rendering the data, the value "status" is set to "OK".
+# If there is an error, "status" is set to the "<error message>".
+# Clients should therefore check "status" first. If there is a serious server error part way
+# through rendering, the JSON may be malformed and not parsable.
+#
+# CGI usage: /tvdiary/view_analysis.jim?activity_id=<ID>
+#   ID = the activity ID.
+#
+# Author: Martin Wink, 2017.
+#
+
+package require cgi
+source /mod/webif/lib/setup
+source /mod/webif/html/tvdiary/tvdiary_utils.jim
+
+# --------------------------------------------------------------
+# Declare globals
+# --------------------------------------------------------------
+set current_time [clock seconds]
+set time_fmt "%H:%M"
+set date_time_fmt "%a %d %b %Y $time_fmt"
+
+set channel_icons_path "/mod/webif/html/img/channels/out"
+set channel_icons_url "/img/channels/out"
+
+
+# --------------------------------------------------------------
+# CGI parameters
+# --------------------------------------------------------------
+set runmode cli
+if { [dict exists $env "REQUEST_METHOD"] } { set runmode cgi }
+
+case $runmode {
+  cgi {
+    cgi_input
+    set activity_id [cgi_get activity_id]
+    httpheader "application/json"
+  }
+  cli {
+    set activity_id -1
+    if { $argc == 1 } {
+      set activity_id [lindex $argv 0]
+    } else {
+      puts "Usage: $argv0 <activity_id>"
+      puts "  activity_id = the activity ID."
+      puts ""
+      puts "Eg: $argv0 1234"
+      exit -1
+    }
+  }
+}
+
+# In case of error - break glass!
+#puts "/* "
+#foreach key [lsort [dict keys $env]] {puts "env($key)=$env($key)"}
+#puts "auto_path=$auto_path"
+#puts "*/"
+
+# --------------------------------------------------------------
+# Declare procedures
+# --------------------------------------------------------------
+
+#
+# Main
+#
+proc main {} {
+  # begin_debug
+  #puts "/* Parameters:
+  #  activity_id=$::activity_id */"
+  # end_debug
+
+  #
+  # Check we have a database, and open it, else HTTP error.
+  #
+  if { ![file exists $::DB_FILEPATH] } {
+    throw error "The $::DB_FILEPATH database is missing."
+  }
+
+  #
+  # Get a lock for the database
+  #
+  if {![acquire_lock tvdiary_db]} {
+    throw error "Timed out acquiring exclusive access to the database. Try again later."
+  }
+
+  set tvdiarydb [sqlite3.open $::DB_FILEPATH]
+
+  # Search for the programme associated with the activity_id, and include the title, synopsis and channel.
+  set p_records [$tvdiarydb query "
+    SELECT p.program_id, p.start, p.duration, p.crid, t.title_id, t.title, s.synopsis_id, s.synopsis, c.channel_id, c.channel_name
+    FROM programs p, titles t, synopses s, channels c, activities a
+    WHERE a.activity_id = '%s'
+      AND a.program_id = p.program_id
+      AND p.title_id = t.title_id
+      AND p.synopsis_id = s.synopsis_id
+      AND p.channel_id = c.channel_id
+    LIMIT 1001" $::activity_id]
+
+  if { [llength $p_records] != 1 } {
+    throw error "Wrong number of results searching for activity_id $::activity_id: [llength $p_records]"
+  }
+
+  puts "\{"
+
+  foreach p_record $p_records {
+    set program_id $p_record(program_id)
+    puts " \"program_id\": $program_id,"
+    puts " \"start\": $p_record(start),"
+    puts " \"duration\": $p_record(duration),"
+    puts " \"crid\": \"$p_record(crid)\","
+    puts " \"title_id\": $p_record(title_id),"
+    puts " \"title\": \"[escape_json_string $p_record(title)]\","
+    puts " \"synopsis_id\": $p_record(synopsis_id),"
+    puts " \"synopsis\": \"[escape_json_string $p_record(synopsis)]\","
+    puts " \"channel_id\": $p_record(channel_id),"
+
+    set channel_name $p_record(channel_name)
+    puts " \"channel_name\": \"[escape_json_string $channel_name]\","
+    set channel_icon_path "$::channel_icons_url/Unknown.png"
+    if { $channel_name != "" } {
+      if { [file exists "$::channel_icons_path/$channel_name.png"] } {
+        set channel_icon_path "$::channel_icons_url/[cgi_quote_url $channel_name].png"
+      } else {
+        set channel_icon_path "$::channel_icons_url/Unknown.png"
+      }
+    }
+    puts " \"channel_icon_path\": \"$channel_icon_path\","
+    
+    puts " \"viewtimes\": \["
+
+    # Search for the viewing times associated with the program_id.
+    set v_records [$tvdiarydb query "
+      SELECT v.time, v.activity_id, v.count
+      FROM viewtimes v, activities a
+      WHERE a.program_id = '%s'
+        AND v.activity_id = a.activity_id
+      ORDER BY v.time, v.activity_id" $program_id]
+
+    set comma 0
+    foreach v_record $v_records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+      puts "\{"
+      puts "  \"time\": $v_record(time),"
+      puts "  \"activity_id\": $v_record(activity_id),"
+      puts "  \"count\": $v_record(count)"
+      puts "\}"
+    }
+
+    puts -nonewline "\],"
+  }
+
+
+  puts " \"status\": \"OK\""
+  puts "\}"
+
+  # Finished with the DBs.
+  $tvdiarydb close
+
+  #
+  # Closed the DB so release the lock.
+  #
+  release_lock tvdiary_db
+}
+
+if { $runmode == "cgi" } {
+  try {
+    main
+  } on error { msg } {
+    puts "{ \"status\": \"[escape_json_string $msg]\" }"
+  }
+} else {
+  main
+}

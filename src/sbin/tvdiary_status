@@ -82,13 +82,13 @@ proc calc_live_time { the_time the_offset } {
 #
 # Calculate the viewtime from the offset in minutes.
 #
-proc calc_viewtime_minutes { the_offset } {
+proc calc_viewtime_minutes { the_offset ts_offset } {
   set mins -1
   if { $the_offset != "" } {
     lassign [split $the_offset ":"] h m
     set mins [expr ($h * 60) + $m]
   }
-  return $mins
+  return [expr $mins + $ts_offset]
 }
 
 #
@@ -267,8 +267,8 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
       puts "$::logging_time: Started new activity $act_id, [get_activity_program_details $tvdiarydb $act_id]"
     }
   }
-  if { $act_id ne {} && $viewing_time != -1 } {
-    # Add viewing offset for the activity.
+  if { $prog_id ne {} && $viewing_time != -1 } {
+    # Add viewing offset for the program.
     $tvdiarydb query "
       INSERT OR REPLACE INTO viewtimes(activity_id, time, count)
       VALUES (%s, %s, COALESCE( (SELECT count FROM viewtimes WHERE activity_id=%s AND time=%s), 0) + 1)
@@ -501,6 +501,11 @@ proc main {} {
           set schedstart [$ts get schedstart]
           set scheddur [expr [$ts get scheddur] / 60]
 
+          # Testing
+          set start [$ts get start]
+          set ts_offset [expr ($start - $schedstart)/60]
+          # Testing
+
           if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
             # "Decrypting"
             if { $::logging > 2 } {
@@ -525,6 +530,8 @@ proc main {} {
 
               set offset [my_redring_offset]
               # TODO: Calculate time from offset instead of clock seconds. Verify the EPG still contains entries for past programmes.
+              # TODO: If we get back Not in EPG, try to get epg_record from programs table instead. Maybe switch it around to get from my DB first?
+              # TODO: returning channel_name, title, synopsis, start, duration, event_crid,
               set live_time [calc_live_time [clock seconds] $offset]
 
               set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
@@ -539,6 +546,7 @@ proc main {} {
           } elseif { ($data($filepath) == -1) || ($ndata($filepath) == -1) } {
             # "Chase Playing"
             set offset [my_redring_offset]
+            # TODO: Adjust the offset using the ts.class information.
             if { $::logging > 2 } {
               puts "$::logging_time: RP $ndata($filepath) & $data($filepath) $filepath"
             }
@@ -546,11 +554,11 @@ proc main {} {
             # Get epg_rec for current time - ONLY use for recording. Playback is at the redring offset.
             set epg_rec [get_epg_from_channel_name $epg_db $channel_name [clock seconds]]
             log_program_activity $tvdiarydb finished_activities "R" $::current_time $channel_name $title $synopsis $schedstart $scheddur $epg_rec(event_crid) -1
-            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset]
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset $ts_offset]
             dict set recording_channels $channel_name 1
             dict set playing_channels $channel_name 1
 
-            puts "$::logging_time: Chase Playing $title Offset=[calc_viewtime_minutes $offset]=$offset\n"
+            puts "$::logging_time: Chase Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
 
           } elseif { $ndata($filepath) > $data($filepath) } {
             # "Recording"
@@ -569,13 +577,14 @@ proc main {} {
           } else {
             # "Playing"
             set offset [my_redring_offset]
+            # TODO: Adjust offset using the ts.class information.
             if { $::logging > 2 } {
               puts "$::logging_time: P [expr $ndata($filepath) - $data($filepath)] difference ($ndata($filepath) - $data($filepath)) $filepath"
             }
-            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset]
+            log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset $ts_offset]
             dict set playing_channels $channel_name 1
 
-            puts "$::logging_time: Playing $title Offset=[calc_viewtime_minutes $offset]=$offset\n"
+            puts "$::logging_time: Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
           }
 
         } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
@@ -608,6 +617,7 @@ proc main {} {
 
       set offset [my_redring_offset]
       # TODO: Calculate time from offset instead of clock seconds. Verify the EPG still contains entries for past programmes.
+      # See the rest of the TODOs above.
       set live_time [calc_live_time [clock seconds] $offset]
 
       set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
