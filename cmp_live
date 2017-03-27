@@ -19,7 +19,7 @@ diff live/webif/html/tvdiary/tvdiary_utils.jim src/webif/html/tvdiary/tvdiary_ut
 diff live/webif/html/tvdiary/tvdiary_watchlist.jim src/webif/html/tvdiary/tvdiary_watchlist.jim
 diff live/webif/html/tvdiary/update_watchlist_cfg_json.jim src/webif/html/tvdiary/update_watchlist_cfg_json.jim
 diff live/webif/html/tvdiary/watchlist_json.jim src/webif/html/tvdiary/watchlist_json.jim
-diff live/webif/html/tvdiary/view_analysis.jim src/webif/html/tvdiary/view_analysis.jim
+diff live/webif/html/tvdiary/view_analysis_json.jim src/webif/html/tvdiary/view_analysis_json.jim
 diff live/webif/plugin/tvdiary/menu.hook src/webif/plugin/tvdiary/menu.hook
 diff live/webif/plugin/tvdiary/settings.hook src/webif/plugin/tvdiary/settings.hook
 diff live/webif/plugin/tvdiary/toolbar.hook src/webif/plugin/tvdiary/toolbar.hook

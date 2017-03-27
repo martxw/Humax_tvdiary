@@ -8,7 +8,7 @@
 # Clients should therefore check "status" first. If there is a serious server error part way
 # through rendering, the JSON may be malformed and not parsable.
 #
-# CGI usage: /tvdiary/view_analysis.jim?activity_id=<ID>
+# CGI usage: /tvdiary/view_analysis_json.jim?activity_id=<ID>
 #   ID = the activity ID.
 #
 # Author: Martin Wink, 2017.
