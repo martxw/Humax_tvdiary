@@ -2627,7 +2627,7 @@ $(document).ready(function() {
     $('#schedule_dialog')
       .html('<img src=/img/spin.gif> Loading details... Please wait...');
 
-    var url = '/tvdiary/view_analysis.jim?activity_id=' + act_id;
+    var url = '/tvdiary/view_analysis_json.jim?activity_id=' + act_id;
     $.ajax({
       type: "GET",
       dataType: "json",
