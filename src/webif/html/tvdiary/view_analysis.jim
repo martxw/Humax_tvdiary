@@ -131,6 +131,34 @@ proc main {} {
     }
     puts " \"channel_icon_path\": \"$channel_icon_path\","
     
+    puts " \"activities\": \["
+
+    # Search for the activities associated with the program_id.
+    set a_records [$tvdiarydb query "
+      SELECT a.activity_id, a.type, a.start, a.end, a.unfinished
+      FROM activities a
+      WHERE a.program_id = '%s'
+      ORDER BY a.type, a.start, a.activity_id" $program_id]
+
+    set comma 0
+    foreach a_record $a_records {
+      if { $comma } {
+        puts ","
+      } else {
+        puts ""
+        set comma 1
+      }
+      puts "\{"
+      puts "  \"activity_id\": $a_record(activity_id),"
+      puts "  \"type\": \"$a_record(type)\","
+      puts "  \"start\": $a_record(start),"
+      puts "  \"end\": $a_record(end),"
+      puts "  \"unfinished\": $a_record(unfinished)"
+      puts "\}"
+    }
+
+    puts -nonewline "\],"
+
     puts " \"viewtimes\": \["
 
     # Search for the viewing times associated with the program_id.

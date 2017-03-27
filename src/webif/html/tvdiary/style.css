@@ -470,3 +470,17 @@ span.analysis {
 span.analysis:hover {
   text-decoration: underline;
 }
+
+#schedule_dialog text.highcharts-title {
+  font-family: Segoe UI,Arial,sans-serif;
+  font-weight: bold;
+}
+#schedule_dialog #container {
+  width: 370px;
+  height: 370px;
+  margin: 0 auto;
+  float: left;
+}
+#schedule_dialog #details {
+  margin-left: 370px;
+}

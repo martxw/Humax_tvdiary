@@ -2637,7 +2637,7 @@ $(document).ready(function() {
           if (data.viewtimes.length == 0) {
             $('#schedule_dialog').html("<span class=\"nothing\">No viewing statistics available</span>");
           } else {
-            $('#schedule_dialog').html('<div id="container" style="width: 370px; height: 370px; margin: 0 auto"></div>');
+            $('#schedule_dialog').html(view_analysis_json_to_html(data));
 
             var options = {
               credits: false,
@@ -2726,6 +2726,68 @@ $(document).ready(function() {
         .attr('act_id', act_id)
         .attr('refresh', "F");
     $dialog.dialog('open');
+  }
+
+  function view_analysis_json_to_html(data) {
+    var live_parts = 0;
+    var live_start;
+    var live_end;
+    var recording_parts = 0;
+    var recording_start;
+    var recording_end;
+    var played_parts = 0;
+
+    for (var i = 0, len = data.activities.length; i < len; i++) {
+      var activity = data.activities[i];
+      if (activity.type == "L") {
+        live_parts += 1;
+        if (live_parts == 1) {
+          live_start = activity.start;
+        }
+        live_end = activity.end;
+      } else if (activity.type == "R") {
+        recording_parts += 1;
+        if (recording_parts == 1) {
+          recording_start = activity.start;
+        }
+        recording_end = activity.end;
+      } else if (activity.type == "P") {
+        played_parts += 1;
+      }
+    }
+    var played_start = data.viewtimes[0].time;
+    var played_end = data.viewtimes[data.viewtimes.length - 1].time;
+
+    var html = '<div id="container"></div><div id="details">'
+      + '<div>' + escapeHtml(data.synopsis) + '</div>'
+      + '<div>Broadcast: ' + formatDate(data.start) + '</div>'
+      + '<div>Scheduled: ' + formatTime(data.start) + ' to ' + formatTime(data.start + (data.duration * 60)) + ' (' + data.duration + ' mins)</div>';
+
+    if (live_parts == 1) {
+      html += '<div>Watched live: ' + formatTime(live_start) + ' to ' + formatTime(live_end) + ' (' + Math.floor((live_end - live_start) / 60) + ' mins)</div>';
+    } else if (live_parts > 1) {
+      html += '<div>Watched live: ' + formatTime(live_start) + ' to ' + formatTime(live_end) + ' in ' + live_parts + ' parts</div>';
+    }
+
+    if (recording_parts == 1) {
+      html += '<div>Recorded: ' + formatTime(recording_start) + ' to ' + formatTime(recording_end) + ' (' + Math.floor((recording_end - recording_start) / 60) + ' mins)</div>';
+    } else if (recording_parts > 1) {
+      html += '<div>Recorded: ' + formatTime(recording_start) + ' to ' + formatTime(recording_end) + ' in ' + recording_parts + ' parts</div>';
+    }
+
+    if (played_parts == 1) {
+      html += '<div>Playback range: ' + formatTime(data.start + (played_start * 60)) + ' to ' + formatTime(data.start + (played_end * 60)) + ' (' + (played_end - played_start + 1) + ' mins)</div>';
+    } else if (played_parts > 1) {
+      html += '<div>Playback range: ' + formatTime(data.start + (played_start * 60)) + ' to ' + formatTime(data.start + (played_end * 60)) + ' (' + (played_end - played_start + 1) + ' mins), in ' + played_parts + ' sessions</div>';
+    }
+
+    html += /*'<div>program_id ' + escapeHtml(data.program_id) + '</div>'
+      + '<div>crid ' + escapeHtml(data.crid) + '</div>'
+      + '<div>channel_name ' + escapeHtml(data.channel_name) + '</div>'
+      + '<div>channel_icon_path ' + escapeHtml(data.channel_icon_path) + '</div>'
+      +*/ '</div>';
+    
+    return $(html);
   }
 
   ////////////////////////////////
