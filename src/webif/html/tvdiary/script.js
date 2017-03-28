@@ -2639,6 +2639,14 @@ $(document).ready(function() {
           } else {
             $('#schedule_dialog').html(view_analysis_json_to_html(data));
 
+            var max_duration = data.duration;
+            var played_start = data.viewtimes[0].time;
+            var played_end = data.viewtimes[data.viewtimes.length - 1].time;
+            if (played_end > max_duration) {
+              max_duration = played_end;
+            }
+            // TODO: possibly handle negative viewtimes if recording started early. Add an offset to all values so they start at zero.
+            
             var options = {
               credits: false,
               chart: {
@@ -2659,7 +2667,7 @@ $(document).ready(function() {
               },
               xAxis: {
                   min: 0,
-                  max: data.duration,
+                  max: max_duration,
               },
               yAxis: {
                   min: 0,
@@ -2703,6 +2711,7 @@ $(document).ready(function() {
               }
               options.series[0].data[entry.time] += entry.count;
             }
+            // Fill in trailing zeros.
             if (lastTime < data.duration - 1) {
               for (var i = lastTime + 1; i < data.duration - 1; i++) {
                 options.series[0].data[i] = 0;
