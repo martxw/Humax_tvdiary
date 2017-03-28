@@ -2642,8 +2642,8 @@ $(document).ready(function() {
             var max_duration = data.duration;
             var played_start = data.viewtimes[0].time;
             var played_end = data.viewtimes[data.viewtimes.length - 1].time;
-            if (played_end > max_duration) {
-              max_duration = played_end;
+            if (played_end >= max_duration) {
+              max_duration = played_end + 1;
             }
             // TODO: possibly handle negative viewtimes if recording started early. Add an offset to all values so they start at zero.
             
@@ -2769,6 +2769,7 @@ $(document).ready(function() {
 
     var html = '<div id="container"></div><div id="details">'
       + '<div>' + escapeHtml(data.synopsis) + '</div>'
+      + '<div>&nbsp;</div>'
       + '<div>Broadcast: ' + formatDate(data.start) + '</div>'
       + '<div>Scheduled: ' + formatTime(data.start) + ' to ' + formatTime(data.start + (data.duration * 60)) + ' (' + data.duration + ' mins)</div>';
 
