@@ -428,7 +428,7 @@ $(document).ready(function() {
   // Round a duration from seconds to minutes.
   //
   function duration_seconds_to_minutes(d) {
-    return Math.round(d / 60);
+    return Math.floor(d / 60);
   }
 
   //////
@@ -1090,7 +1090,7 @@ $(document).ready(function() {
       // Column 3. There will always be a title. There might not be a synopsis, and there might not be sheduled time and duration.
       //
       html += "<td class=\"event_descr\">";
-      var analysis_class = (event.activity_id == -1 ? "" : " analysis");
+      var analysis_class = (event.activity_id == -1 || event.scheduled_start == 0 ? "" : " analysis");
       html += "<span class=\"tvtitle" + analysis_class + "\" act_id=\"" + event.activity_id + "\">" + escapeHtml(event.title) + "</span>";
       if (event.synopsis != "") {
         html += "<span class=\"tvsynopsis\">" + escapeHtml(event.synopsis) + "</span>";
@@ -2634,19 +2634,53 @@ $(document).ready(function() {
       url: url,
       success: function(data) {
         if (data.status == "OK" ) {
-          if (data.viewtimes.length == 0) {
-            $('#schedule_dialog').html("<span class=\"nothing\">No viewing statistics available</span>");
+          if (data.start == 0) {
+            $('#schedule_dialog').html("<span class=\"nothing\">Not in EPG - can't display statistics</span>");
           } else {
-            $('#schedule_dialog').html(view_analysis_json_to_html(data));
+            var live_parts = 0;
+            var live_start;
+            var live_end;
+            var recording_parts = 0;
+            var recording_start;
+            var recording_end;
+            var played_parts = 0;
+            var played_start;
+            var played_end;
+
+            for (var i = 0, len = data.activities.length; i < len; i++) {
+              var activity = data.activities[i];
+              if (activity.type == "L") {
+                live_parts += 1;
+                if (live_parts == 1) {
+                  live_start = activity.start;
+                }
+                live_end = activity.end;
+              } else if (activity.type == "R") {
+                recording_parts += 1;
+                if (recording_parts == 1) {
+                  recording_start = activity.start;
+                }
+                recording_end = activity.end;
+              } else if (activity.type == "P") {
+                played_parts += 1;
+              }
+            }
 
             var max_duration = data.duration;
-            var played_start = data.viewtimes[0].time;
-            var played_end = data.viewtimes[data.viewtimes.length - 1].time;
-            if (played_end >= max_duration) {
-              max_duration = played_end + 1;
+            if (data.viewtimes.length > 0) {
+              played_start = data.viewtimes[0].time;
+              played_end = data.viewtimes[data.viewtimes.length - 1].time;
+              if (played_end >= max_duration) {
+                max_duration = played_end + 1;
+              }
+              // TODO: possibly handle negative viewtimes if recording started early. Add an offset to all values so they start at zero.
+            } else {
+              played_start = 0;
+              played_end = 0;
             }
-            // TODO: possibly handle negative viewtimes if recording started early. Add an offset to all values so they start at zero.
-            
+
+            $('#schedule_dialog').html(view_analysis_json_to_html(data, live_parts, live_start, live_end, recording_parts, recording_start, recording_end, played_parts, played_start, played_end));
+
             var options = {
               credits: false,
               chart: {
@@ -2712,11 +2746,10 @@ $(document).ready(function() {
               options.series[0].data[entry.time] += entry.count;
             }
             // Fill in trailing zeros.
-            if (lastTime < data.duration - 1) {
-              for (var i = lastTime + 1; i < data.duration - 1; i++) {
+            if (lastTime < max_duration - 1) {
+              for (var i = lastTime + 1; i < max_duration - 1; i++) {
                 options.series[0].data[i] = 0;
               }
-              lastTime = entry.time;
             }
 
             var chart = new Highcharts.Chart(options);
@@ -2737,35 +2770,7 @@ $(document).ready(function() {
     $dialog.dialog('open');
   }
 
-  function view_analysis_json_to_html(data) {
-    var live_parts = 0;
-    var live_start;
-    var live_end;
-    var recording_parts = 0;
-    var recording_start;
-    var recording_end;
-    var played_parts = 0;
-
-    for (var i = 0, len = data.activities.length; i < len; i++) {
-      var activity = data.activities[i];
-      if (activity.type == "L") {
-        live_parts += 1;
-        if (live_parts == 1) {
-          live_start = activity.start;
-        }
-        live_end = activity.end;
-      } else if (activity.type == "R") {
-        recording_parts += 1;
-        if (recording_parts == 1) {
-          recording_start = activity.start;
-        }
-        recording_end = activity.end;
-      } else if (activity.type == "P") {
-        played_parts += 1;
-      }
-    }
-    var played_start = data.viewtimes[0].time;
-    var played_end = data.viewtimes[data.viewtimes.length - 1].time;
+  function view_analysis_json_to_html(data, live_parts, live_start, live_end, recording_parts, recording_start, recording_end, played_parts, played_start, played_end) {
 
     var html = '<div id="container"></div><div id="details">'
       + '<div>' + escapeHtml(data.synopsis) + '</div>'
@@ -2774,13 +2779,13 @@ $(document).ready(function() {
       + '<div>Scheduled: ' + formatTime(data.start) + ' to ' + formatTime(data.start + (data.duration * 60)) + ' (' + data.duration + ' mins)</div>';
 
     if (live_parts == 1) {
-      html += '<div>Watched live: ' + formatTime(live_start) + ' to ' + formatTime(live_end) + ' (' + Math.floor((live_end - live_start) / 60) + ' mins)</div>';
+      html += '<div>Watched live: ' + formatTime(live_start) + ' to ' + formatTime(live_end) + ' (' + (Math.floor(live_end / 60) - Math.floor(live_start / 60) + 1) + ' mins)</div>';
     } else if (live_parts > 1) {
       html += '<div>Watched live: ' + formatTime(live_start) + ' to ' + formatTime(live_end) + ' in ' + live_parts + ' parts</div>';
     }
 
     if (recording_parts == 1) {
-      html += '<div>Recorded: ' + formatTime(recording_start) + ' to ' + formatTime(recording_end) + ' (' + Math.floor((recording_end - recording_start) / 60) + ' mins)</div>';
+      html += '<div>Recorded: ' + formatTime(recording_start) + ' to ' + formatTime(recording_end) + ' (' + (Math.floor(recording_end / 60) - Math.floor(recording_start / 60)) + ' mins)</div>';
     } else if (recording_parts > 1) {
       html += '<div>Recorded: ' + formatTime(recording_start) + ' to ' + formatTime(recording_end) + ' in ' + recording_parts + ' parts</div>';
     }
