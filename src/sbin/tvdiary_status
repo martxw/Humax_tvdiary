@@ -275,33 +275,62 @@ proc log_program_activity { tvdiarydb &finished_activities activity_type log_tim
 }
 
 #
-# Get the EPG details from an hsvc. Return as an associative array. With defaults if nothing in the EPG.
+# Get the EPG details from an hsvc. Return as an associative array. If nothing in the EPG try to get from the tvdiarydb.
 #
-proc get_epg_from_hsvc { epg_db hsvc time } {
+proc get_epg_from_hsvc { epg_db hsvc time tvdiarydb } {
+  puts "$::logging_time: get_epg_from_hsvc \( hsvc=$hsvc time=$time \)"
   set records [$epg_db query "
-    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, e.duration, e.event_crid
+    SELECT SUBSTR(c.szSvcName, 2) AS channel_name, e.name AS title, e.text AS synopsis, e.start, e.end, (e.duration / 60) as duration, e.event_crid
     FROM epg e, channel.TBL_SVC c
     WHERE c.hSvc = %s
       AND e.service_id = c.usSvcId
       AND e.start <= %s and e.end > %s
     " $hsvc $time $time]
-  if { [llength $records] == 1 } {
+  puts "$::logging_time: llength records=[llength $records]"
+  if { 1 && [llength $records] == 1 } {
     set record [lindex $records 0]
-    dict set record duration [expr $record(duration) / 60]
+    #dict set record duration [expr $record(duration) / 60]
+    puts "$::logging_time: returning EPG record"
   } else {
+    puts "$::logging_time: looking for channel name instead"
     set records [$epg_db query "
       SELECT SUBSTR(c.szSvcName, 2) AS channel_name
       FROM channel.TBL_SVC c
       WHERE c.hSvc = %s
       " $hsvc]
     set record [lindex $records 0]
-    dict set record title "Not in EPG"
-    dict set record synopsis "No information available"
-    dict set record start 0
-    dict set record end 0
-    dict set record duration 0
-    dict set record event_crid ""
+    set channel_name $record(channel_name)
+
+    puts "$::logging_time: Looking for matching program on channel=$channel_name at time=$time"
+
+    set records [$tvdiarydb query "
+      SELECT t.title, s.synopsis, c.channel_name, p.start, p.duration, p.start + (p.duration * 60) as end, p.crid as event_crid
+      FROM programs p, channels c, titles t, synopses s
+      WHERE c.channel_name = \"%s\" AND c.channel_id = p.channel_id AND t.title_id = p.title_id AND s.synopsis_id = p.synopsis_id AND %s >= p.start AND %s < (p.start + (p.duration * 60))
+      " $channel_name $time $time]
+    puts "$::logging_time: llength records=[llength $records]"
+    if { [llength $records] == 1 } {
+      set record [lindex $records 0]
+      puts "$::logging_time: returning existing program record as EPG record"
+    } else {
+      set record {}
+      dict set record title "Not in EPG"
+      dict set record synopsis "No information available"
+      dict set record channel_name $channel_name
+      dict set record start 0
+      dict set record end 0
+      dict set record duration 0
+      dict set record event_crid ""
+      puts "$::logging_time: returning NOT IN EPG record"
+    }
   }
+  puts "$::logging_time: returning record.title=$record(title)"
+  puts "$::logging_time: returning record.synopsis=$record(synopsis)"
+  puts "$::logging_time: returning record.channel_name=$record(channel_name)"
+  puts "$::logging_time: returning record.start=$record(start)"
+  puts "$::logging_time: returning record.end=$record(end)"
+  puts "$::logging_time: returning record.duration=$record(duration)"
+  puts "$::logging_time: returning record.event_crid=$record(event_crid)"
   return $record
 }
 
@@ -498,7 +527,7 @@ proc main {} {
 
           # In playback, report the offset from the scheduled start, so calculate the start of video relative to the scheduled start.
           set start [$ts get start]
-          set ts_offset [expr ($start - $schedstart)/60]
+          set ts_offset [expr int(($start - $schedstart) / 60)]
           #puts "$filename schedstart=$schedstart, start=$start, ts_offset=$ts_offset"
 
           if { [file exists "/mod/tmp/webif_auto/decrypting.$basename.ts"] } {
@@ -526,12 +555,7 @@ proc main {} {
               set offset [my_redring_offset]
               set live_time [calc_live_time [clock seconds] $offset]
 
-              set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
-              # TODO: If we get back Not in EPG, try to get epg_record from programs table instead. Maybe switch it around to get from my DB first?
-              # TODO: returning channel_name, title, synopsis, start, duration, event_crid,
-              if { $title eq "Not in EPG" } {
-                puts "NOT IN EPG: $epg_record(title) $epg_record(start) $epg_record(end) $epg_record(duration)"
-              }
+              set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time $tvdiarydb]
 
               log_program_activity $tvdiarydb finished_activities "L" $::current_time $epg_record(channel_name) $epg_record(title) $epg_record(synopsis) $epg_record(start) $epg_record(duration) $epg_record(event_crid) [calc_live_viewtime_offset $::current_time $offset $epg_record(start)]
 
@@ -613,12 +637,7 @@ proc main {} {
       set offset [my_redring_offset]
       set live_time [calc_live_time [clock seconds] $offset]
 
-      set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time]
-      # TODO: Calculate time from offset instead of clock seconds. Verify the EPG still contains entries for past programmes.
-      # See the rest of the TODOs above.
-      if { $title eq "Not in EPG" } {
-        puts "NOT IN EPG: $epg_record(title) $epg_record(start) $epg_record(end) $epg_record(duration)"
-      }
+      set epg_record [get_epg_from_hsvc $epg_db $hsvc $live_time $tvdiarydb]
 
       set channel_name $epg_record(channel_name)
 
