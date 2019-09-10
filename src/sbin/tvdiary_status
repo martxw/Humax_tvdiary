@@ -18,7 +18,7 @@ source /mod/webif/plugin/redring/lib.jim
 # --------------------------------------------------------------
 # Declare globals
 # --------------------------------------------------------------
-set logging 1
+set logging 0
 
 set LSOF "/mod/bin/lsof"
 set PGREP "/mod/bin/busybox/pgrep"
@@ -578,7 +578,9 @@ proc main {} {
             dict set recording_channels $channel_name 1
             dict set playing_channels $channel_name 1
 
-            puts "$::logging_time: Chase Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
+            if { $::logging > 0 } {
+              puts "$::logging_time: Chase Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
+            }
 
           } elseif { $ndata($filepath) > $data($filepath) } {
             # "Recording"
@@ -603,7 +605,9 @@ proc main {} {
             log_program_activity $tvdiarydb finished_activities "P" $::current_time $channel_name $title $synopsis $schedstart $scheddur "" [calc_viewtime_minutes $offset $ts_offset]
             dict set playing_channels $channel_name 1
 
-            puts "$::logging_time: Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
+            if { $::logging > 0 } {
+              puts "$::logging_time: Playing $title Offset=$offset=[calc_viewtime_minutes $offset $ts_offset] schedstart=$schedstart ts.start=$start TS-start-offset=$ts_offset\n"
+            }
           }
 
         } elseif { $extension in $::MEDIA_FILE_EXTENSIONS } {
