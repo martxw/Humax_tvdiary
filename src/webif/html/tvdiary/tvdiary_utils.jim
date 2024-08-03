@@ -47,7 +47,7 @@ proc _lock_to_port {id} {
 
 proc _lock_dummy {newsock addr port} { }
 
-proc acquire_lock {id {wait_time 35}} {
+proc acquire_lock {id {wait_time 45}} {
   global _locks
 
   set port [_lock_to_port $id]
