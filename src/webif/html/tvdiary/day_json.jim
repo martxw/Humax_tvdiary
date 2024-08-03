@@ -30,8 +30,8 @@ set current_time [clock seconds]
 set time_fmt "%H:%M"
 set date_time_fmt "%a %d %b %Y $time_fmt"
 
-set channel_icons_path "/mod/webif/html/img/channels/out"
-set channel_icons_url "/img/channels/out"
+set channel_icons_path "/mod/webif/html/img/channels"
+set channel_icons_url "/img/channels"
 
 # --------------------------------------------------------------
 # CGI or command line parameters
@@ -107,12 +107,12 @@ proc output_row { type active watched repeat_program_id repeat_crid_count event_
   puts "   \"scheduled_slot\": $scheduled_slot,"
 
   puts "   \"channel_name\": \"[escape_json_string $channel_name]\","
-  set channel_icon_path "$::channel_icons_url/Unknown.png"
+  set channel_icon_path "$::channel_icons_url/blank.png"
   if { $channel_name != "" } {
     if { [file exists "$::channel_icons_path/$channel_name.png"] } {
       set channel_icon_path "$::channel_icons_url/[cgi_quote_url $channel_name].png"
     } else {
-      set channel_icon_path "$::channel_icons_url/Unknown.png"
+      set channel_icon_path "$::channel_icons_url/blank.png"
     }
   }
   puts "   \"channel_icon_path\": \"$channel_icon_path\","
