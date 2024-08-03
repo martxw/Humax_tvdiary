@@ -18,8 +18,8 @@ set current_time [clock seconds]
 set time_fmt "%H:%M"
 set date_time_fmt "%a %d %b %Y $time_fmt"
 
-set channel_icons_path "/mod/webif/html/img/channels/out"
-set channel_icons_url "/img/channels/out"
+set channel_icons_path "/mod/webif/html/img/channels"
+set channel_icons_url "/img/channels"
 
 set search_options {"E" "C" "S" "F" "M"}
 

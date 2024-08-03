@@ -1,7 +1,7 @@
 Package: tvdiary
 Priority: optional
 Section: misc
-Version: 0.0.4-4
+Version: 0.0.4-5
 Architecture: mipsel
 Maintainer: martxw
 Depends: webif (>= 1.4.1-2), jim (>= 0.76), sqlite3-xconv (>= 1.0.1), redring (>=2.20-1)
