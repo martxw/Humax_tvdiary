@@ -28,9 +28,9 @@ if { ![file exists $DB_FILEPATH] } {
 
 } else {
   #
-  # Get a lock for the database. Max wait 20 seconds here.
+  # Get a lock for the database. Max wait 30 seconds here.
   #
-  if { ![acquire_lock tvdiary_db 20] } {
+  if { ![acquire_lock tvdiary_db 30] } {
 
     puts "<div>Unable to aquire an exclusive lock on the TV Diary database.</div><div>Wait a few moments and try refreshing this page.</div>"
 
